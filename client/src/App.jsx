@@ -40,7 +40,7 @@ export default function App() {
   return (
     <div className="app-container">
       <Header onMenuClick={() => setIsDrawerOpen(true)} />
-      
+
       <Drawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
@@ -82,7 +82,7 @@ export default function App() {
                 }}
               >
                 <ArrowLeft size={18} />
-                <span>Volver al Dashboard</span>
+                <span>Volver a Inicio</span>
               </button>
             </div>
             <ScanHome
@@ -108,7 +108,7 @@ export default function App() {
                 }}
               >
                 <ArrowLeft size={18} />
-                <span>Volver al Dashboard</span>
+                <span>Volver a Inicio</span>
               </button>
             </div>
             <RemitosList

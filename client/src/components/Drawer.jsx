@@ -1,16 +1,16 @@
 import React from 'react';
-import { 
-  X, 
-  Home, 
-  ScanLine, 
-  Truck, 
-  PackageMinus, 
-  Boxes, 
-  FileText, 
-  LogOut, 
-  Shield, 
-  Sun, 
-  Moon 
+import {
+  X,
+  Home,
+  ScanLine,
+  Truck,
+  PackageMinus,
+  Boxes,
+  FileText,
+  LogOut,
+  Shield,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useAuth } from '../config/AuthContext';
 import { useTheme } from '../config/ThemeContext';
@@ -22,7 +22,7 @@ export default function Drawer({ isOpen, onClose, onNavigate, currentScreen }) {
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard Principal', icon: <Home size={20} />, badge: null },
-    { id: 'scan', label: 'Registrar Remito', icon: <ScanLine size={20} />, badge: 'Cámara 1D' },
+    { id: 'scan', label: 'Registrar Remito', icon: <ScanLine size={20} />, badge: null },
     { id: 'entregas', label: 'Entregas de Mercadería', icon: <Truck size={20} />, badge: 'Próx.' },
     { id: 'devoluciones', label: 'Devoluciones', icon: <PackageMinus size={20} />, badge: 'Próx.' },
     { id: 'cajones', label: 'Movimiento de Cajones', icon: <Boxes size={20} />, badge: 'Próx.' },
@@ -41,7 +41,7 @@ export default function Drawer({ isOpen, onClose, onNavigate, currentScreen }) {
 
   return (
     <>
-      <div 
+      <div
         className={`drawer-overlay ${isOpen ? 'open' : ''}`}
         onClick={onClose}
       />
@@ -65,45 +65,23 @@ export default function Drawer({ isOpen, onClose, onNavigate, currentScreen }) {
         </div>
 
         {/* Lista de Navegación */}
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+        <nav className="drawer-nav-list">
           {menuItems.map((item) => {
             const isActive = currentScreen === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => handleItemClick(item.id)}
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  borderRadius: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  background: isActive ? 'rgba(13, 44, 92, 0.12)' : 'transparent',
-                  color: isActive ? 'var(--dy-blue)' : 'var(--text)',
-                  border: isActive ? '1.5px solid var(--dy-blue)' : '1px solid transparent',
-                  fontWeight: isActive ? 800 : 600,
-                  fontSize: '0.92rem',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.15s ease'
-                }}
+                className={`drawer-nav-item ${isActive ? 'active' : ''}`}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ color: isActive ? 'var(--dy-blue)' : 'var(--text-muted)' }}>
+                  <span className="drawer-nav-icon">
                     {item.icon}
                   </span>
                   <span>{item.label}</span>
                 </div>
                 {item.badge && (
-                  <span style={{
-                    fontSize: '0.65rem',
-                    fontWeight: 700,
-                    padding: '2px 6px',
-                    borderRadius: '50px',
-                    background: item.badge === 'Próx.' ? 'rgba(100, 116, 139, 0.15)' : 'rgba(13, 44, 92, 0.15)',
-                    color: item.badge === 'Próx.' ? 'var(--text-muted)' : 'var(--dy-blue)'
-                  }}>
+                  <span className={`drawer-badge ${item.badge === 'Próx.' ? '' : 'primary'}`}>
                     {item.badge}
                   </span>
                 )}
@@ -111,24 +89,11 @@ export default function Drawer({ isOpen, onClose, onNavigate, currentScreen }) {
             );
           })}
 
-          <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div className="drawer-footer-actions">
             {/* Toggle de Modo Claro / Oscuro */}
             <button
               onClick={toggleTheme}
-              style={{
-                width: '100%',
-                padding: '12px 14px',
-                borderRadius: '14px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                background: 'transparent',
-                border: '1px solid var(--border)',
-                color: 'var(--text)',
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
+              className="drawer-action-btn"
             >
               {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
               <span>{theme === 'light' ? 'Activar Modo Oscuro' : 'Activar Modo Claro'}</span>
@@ -137,20 +102,7 @@ export default function Drawer({ isOpen, onClose, onNavigate, currentScreen }) {
             {/* Cerrar Sesión */}
             <button
               onClick={handleLogout}
-              style={{
-                width: '100%',
-                padding: '12px 14px',
-                borderRadius: '14px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                background: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.2)',
-                color: 'var(--error)',
-                fontSize: '0.9rem',
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
+              className="drawer-action-btn logout"
             >
               <LogOut size={18} />
               <span>Cerrar Sesión</span>
