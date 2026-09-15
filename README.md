@@ -72,6 +72,7 @@ dy_logistica_app/
 │       │   ├── Drawer.jsx      # Menú lateral deslizable categorizado
 │       │   ├── BottomNav.jsx   # Barra inferior persistente con safe-area
 │       │   ├── HelpChatModal.jsx # Chatbot interactivo de asistencia al chofer
+│       │   ├── AlertModal.jsx  # Modal reutilizable de alertas y errores con guía de diseño
 │       │   ├── SearchBar.jsx   # Buscador predictivo
 │       │   ├── RemitoCard.jsx  # Tarjeta táctil de remito
 │       │   ├── CameraCapture.jsx # Módulo de cámara con compresión 70%

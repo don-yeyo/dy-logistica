@@ -1,12 +1,14 @@
 import React, { useRef, useState } from 'react';
 import { Camera, Trash2, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { compressImage } from '../services/imageCompressor';
+import AlertModal from './AlertModal';
 
 export default function CameraCapture({ initialPhotoUrl, onPhotoCaptured, onPhotoRemoved }) {
   const fileInputRef = useRef(null);
   const [compressing, setCompressing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(initialPhotoUrl || null);
   const [stats, setStats] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
@@ -37,7 +39,7 @@ export default function CameraCapture({ initialPhotoUrl, onPhotoCaptured, onPhot
       }
     } catch (error) {
       console.error('[Camera] Error al comprimir imagen:', error);
-      alert('Error al procesar la imagen: ' + error.message);
+      setErrorMessage(error.message || 'No se pudo procesar la fotografía seleccionada.');
     } finally {
       setCompressing(false);
       if (fileInputRef.current) {
@@ -112,6 +114,15 @@ export default function CameraCapture({ initialPhotoUrl, onPhotoCaptured, onPhot
           )}
         </button>
       )}
+
+      {/* Modal de Error Estilizado */}
+      <AlertModal
+        isOpen={Boolean(errorMessage)}
+        onClose={() => setErrorMessage(null)}
+        type="error"
+        title="Error de Cámara / Imagen"
+        message={errorMessage}
+      />
     </div>
   );
 }

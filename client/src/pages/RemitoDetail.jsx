@@ -4,6 +4,7 @@ import { queuePendingControl } from '../services/offlineStorage';
 import { useAuth } from '../config/AuthContext';
 import CameraCapture from '../components/CameraCapture';
 import BottomBar from '../components/BottomBar';
+import AlertModal from '../components/AlertModal';
 import { 
   Building2, 
   Truck, 
@@ -34,6 +35,7 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
   const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [saving, setSaving] = useState(false);
   const [successModal, setSuccessModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   // Formato de fecha
   let formattedDate = remito.finne_Fecha || '';
@@ -106,7 +108,7 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
 
     } catch (error) {
       console.error('[RemitoDetail] Error al guardar control:', error);
-      alert('Error al guardar control del remito: ' + error.message);
+      setErrorMessage(error?.message || 'Ocurrió un error inesperado al guardar el control del remito.');
     } finally {
       setSaving(false);
     }
@@ -244,6 +246,18 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
           </div>
         </div>
       )}
+
+      {/* Modal Reutilizable de Error / Alerta */}
+      <AlertModal
+        isOpen={Boolean(errorMessage)}
+        onClose={() => setErrorMessage(null)}
+        type="error"
+        title="Error al Guardar"
+        message="No se pudo guardar el control del remito."
+        detail={errorMessage}
+        confirmText="Entendido"
+      />
     </div>
   );
 }
+
