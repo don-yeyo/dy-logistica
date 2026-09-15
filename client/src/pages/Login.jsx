@@ -21,7 +21,7 @@ export default function Login() {
             setTestUsers(res.users);
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [isMockAllowed]);
 
@@ -57,7 +57,7 @@ export default function Login() {
             Don Yeyo Logística
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginTop: '6px' }}>
-            Control de Choferes, Firmas y Recepción de Remitos
+            Gestión Documental de Transporte
           </p>
         </div>
 
