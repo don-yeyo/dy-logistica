@@ -6,66 +6,59 @@ export default function BottomNav({ currentScreen, onNavigate, onOpenHelp }) {
   const isScanActive = currentScreen === 'scan';
   const isViajesActive = currentScreen === 'hojas_ruta';
 
+  const navItems = [
+    {
+      id: 'dashboard',
+      label: 'Inicio',
+      icon: <Home size={22} />,
+      isActive: isHomeActive,
+      onClick: () => onNavigate('dashboard')
+    },
+    {
+      id: 'scan',
+      label: 'Escanear',
+      icon: <ScanLine size={22} />,
+      isActive: isScanActive,
+      onClick: () => onNavigate('scan')
+    },
+    {
+      id: 'hojas_ruta',
+      label: 'Viajes',
+      icon: <FileText size={22} />,
+      isActive: isViajesActive,
+      onClick: () => onNavigate('hojas_ruta')
+    },
+    {
+      id: 'help',
+      label: 'Ayuda',
+      icon: <HelpCircle size={22} />,
+      isActive: false,
+      onClick: onOpenHelp
+    }
+  ];
+
   return (
     <nav className="bottom-nav glass">
       <div className="bottom-nav-inner">
-        {/* 1. Inicio (Dashboard) */}
-        <button
-          type="button"
-          className={`bottom-nav-item ${isHomeActive ? 'active' : ''}`}
-          onClick={() => onNavigate('dashboard')}
-          title="Inicio"
-        >
-          <div className="nav-icon-container">
-            <Home size={22} />
-          </div>
-          <span>Inicio</span>
-          {isHomeActive && <div className="nav-active-pill" />}
-        </button>
-
-        {/* 2. Escanear (Botón Central) */}
-        <button
-          type="button"
-          className={`bottom-nav-scan-btn ${isScanActive ? 'active' : ''}`}
-          onClick={() => onNavigate('scan')}
-          title="Escanear Remito"
-        >
-          <div className={`scan-btn-circle ${isScanActive ? 'active' : ''}`}>
-            <ScanLine size={24} />
-          </div>
-          <span className={`scan-btn-label ${isScanActive ? 'active' : ''}`}>
-            Escanear
-          </span>
-        </button>
-
-        {/* 3. Viajes / Hojas de Ruta */}
-        <button
-          type="button"
-          className={`bottom-nav-item ${isViajesActive ? 'active' : ''}`}
-          onClick={() => onNavigate('hojas_ruta')}
-          title="Hojas de Ruta"
-        >
-          <div className="nav-icon-container">
-            <FileText size={22} />
-          </div>
-          <span>Viajes</span>
-          {isViajesActive && <div className="nav-active-pill" />}
-        </button>
-
-        {/* 4. Ayuda / Asistente Virtual */}
-        <button
-          type="button"
-          className="bottom-nav-item"
-          onClick={onOpenHelp}
-          title="Robot Ayudante"
-        >
-          <div className="nav-icon-container">
-            <HelpCircle size={22} />
-          </div>
-          <span>Ayuda</span>
-        </button>
+        {navItems.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`bottom-nav-btn ${item.isActive ? 'active' : ''}`}
+            onClick={item.onClick}
+            title={item.label}
+          >
+            <div className={`nav-btn-circle ${item.isActive ? 'active' : ''}`}>
+              {item.icon}
+            </div>
+            <span className={`nav-btn-label ${item.isActive ? 'active' : ''}`}>
+              {item.label}
+            </span>
+          </button>
+        ))}
       </div>
     </nav>
   );
 }
+
 

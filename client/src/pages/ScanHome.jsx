@@ -3,14 +3,14 @@ import BarcodeScanner from '../components/BarcodeScanner';
 import { searchRemitoByCode } from '../services/api';
 import { searchCachedRemitoByCode, getCachedRemitos } from '../services/offlineStorage';
 import { useAuth } from '../config/AuthContext';
-import { 
-  Scan, 
-  FileText, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  History, 
-  RefreshCw, 
+import {
+  Scan,
+  FileText,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  History,
+  RefreshCw,
   ChevronRight,
   Truck,
   Building2,
@@ -113,9 +113,7 @@ export default function ScanHome({ onSelectRemito }) {
           </div>
           <div>
             <h2 className="scan-main-title">Escanear Remito</h2>
-            <p className="scan-subtitle">
-              Lectura 1D de <strong>TransaccionId</strong> (Code 128 / Code 39)
-            </p>
+
           </div>
         </div>
       </div>
