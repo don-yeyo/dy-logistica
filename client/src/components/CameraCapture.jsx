@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Camera, Image as ImageIcon, Trash2, CheckCircle, RefreshCw, Sparkles } from 'lucide-react';
+import { Camera, Trash2, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { compressImage } from '../services/imageCompressor';
 
 export default function CameraCapture({ initialPhotoUrl, onPhotoCaptured, onPhotoRemoved }) {
@@ -14,11 +14,7 @@ export default function CameraCapture({ initialPhotoUrl, onPhotoCaptured, onPhot
 
     try {
       setCompressing(true);
-      console.log(`[Camera] Procesando foto original: ${file.name} (${(file.size / 1024).toFixed(1)} KB)...`);
-      
       const result = await compressImage(file, { quality: 0.70 });
-      
-      console.log(`✔ [Camera] Foto comprimida al 70%: ${(result.compressedSizeKb)} KB (Ahorro: ${result.reductionPct}%)`);
       
       setPreviewUrl(result.dataUrl);
       setStats({
@@ -59,7 +55,7 @@ export default function CameraCapture({ initialPhotoUrl, onPhotoCaptured, onPhot
   };
 
   return (
-    <div className="photo-module">
+    <div className="photo-module-compact">
       <input
         type="file"
         ref={fileInputRef}
@@ -70,57 +66,48 @@ export default function CameraCapture({ initialPhotoUrl, onPhotoCaptured, onPhot
       />
 
       {previewUrl ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div className="photo-preview-box">
-            <img src={previewUrl} alt="Foto del remito" className="photo-preview-img" />
-            <button
-              type="button"
-              className="photo-remove-btn"
-              onClick={handleRemove}
-              title="Eliminar foto"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-
-          {stats && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
-              <span className="compression-badge">
-                <Sparkles size={13} />
-                Comprimida al 70%: {stats.compressedSizeKb} KB
-              </span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Original: {stats.originalSizeKb} KB (-{stats.reductionPct}%)
-              </span>
+        <div className="photo-attached-strip">
+          <img src={previewUrl} alt="Foto" className="photo-thumb-compact" />
+          <div className="photo-attached-info">
+            <div className="photo-attached-title">
+              <CheckCircle2 size={14} style={{ color: '#10b981' }} />
+              <span>Foto adjunta</span>
+              {stats && <span className="photo-size-tag">({stats.compressedSizeKb} KB)</span>}
             </div>
-          )}
-
+          </div>
           <button
             type="button"
-            className="camera-action-btn"
-            style={{ minHeight: '44px', fontSize: '0.9rem' }}
+            className="photo-retake-btn"
             onClick={() => fileInputRef.current?.click()}
+            title="Cambiar foto"
           >
-            <RefreshCw size={16} />
-            <span>Tomar otra foto</span>
+            <RefreshCw size={14} />
+          </button>
+          <button
+            type="button"
+            className="photo-delete-btn"
+            onClick={handleRemove}
+            title="Eliminar foto"
+          >
+            <Trash2 size={14} />
           </button>
         </div>
       ) : (
         <button
           type="button"
-          className="camera-action-btn"
+          className="camera-btn-compact"
           onClick={() => fileInputRef.current?.click()}
           disabled={compressing}
         >
           {compressing ? (
             <>
-              <RefreshCw size={20} className="spin" />
+              <RefreshCw size={16} className="spin" />
               <span>Optimizando foto al 70%...</span>
             </>
           ) : (
             <>
-              <Camera size={22} />
-              <span>Sacar Foto del Remito / Comprobante</span>
+              <Camera size={16} />
+              <span>Tomar Foto del Comprobante (Opcional)</span>
             </>
           )}
         </button>

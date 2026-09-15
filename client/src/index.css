@@ -490,349 +490,322 @@ body {
 }
 
 /* ==============================================================================
-   PANTALLA DE CONTROL Y DETALLE DE REMITO (DEDOS GRANDES)
+   PANTALLA DE CONTROL Y DETALLE DE REMITO (COMPACTA - ZERO SCROLL)
    ============================================================================== */
-.detail-container {
+.detail-container-no-scroll {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 10px;
+  padding: 8px 12px calc(80px + var(--safe-bottom)) 12px;
 }
 
-.detail-header-card {
-  background: var(--dy-blue);
-  color: #fff;
-  border-radius: var(--radius-lg);
-  padding: 18px;
-  box-shadow: var(--shadow-lg);
+/* Tarjeta Resumen de Cabecera (Sutil, Compacta) */
+.remito-summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 3px;
+  box-shadow: var(--shadow-sm);
 }
 
-.detail-header-title {
+.remito-summary-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.detail-cbte {
-  font-size: 1.4rem;
+.remito-summary-cbte {
+  font-size: 1.05rem;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  color: var(--dy-blue);
+  letter-spacing: -0.01em;
 }
 
-.detail-hr-pill {
-  background: rgba(255,255,255,0.2);
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  font-size: 0.8rem;
-  font-weight: 700;
+.dark-theme .remito-summary-cbte {
+  color: #38bdf8;
 }
 
-.detail-client-box {
-  background: rgba(255,255,255,0.1);
-  padding: 12px;
-  border-radius: var(--radius-md);
+.remito-summary-date {
+  font-size: 0.76rem;
+  color: var(--text-muted);
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 4px;
 }
 
-.detail-client-title {
-  font-size: 1.05rem;
+.remito-summary-client {
+  font-size: 0.86rem;
   font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.detail-client-sub {
-  font-size: 0.85rem;
-  color: #cbd5e1;
+.remito-summary-address {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detail-section-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.section-label-compact {
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: 5px;
 }
 
-/* Botonera de Decisión Táctil (DEDOS GRANDES) */
-.section-label {
-  font-size: 0.92rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.touch-button-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-
-.touch-btn {
-  min-height: 64px;
-  padding: 14px 16px;
-  border-radius: var(--radius-lg);
-  border: 3px solid var(--border);
-  background: var(--surface);
-  font-size: 1.1rem;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: var(--shadow-sm);
-  text-align: left;
-}
-
-.touch-btn:active {
-  transform: scale(0.97);
-}
-
-.touch-btn-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.touch-btn-icon-wrapper {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.touch-btn-texts {
-  display: flex;
-  flex-direction: column;
-}
-
-.touch-btn-title {
-  font-size: 1.05rem;
-  font-weight: 800;
-}
-
-.touch-btn-desc {
-  font-size: 0.8rem;
-  font-weight: 500;
-  opacity: 0.85;
-}
-
-/* Estados seleccionados */
-.touch-btn.btn-cliente {
-  border-color: var(--status-cliente);
-  color: #065f46;
-}
-.touch-btn.btn-cliente .touch-btn-icon-wrapper {
-  background: var(--status-cliente-bg);
-  color: var(--status-cliente);
-}
-.touch-btn.btn-cliente.selected {
-  background: var(--status-cliente);
-  color: #fff;
-  border-color: #047857;
-  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);
-}
-.touch-btn.btn-cliente.selected .touch-btn-icon-wrapper {
-  background: rgba(255,255,255,0.25);
-  color: #fff;
-}
-
-.touch-btn.btn-interm {
-  border-color: var(--status-interm);
-  color: #075985;
-}
-.touch-btn.btn-interm .touch-btn-icon-wrapper {
-  background: var(--status-interm-bg);
-  color: var(--status-interm);
-}
-.touch-btn.btn-interm.selected {
-  background: var(--status-interm);
-  color: #fff;
-  border-color: #0369a1;
-  box-shadow: 0 8px 20px rgba(2, 132, 199, 0.35);
-}
-.touch-btn.btn-interm.selected .touch-btn-icon-wrapper {
-  background: rgba(255,255,255,0.25);
-  color: #fff;
-}
-
-.touch-btn.btn-nofirma {
-  border-color: var(--status-nofirma);
-  color: #991b1b;
-}
-.touch-btn.btn-nofirma .touch-btn-icon-wrapper {
-  background: var(--status-nofirma-bg);
-  color: var(--status-nofirma);
-}
-.touch-btn.btn-nofirma.selected {
-  background: var(--status-nofirma);
-  color: #fff;
-  border-color: #b91c1c;
-  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.35);
-}
-.touch-btn.btn-nofirma.selected .touch-btn-icon-wrapper {
-  background: rgba(255,255,255,0.25);
-  color: #fff;
-}
-
-/* Selector de Tipo de Documento */
-.doc-type-group {
+/* Grid de Ejemplares (3 Columnas x 2 Filas) */
+.ejemplar-grid-3col {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 6px;
 }
 
-.doc-type-btn {
-  min-height: 48px;
-  padding: 8px 6px;
-  border-radius: var(--radius-md);
-  border: 2px solid var(--border);
+.ejemplar-btn-3col {
+  height: 42px;
+  padding: 2px 4px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
   background: var(--surface);
+  color: var(--text);
   font-size: 0.82rem;
   font-weight: 700;
-  color: var(--text-muted);
-  cursor: pointer;
-  text-align: center;
-  transition: all 0.15s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  cursor: pointer;
+  line-height: 1.15;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.doc-type-btn.selected {
+.ejemplar-btn-3col:active {
+  transform: scale(0.95);
+}
+
+.ejemplar-btn-3col.selected {
+  background: rgba(13, 44, 92, 0.1);
   border-color: var(--dy-blue);
-  background: #eff6ff;
   color: var(--dy-blue);
-  box-shadow: var(--shadow-sm);
+  font-weight: 900;
+  box-shadow: 0 2px 8px rgba(13, 44, 92, 0.12);
 }
 
-/* Observaciones y Chips de Texto Rápido */
-.observations-box {
+.dark-theme .ejemplar-btn-3col.selected {
+  background: rgba(56, 189, 248, 0.16);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  box-shadow: 0 2px 8px rgba(56, 189, 248, 0.15);
+}
+
+.ejemplar-btn-subline {
+  font-size: 0.72rem;
+}
+
+/* Grid de Firmas (3 Columnas) */
+.firma-grid-3col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.firma-btn-3col {
+  min-height: 52px;
+  padding: 6px 4px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.quick-chips-row {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: none;
-}
-.quick-chips-row::-webkit-scrollbar {
-  display: none;
-}
-
-.quick-chip {
-  flex-shrink: 0;
-  padding: 6px 12px;
-  border-radius: var(--radius-pill);
-  font-size: 0.78rem;
-  font-weight: 600;
-  background: #e2e8f0;
-  color: var(--text-main);
-  border: none;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--text-muted);
   cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.obs-textarea {
-  width: 100%;
-  min-height: 75px;
-  padding: 12px;
-  border-radius: var(--radius-md);
-  border: 2px solid var(--border);
-  font-family: inherit;
-  font-size: 0.95rem;
-  color: var(--text-main);
-  resize: vertical;
+.firma-btn-3col:active {
+  transform: scale(0.95);
 }
-.obs-textarea:focus {
+
+.firma-btn-3col.btn-cliente.selected {
+  background: #ecfdf5;
+  border-color: #10b981;
+  color: #047857;
+  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.25);
+}
+
+.dark-theme .firma-btn-3col.btn-cliente.selected {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #10b981;
+  color: #34d399;
+}
+
+.firma-btn-3col.btn-interm.selected {
+  background: #eff6ff;
+  border-color: #0284c7;
+  color: #0369a1;
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.25);
+}
+
+.dark-theme .firma-btn-3col.btn-interm.selected {
+  background: rgba(2, 132, 199, 0.18);
+  border-color: #0284c7;
+  color: #38bdf8;
+}
+
+.firma-btn-3col.btn-nofirma.selected {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #b91c1c;
+  box-shadow: 0 3px 10px rgba(239, 68, 68, 0.25);
+}
+
+.dark-theme .firma-btn-3col.btn-nofirma.selected {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: #ef4444;
+  color: #f87171;
+}
+
+/* Módulo de Foto Compacto */
+.photo-module-compact {
+  width: 100%;
+}
+
+.camera-btn-compact {
+  width: 100%;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1.5px dashed var(--border);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.camera-btn-compact:hover {
+  background: var(--surface-hover);
+  border-color: var(--dy-blue);
+  color: var(--dy-blue);
+}
+
+.dark-theme .camera-btn-compact:hover {
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.photo-attached-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  border-radius: 10px;
+  height: 42px;
+}
+
+.photo-thumb-compact {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.photo-attached-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.photo-attached-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.photo-size-tag {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.photo-retake-btn,
+.photo-delete-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: var(--surface-active);
+  color: var(--text);
+  transition: all 0.15s ease;
+}
+
+.photo-delete-btn {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+}
+
+/* Casillero de Observaciones Compacto */
+.obs-textarea-compact {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.82rem;
+  line-height: 1.3;
+  resize: none;
+  box-sizing: border-box;
+}
+
+.obs-textarea-compact:focus {
   outline: none;
   border-color: var(--dy-blue);
 }
 
-/* Módulo de Fotografía y Compresión */
-.photo-module {
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-  border: 2px dashed var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.photo-preview-box {
-  position: relative;
-  width: 100%;
-  max-height: 240px;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: #000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.photo-preview-img {
-  max-width: 100%;
-  max-height: 240px;
-  object-fit: contain;
-}
-
-.photo-remove-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(0,0,0,0.7);
-  color: #fff;
-  border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.compression-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #dbeafe;
-  color: #1e40af;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.camera-action-btn {
-  min-height: 52px;
-  width: 100%;
-  border-radius: var(--radius-md);
-  background: #eff6ff;
-  border: 2px solid #bfdbfe;
-  color: var(--dy-blue);
-  font-size: 1rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.dark-theme .obs-textarea-compact:focus {
+  border-color: #38bdf8;
 }
 
 /* ==============================================================================
