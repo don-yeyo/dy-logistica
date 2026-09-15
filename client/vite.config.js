@@ -10,9 +10,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'logo.png', 'robots.txt'],
       manifest: {
-        name: 'Don Yeyo - Control de Remitos',
-        short_name: 'DY Remitos',
-        description: 'PWA para choferes de Don Yeyo S.A. - Control y registro de firmas de remitos',
+        name: 'Don Yeyo Logística',
+        short_name: 'DY Log',
+        description: 'PWA de Logística para choferes de Don Yeyo S.A.',
         theme_color: '#0d2c5c',
         background_color: '#f4f6f9',
         display: 'standalone',
