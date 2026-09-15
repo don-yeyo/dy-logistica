@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useAuth } from './config/AuthContext';
 import Header from './components/Header';
 import Drawer from './components/Drawer';
+import BottomNav from './components/BottomNav';
+import HelpChatModal from './components/HelpChatModal';
 import OfflineBanner from './components/OfflineBanner';
 import Dashboard from './pages/Dashboard';
 import ScanHome from './pages/ScanHome';
@@ -13,6 +15,7 @@ import { RefreshCw, ArrowLeft } from 'lucide-react';
 export default function App() {
   const { user, loading } = useAuth();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState('dashboard'); // 'dashboard' | 'scan' | 'hojas_ruta'
   const [selectedRemito, setSelectedRemito] = useState(null);
 
@@ -37,12 +40,14 @@ export default function App() {
   return (
     <div className="app-container">
       <Header onMenuClick={() => setIsDrawerOpen(true)} />
+      
       <Drawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         onNavigate={handleNavigate}
         currentScreen={currentScreen}
       />
+
       <OfflineBanner />
 
       <main className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -115,6 +120,21 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Barra Inferior Persistente (BottomNav) */}
+      {!selectedRemito && (
+        <BottomNav
+          currentScreen={currentScreen}
+          onNavigate={handleNavigate}
+          onOpenHelp={() => setIsHelpOpen(true)}
+        />
+      )}
+
+      {/* Modal Interactivo de Ayuda y Chatbot Chofer */}
+      <HelpChatModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+      />
     </div>
   );
 }

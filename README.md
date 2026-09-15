@@ -12,6 +12,8 @@ Aplicación Web Progresiva (**PWA**) mobile-first de alta velocidad diseñada es
 ## 🚀 Características Principales
 
 * 🧭 **Dashboard de Acciones Mobile-First**: Botonera optimizada en 2 columnas sin scroll para smartphones con acceso directo a "Registrar Remito", "Entregas", "Devoluciones", "Cajones" y "Hojas de Ruta".
+* 📱 **Barra Inferior Persistente (BottomNav)**: Navegación inferior fija con soporte de área segura (`safe-area-inset-bottom`), acceso instantáneo a **Inicio**, botón central destacado para **Escanear**, **Viajes** y **Ayuda**.
+* 💬 **Chatbot y Asistente Virtual Integrado**: Modal interactivo de ayuda que responde consultas de choferes en tiempo real a partir del documento [`docs/manual_usuario.md`](file:///c:/Users/gabrielt/Documents/Proyectos/Logistica/dy_logistica_app/docs/manual_usuario.md) con sugerencias rápidas (FAQ) y búsqueda contextual.
 * 🌓 **Modo Oscuro / Claro**: Soporte completo de temas corporativo Don Yeyo con persistencia y toggle en Header, Drawer y Login.
 * 📋 **Menú Drawer Lateral Deslizable**: Navegación categorizada con accesos rápidos y branding Don Yeyo S.A.
 * 📷 **Escáner 1D con Cámara en Vivo**: Decodifica en tiempo real códigos de barras 1D (**Code 128** y **Code 39**) impresos en los remitos en papel, decodificando el `TransaccionId` de Finnegans al instante.
@@ -44,6 +46,9 @@ dy_logistica_app/
 ├── package.json               # Scripts globales con concurrently
 ├── .gitignore                 # Reglas Git para Node, Vite y entornos
 ├── README.md                  # Documentación del proyecto
+├── docs/
+│   ├── manual_usuario.md      # Manual de usuario para choferes (Base del Chatbot)
+│   └── Especificacion Funcional app Choferes.docx
 ├── schema.sql                 # Script SQL para tablas MySQL y datos de prueba
 ├── client/                    # Frontend React 18 + Vite + PWA
 │   ├── package.json
@@ -65,10 +70,12 @@ dy_logistica_app/
 │       ├── components/
 │       │   ├── Header.jsx      # Header con menú hamburguesa, tema y avatar
 │       │   ├── Drawer.jsx      # Menú lateral deslizable categorizado
+│       │   ├── BottomNav.jsx   # Barra inferior persistente con safe-area
+│       │   ├── HelpChatModal.jsx # Chatbot interactivo de asistencia al chofer
 │       │   ├── SearchBar.jsx   # Buscador predictivo
 │       │   ├── RemitoCard.jsx  # Tarjeta táctil de remito
 │       │   ├── CameraCapture.jsx # Módulo de cámara con compresión 70%
-│       │   ├── BottomBar.jsx   # Barra de acciones fija inferior
+│       │   ├── BottomBar.jsx   # Barra de acciones de detalle
 │       │   └── OfflineBanner.jsx # Notificación flotante de sincronización
 │       ├── pages/
 │       │   ├── Dashboard.jsx   # Dashboard de acciones (2 columnas sin scroll)

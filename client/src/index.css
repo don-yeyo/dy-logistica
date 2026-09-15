@@ -1624,4 +1624,102 @@ body {
   color: #38bdf8;
 }
 
+/* ==============================================================================
+   BARRA INFERIOR PERSISTENTE (BOTTOM NAV) CON SAFE AREA
+   ============================================================================== */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  z-index: 900;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.bottom-nav-inner {
+  max-width: 650px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  height: 64px;
+  padding: 0 10px;
+  position: relative;
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  gap: 3px;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 12px;
+  transition: all 0.15s ease;
+  flex: 1;
+}
+
+.bottom-nav-item:active {
+  transform: scale(0.94);
+}
+
+.bottom-nav-item.active {
+  color: var(--dy-blue);
+}
+
+.dark-theme .bottom-nav-item.active {
+  color: #38bdf8;
+}
+
+.bottom-nav-scan-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  margin-top: -24px;
+  flex: 1;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bottom-nav-scan-btn:active {
+  transform: scale(0.92);
+}
+
+.scan-btn-circle {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0d2c5c 0%, #1a4b8c 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px rgba(13, 44, 92, 0.4);
+  border: 3px solid var(--surface);
+  transition: all 0.2s ease;
+}
+
+.dark-theme .scan-btn-circle {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  box-shadow: 0 6px 16px rgba(2, 132, 199, 0.4);
+}
+
+/* Espacio en el contenedor principal para que la barra fija no tape contenido */
+.main-content {
+  padding-bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+}
+
+
 

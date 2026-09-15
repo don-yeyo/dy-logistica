@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { 
-  ScanLine, 
-  Truck, 
-  PackageMinus, 
-  Boxes, 
-  FileText, 
-  RefreshCw, 
-  Info, 
-  X, 
-  CheckCircle, 
-  Calendar, 
+import {
+  ScanLine,
+  Truck,
+  PackageMinus,
+  Boxes,
+  FileText,
+  RefreshCw,
+  Info,
+  X,
+  CheckCircle,
+  Calendar,
   User as UserIcon,
   ChevronRight
 } from 'lucide-react';
@@ -81,7 +81,7 @@ export default function Dashboard({ onStartScan, onOpenHojasRuta }) {
             Registrar Remito
           </div>
           <div className="dashboard-card-desc" style={{ fontSize: '0.82rem' }}>
-            Escanear código 1D o ingresar remito manualmente
+            Escanear código de barras o ingresar remito manualmente
           </div>
         </div>
 
@@ -163,8 +163,8 @@ export default function Dashboard({ onStartScan, onOpenHojasRuta }) {
       </div>
 
       {/* Barra de Estado Rápida / Sync */}
-      <div 
-        className="glass" 
+      <div
+        className="glass"
         onClick={triggerSyncOffline}
         style={{
           padding: '10px 14px',
@@ -196,7 +196,7 @@ export default function Dashboard({ onStartScan, onOpenHojasRuta }) {
 
       {/* Modal Informativo para Módulos de la Próxima Fase */}
       {modalInfo && (
-        <div 
+        <div
           style={{
             position: 'fixed',
             top: 0,
@@ -214,7 +214,7 @@ export default function Dashboard({ onStartScan, onOpenHojasRuta }) {
           }}
           onClick={() => setModalInfo(null)}
         >
-          <div 
+          <div
             className="glass"
             style={{
               width: '100%',
