@@ -141,20 +141,45 @@ npm run dev
 
 ---
 
-## 📋 Variables de Entorno Principales
+## ☁️ Despliegue en Netlify (Serverless Full-Stack)
 
-| Variable | Descripción | Ubicación |
+El proyecto está 100% configurado para desplegarse en **Netlify** de forma unificada:
+- **Frontend SPA / PWA**: Se compila y publica desde `client/dist`.
+- **Backend API Serverless**: Se ejecuta a través de la función serverless [`netlify/functions/api.js`](file:///c:/Users/gabrielt/Documents/Proyectos/Logistica/dy_logistica_app/netlify/functions/api.js) envolviendo la app modular [`server/app.js`](file:///c:/Users/gabrielt/Documents/Proyectos/Logistica/dy_logistica_app/server/app.js) con `serverless-http`.
+- **Enrutamiento y Proxy**: [`netlify.toml`](file:///c:/Users/gabrielt/Documents/Proyectos/Logistica/dy_logistica_app/netlify.toml) redirige automáticamente cualquier petición a `/api/*` hacia la función serverless y el resto a `/index.html` para la SPA.
+
+### Variables de Entorno para Configurar en Netlify (`Site Settings > Environment Variables`)
+
+#### 1. Variables de Frontend (PWA / Cliente)
+| Variable | Valor Recomendado en Producción | Descripción |
 | :--- | :--- | :--- |
-| `PORT` | Puerto del servidor Express (default: `5000`) | `server/.env` |
-| `DB_HOST` | Host de base de datos MySQL (default: `localhost`) | `server/.env` |
-| `DB_NAME` | Nombre de base de datos (default: `Firma_de_remitos`) | `server/.env` |
-| `MAX_VIAJES_HISTORICOS_DEFAULT` | Cantidad de hojas de ruta históricas a cargar (default: `4`) | `server/.env` |
-| `ENABLE_SHAREPOINT_UPLOAD` | Habilitar subida a SharePoint vía Power Automate (`true`/`false`) | `server/.env` |
-| `POWERAUTOMATE_URL` | URL de Webhook de Power Automate para recibir las fotos | `server/.env` |
-| `VITE_AZURE_AD_CLIENT_ID` | Client ID de la App registrada en Microsoft Entra ID | `client/.env` |
-| `VITE_AZURE_AD_TENANT_ID` | Tenant ID de Microsoft Entra ID | `client/.env` |
-| `VITE_IMAGE_COMPRESSION_QUALITY` | Calidad de compresión client-side (default: `0.70`) | `client/.env` |
-| `VITE_MOCK_AUTH` | Habilitar selector rápido de chofer para desarrollo local | `client/.env` |
+| `VITE_API_URL` | `/api` | Ruta relativa para proxy transparente hacia Netlify Functions |
+| `VITE_AZURE_AD_CLIENT_ID` | `8d66bceb-6e2b-4cd7-8ed3-31046f8c22ad` | ID de la aplicación registrada en Microsoft Entra ID (Público) |
+| `VITE_AZURE_AD_TENANT_ID` | `fd8a7e94-3179-471f-b79c-a64f8bfc8536` | ID del Directorio / Inquilino Entra ID (Público) |
+| `VITE_AZURE_AD_REDIRECT_URI` | `https://tu-sitio.netlify.app` *(o dominio personalizado)* | URL de retorno autorizada tras el login SSO |
+| `VITE_MOCK_AUTH` | `false` | **Obligatorio en producción**: Exige autenticación real por SSO |
+| `VITE_IMAGE_COMPRESSION_QUALITY` | `0.70` | Calidad de compresión client-side en canvas (JPEG 70%) |
+| `VITE_IMAGE_MAX_WIDTH` | `1920` | Ancho máximo en px para redimensionar fotos antes de enviar |
+| `VITE_IMAGE_MAX_HEIGHT` | `1920` | Alto máximo en px para redimensionar fotos antes de enviar |
+
+#### 2. Variables de Backend (Netlify Functions Serverless)
+| Variable | Valor en Producción | Descripción |
+| :--- | :--- | :--- |
+| `NODE_ENV` | `production` | Entorno de ejecución |
+| `DB_HOST` | `dydb2-instance-1.cz8kik28igwg.us-east-1.rds.amazonaws.com` | Endpoint de base de datos MySQL en AWS RDS |
+| `DB_PORT` | `3306` | Puerto de conexión MySQL |
+| `DB_NAME` | `Firma_de_remitos` | Nombre de la base de datos |
+| `DB_USER` | `DBAdmin_Firma_de_Remitos` | Usuario de base de datos |
+| `DB_PASSWORD` | *(Contraseña privada RDS)* | Contraseña segura de MySQL |
+| `DB_SSL` | `true` | Conexión encriptada SSL/TLS hacia AWS RDS |
+| `DB_CONNECTION_LIMIT` | `5` | Límite conservador de conexiones por instancia Lambda |
+| `MAX_VIAJES_HISTORICOS_DEFAULT` | `4` | Cantidad de hojas de ruta históricas a recuperar |
+| `AZURE_AD_TENANT_ID` | `fd8a7e94-3179-471f-b79c-a64f8bfc8536` | Tenant ID de Entra ID para validación de servicios |
+| `AZURE_AD_CLIENT_ID` | `8d66bceb-6e2b-4cd7-8ed3-31046f8c22ad` | Client ID de la App en Entra ID |
+| `AZURE_AD_CLIENT_SECRET` | *(Secreto privado Azure)* | Secreto de cliente confidencial (Sólo Backend) |
+| `ENABLE_SHAREPOINT_UPLOAD` | `true` *(o `false` para pruebas)* | Activa el envío automático de fotos a Power Automate |
+| `POWERAUTOMATE_URL` | *(URL de flujo Power Automate)* | Webhook HTTP de Power Automate para almacenar en SharePoint |
+| `SHAREPOINT_FQDN` | `https://donyeyo.sharepoint.com` | FQDN base de SharePoint |
 
 ---
 
@@ -185,3 +210,4 @@ La PWA utiliza `IndexedDB` y `Service Workers` de la siguiente manera:
 2. Si se pierde la señal, el chofer puede seguir buscando y marcando remitos.
 3. El control se guarda en la cola `pending_controls` y la tarjeta actualiza su estado visual en pantalla inmediatamente.
 4. Al reconectarse a Internet, la aplicación detecta el evento `online` y envía automáticamente el lote de controles pendientes al endpoint `/api/remitos/sync-offline`.
+

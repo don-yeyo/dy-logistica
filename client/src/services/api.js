@@ -5,19 +5,13 @@ const api = axios.create({
   timeout: 30000
 });
 
-// Interceptor de Peticiones: inyecta email de usuario y API Key
+// Interceptor de Peticiones: inyecta email de usuario identificado
 api.interceptors.request.use(
   (config) => {
     const userEmail = localStorage.getItem('dy_user_email');
     if (userEmail) {
       config.headers['x-user-email'] = userEmail;
     }
-
-    const apiKey = import.meta.env.VITE_API_SECRET_KEY;
-    if (apiKey) {
-      config.headers['x-api-key'] = apiKey;
-    }
-
     return config;
   },
   (error) => Promise.reject(error)
