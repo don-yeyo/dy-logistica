@@ -11,6 +11,9 @@ Aplicación Web Progresiva (**PWA**) mobile-first de alta velocidad diseñada es
 
 ## 🚀 Características Principales
 
+* 🧭 **Dashboard de Acciones Mobile-First**: Botonera optimizada en 2 columnas sin scroll para smartphones con acceso directo a "Registrar Remito", "Entregas", "Devoluciones", "Cajones" y "Hojas de Ruta".
+* 🌓 **Modo Oscuro / Claro**: Soporte completo de temas corporativo Don Yeyo con persistencia y toggle en Header, Drawer y Login.
+* 📋 **Menú Drawer Lateral Deslizable**: Navegación categorizada con accesos rápidos y branding Don Yeyo S.A.
 * 📷 **Escáner 1D con Cámara en Vivo**: Decodifica en tiempo real códigos de barras 1D (**Code 128** y **Code 39**) impresos en los remitos en papel, decodificando el `TransaccionId` de Finnegans al instante.
 * 🔦 **Soporte de Linterna / Torch & Sonido Beep**: Botón de linterna integrado para condiciones de poca luz y feedback sonoro/háptico al detectar el código.
 * ⌨️ **Ingreso Manual Alternativo**: Modal con teclado virtual numérico para ingresar el `TransaccionId` o `Comprobante` si el papel está deteriorado o arrugado.
@@ -27,7 +30,7 @@ Aplicación Web Progresiva (**PWA**) mobile-first de alta velocidad diseñada es
   * 🔴 **NO Firmado / Rechazado**.
 * 📱 **PWA Mobile-First & Táctil**: Diseñada para pantalla táctil en ruta ("para dedos grandes"), con botones de alto contraste y respuesta inmediata.
 * 📷 **Compresión de Fotos al 70% Client-Side**: Las fotos capturadas se redimensionan y comprimen en el navegador a JPEG al 70% antes del envío (~150-300 KB).
-* ☁️ **Integración SharePoint / Power Automate**: Las fotos se envían a SharePoint con la nomenclatura estandarizada:
+* ☁️ **Integración SharePoint / Power Automate**: Las fotos se envían en Base64 a Power Automate con la nomenclatura estandarizada:
   `FOTO_CAM_CHOFER_<codigoChofer>_<comprobante>_<timestamp>.jpg`.
 * 📶 **Soporte Completo Offline**: Si el chofer se queda sin señal en la calle, el escaneo y los controles se consultan y guardan en IndexedDB local y se sincronizan automáticamente en segundo plano apenas se recupera la conexión.
 * 🔐 **SSO Microsoft Entra ID**: Autenticación corporativa con Office 365 y resolución automática de roles y código de chofer mediante la tabla de usuarios local.
@@ -52,20 +55,24 @@ dy_logistica_app/
 │   │   ├── icon-192.png
 │   │   └── icon-512.png
 │   └── src/
-│       ├── index.css          # Vanilla CSS con tokens Don Yeyo
-│       ├── main.jsx           # Entrypoint React + Service Worker PWA
+│       ├── index.css          # Vanilla CSS con tokens Don Yeyo y dark-theme
+│       ├── main.jsx           # Entrypoint React + ThemeProvider + PWA
 │       ├── App.jsx            # Contenedor y enrutador dinámico
 │       ├── config/
 │       │   ├── AuthContext.jsx # Proveedor de contexto y gestor offline
+│       │   ├── ThemeContext.jsx # Proveedor de tema Claro / Oscuro
 │       │   └── msalConfig.js   # Configuración Microsoft Entra ID
 │       ├── components/
-│       │   ├── Header.jsx      # Header con estado de red y datos de chofer
+│       │   ├── Header.jsx      # Header con menú hamburguesa, tema y avatar
+│       │   ├── Drawer.jsx      # Menú lateral deslizable categorizado
 │       │   ├── SearchBar.jsx   # Buscador predictivo
 │       │   ├── RemitoCard.jsx  # Tarjeta táctil de remito
 │       │   ├── CameraCapture.jsx # Módulo de cámara con compresión 70%
 │       │   ├── BottomBar.jsx   # Barra de acciones fija inferior
 │       │   └── OfflineBanner.jsx # Notificación flotante de sincronización
 │       ├── pages/
+│       │   ├── Dashboard.jsx   # Dashboard de acciones (2 columnas sin scroll)
+│       │   ├── ScanHome.jsx    # Escaneo 1D con cámara activa
 │       │   ├── RemitosList.jsx # Lista de remitos con selector de viajes
 │       │   ├── RemitoDetail.jsx # Detalle de control y firma
 │       │   └── Login.jsx       # Login Microsoft SSO y Mock Dev

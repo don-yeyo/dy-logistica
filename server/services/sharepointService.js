@@ -68,7 +68,28 @@ class SharePointService {
 
       console.log(`✔ [SharePoint] Imagen enviada con éxito a SharePoint/Power Automate [Status: ${response.status}]`);
       
-      const remoteUrl = response.data?.url || response.data?.fileUrl || `${process.env.SHAREPOINT_FQDN || 'SharePoint'}/${finalFileName}`;
+      let remoteUrl = null;
+      if (response.data) {
+        let archivoPath = response.data.resultado || response.data.archivo || response.data.url || response.data.fileUrl || '';
+        if (typeof archivoPath === 'string' && archivoPath.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(archivoPath);
+            archivoPath = parsed.archivo || parsed.resultado || archivoPath;
+          } catch (e) {
+            // No es JSON válido, conservar string original
+          }
+        }
+
+        if (archivoPath && process.env.SHAREPOINT_FQDN) {
+          const fqdn = process.env.SHAREPOINT_FQDN.replace(/\/$/, '');
+          const cleanPath = decodeURIComponent(archivoPath).replace(/^\//, '');
+          remoteUrl = `${fqdn}/${encodeURI(cleanPath)}`;
+        } else if (archivoPath) {
+          remoteUrl = archivoPath;
+        } else {
+          remoteUrl = `${process.env.SHAREPOINT_FQDN || 'SharePoint'}/${finalFileName}`;
+        }
+      }
 
       return {
         success: true,

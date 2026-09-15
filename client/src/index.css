@@ -12,11 +12,12 @@
   --secondary: var(--dy-red);
   --accent: #2563eb;
   
-  --background: #f1f5f9;
+  --background: #f4f4f4;
   --surface: #ffffff;
   --surface-hover: #f8fafc;
   --surface-active: #e2e8f0;
   
+  --text: #0d2c5c;
   --text-main: #0f172a;
   --text-muted: #64748b;
   --text-light: #94a3b8;
@@ -45,19 +46,40 @@
   /* Glassmorphism y Elevación */
   --glass: rgba(255, 255, 255, 0.85);
   --glass-header: rgba(13, 44, 92, 0.92);
-  --glass-border: rgba(255, 255, 255, 0.2);
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --glass-border: rgba(13, 44, 92, 0.1);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   
   /* Medidas y Bordes */
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 20px;
-  --radius-pill: 9999px;
+  --radius-pill: 50px;
   
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.dark-theme {
+  --dy-red: #ff758f;
+  --background: #0f172a;
+  --surface: #1e293b;
+  --surface-hover: #334155;
+  --surface-active: #475569;
+  --text: #f8fafc;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-light: #64748b;
+  --primary: #f8fafc;
+  --primary-hover: #e2e8f0;
+  --border: #334155;
+  --border-focus: #38bdf8;
+  --glass: rgba(30, 41, 59, 0.85);
+  --glass-header: rgba(15, 23, 42, 0.94);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4);
 }
 
 * {
@@ -1321,4 +1343,285 @@ body {
   border-radius: var(--radius-pill);
   letter-spacing: 0.02em;
 }
+
+/* ==============================================================================
+   ESTILOS COMPARTIDOS CON DON YEYO BOILERPLATE & CONTROL DE INGRESOS
+   ============================================================================== */
+
+/* Botón Toggle de Tema */
+.mode-toggle {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-toggle:hover {
+  background: var(--surface-hover);
+  transform: scale(1.05);
+}
+
+.dark-theme .mode-toggle {
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* Pantalla de Login SSO */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px;
+  text-align: center;
+  background-color: var(--background);
+  position: relative;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 36px 24px 28px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.dark-theme .login-card {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.login-options {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.btn-microsoft {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 14px;
+  border: 1.5px solid var(--border);
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 0.98rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
+}
+
+.btn-microsoft:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: #94a3b8;
+}
+
+.btn-microsoft:active {
+  transform: scale(0.98);
+}
+
+/* Drawer Lateral Deslizable */
+.drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.drawer-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 82%;
+  max-width: 320px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  z-index: 1001;
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.2);
+}
+
+.drawer.open {
+  transform: translateX(0);
+}
+
+/* Dashboard de Acciones (2 Columnas sin scroll en Smartphones) */
+.dashboard-container {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: calc(100vh - 75px);
+  justify-content: space-between;
+}
+
+.dashboard-welcome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  flex: 1;
+  align-content: stretch;
+}
+
+.dashboard-card {
+  border-radius: var(--radius-lg);
+  border: 1.5px solid transparent;
+  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+
+.dashboard-card:active {
+  transform: scale(0.96);
+}
+
+.dashboard-card-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+.dashboard-card-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.25;
+  margin-bottom: 4px;
+}
+
+.dashboard-card-desc {
+  font-size: 0.72rem;
+  opacity: 0.85;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+/* Colores de Cards de Dashboard */
+.card-primary-action {
+  background: linear-gradient(135deg, #0d2c5c 0%, #1a4b8c 100%);
+  color: #ffffff;
+  border-color: #2563eb;
+  grid-column: span 2;
+  padding: 22px 16px;
+}
+
+.card-primary-action .dashboard-card-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  width: 58px;
+  height: 58px;
+}
+
+.card-emerald {
+  background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+  color: #ffffff;
+}
+.card-emerald .dashboard-card-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.card-amber {
+  background: linear-gradient(135deg, #9a3412 0%, #ea580c 100%);
+  color: #ffffff;
+}
+.card-amber .dashboard-card-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.card-purple {
+  background: linear-gradient(135deg, #581c87 0%, #7e22ce 100%);
+  color: #ffffff;
+}
+.card-purple .dashboard-card-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.card-blue {
+  background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%);
+  color: #ffffff;
+}
+.card-blue .dashboard-card-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.card-slate {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+}
+.card-slate .dashboard-card-icon {
+  background: var(--surface-active);
+  color: var(--dy-blue);
+}
+.dark-theme .card-slate .dashboard-card-icon {
+  color: #38bdf8;
+}
+
 

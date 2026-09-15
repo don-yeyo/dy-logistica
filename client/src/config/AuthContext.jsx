@@ -109,10 +109,8 @@ export function AuthProvider({ children }) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Cargar sesión existente
-    const storedEmail = localStorage.getItem('dy_user_email') || (
-      import.meta.env.VITE_MOCK_AUTH === 'true' ? import.meta.env.VITE_DEFAULT_MOCK_EMAIL : null
-    );
+    // Cargar sesión existente si el usuario ya inició sesión
+    const storedEmail = localStorage.getItem('dy_user_email');
 
     if (storedEmail) {
       loadUser(storedEmail);

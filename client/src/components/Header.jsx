@@ -1,66 +1,210 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../config/AuthContext';
-import { Truck, LogOut, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { useTheme } from '../config/ThemeContext';
+import { 
+  Menu, 
+  Sun, 
+  Moon, 
+  LogOut, 
+  Wifi, 
+  WifiOff, 
+  RefreshCw,
+  User
+} from 'lucide-react';
+import logo from '../assets/logo-don-yeyo-png-sin-fondo.png';
 
-export default function Header({ currentRoute, onSelectRoute }) {
-  const { user, isOnline, pendingSyncCount, syncing, triggerSyncOffline, logout } = useAuth();
+export default function Header({ onMenuClick }) {
+  const { user, logout, isOnline, pendingSyncCount, syncing, triggerSyncOffline } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+
+  const name = user?.nombre || 'Chofer';
+  const initials = name
+    .split(' ')
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'DY';
 
   return (
-    <header className="app-header">
+    <header className="app-header glass">
       <div className="header-top">
-        <div className="brand-section">
-          <img src="/logo.png" alt="Don Yeyo" className="brand-logo" onError={(e) => { e.target.style.display = 'none'; }} />
-          <div>
-            <div className="brand-title">Don Yeyo</div>
+        {/* Sección Izquierda: Menú Hamburguesa y Logo Don Yeyo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            type="button"
+            className="mode-toggle"
+            onClick={onMenuClick}
+            style={{ border: 'none', color: '#ffffff', background: 'rgba(255,255,255,0.1)' }}
+            title="Abrir menú"
+          >
+            <Menu size={22} />
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <img
+              src={logo}
+              alt="Don Yeyo"
+              style={{ height: '32px', width: 'auto', objectFit: 'contain' }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span className="brand-title">Logística</span>
+                <span className="brand-badge">PWA</span>
+              </div>
+            </div>
           </div>
-          <span className="brand-badge">Logística</span>
         </div>
 
-        <div className="user-section">
+        {/* Sección Derecha: Indicador de red, Toggle de tema y Avatar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Indicador de Conexión & Sincronización */}
           <button
-            className={`connection-pill ${isOnline ? 'online' : 'offline'}`}
+            type="button"
             onClick={triggerSyncOffline}
-            title={isOnline ? 'Conectado al servidor' : 'Modo Sin Conexión activo'}
+            className={`connection-pill ${isOnline ? 'online' : 'offline'}`}
+            style={{ border: 'none' }}
+            title={
+              isOnline
+                ? pendingSyncCount > 0
+                  ? `Sincronizar ${pendingSyncCount} pendientes`
+                  : 'Conectado a Internet'
+                : 'Sin conexión (Modo Offline activo)'
+            }
           >
-            <span className="connection-dot" />
-            {isOnline ? (
-              <>
-                <Wifi size={13} />
-                <span>Online</span>
-              </>
+            {syncing ? (
+              <RefreshCw size={12} className="spin" />
+            ) : isOnline ? (
+              <Wifi size={12} />
             ) : (
-              <>
-                <WifiOff size={13} />
-                <span>Offline {pendingSyncCount > 0 && `(${pendingSyncCount})`}</span>
-              </>
+              <WifiOff size={12} />
             )}
-            {syncing && <RefreshCw size={12} className="spin" />}
+            <span>
+              {syncing
+                ? 'Sincronizando...'
+                : !isOnline
+                ? 'Offline'
+                : pendingSyncCount > 0
+                ? `${pendingSyncCount} pend.`
+                : 'Online'}
+            </span>
           </button>
 
-          <button 
-            className="btn-back-square" 
-            style={{ minHeight: '34px', minWidth: '34px', border: 'none', background: 'rgba(255,255,255,0.15)', color: '#fff', borderRadius: '8px' }}
-            onClick={logout}
-            title="Cerrar Sesión"
+          {/* Toggle Modo Claro / Oscuro */}
+          <button
+            type="button"
+            className="mode-toggle"
+            onClick={toggleTheme}
+            style={{ border: 'none', color: '#ffffff', background: 'rgba(255,255,255,0.1)' }}
+            title="Cambiar tema"
           >
-            <LogOut size={16} />
+            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
           </button>
+
+          {/* Avatar con Menú Desplegable */}
+          <div style={{ position: 'relative' }}>
+            <div
+              onClick={() => setShowUserDropdown(!showUserDropdown)}
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                background: '#ffffff',
+                color: 'var(--dy-blue)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+              }}
+              title={name}
+            >
+              {initials}
+            </div>
+
+            {showUserDropdown && (
+              <div
+                className="glass"
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '8px',
+                  minWidth: '190px',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                  overflow: 'hidden',
+                  zIndex: 200,
+                  padding: '6px'
+                }}
+              >
+                <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>
+                  <p style={{ fontSize: '0.85rem', fontWeight: 800, margin: 0 }}>{name}</p>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>
+                    {user?.email}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    toggleTheme();
+                    setShowUserDropdown(false);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text)',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                >
+                  {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+                  <span>{theme === 'light' ? 'Modo Oscuro' : 'Modo Claro'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowUserDropdown(false);
+                    logout();
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--error)',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                >
+                  <LogOut size={16} />
+                  <span>Cerrar Sesión</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      {user && (
-        <div className="header-info-bar">
-          <div className="driver-info">
-            <Truck size={15} />
-            <span>Chofer: {user.nombre} {user.codigo_chofer ? `(#${user.codigo_chofer})` : ''}</span>
-          </div>
-          {pendingSyncCount > 0 && (
-            <span style={{ color: '#fef08a', fontSize: '0.75rem', fontWeight: 700 }}>
-              {pendingSyncCount} pendientes de sync
-            </span>
-          )}
-        </div>
-      )}
     </header>
   );
 }
