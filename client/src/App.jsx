@@ -67,19 +67,9 @@ export default function App() {
           <div key="scan" className="page-transition">
             <div style={{ padding: '8px 16px 0 16px' }}>
               <button
+                type="button"
+                className="top-back-btn"
                 onClick={() => setCurrentScreen('dashboard')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--dy-blue)',
-                  fontWeight: 700,
-                  fontSize: '0.88rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  cursor: 'pointer',
-                  padding: '6px 0'
-                }}
               >
                 <ArrowLeft size={18} />
                 <span>Volver a Inicio</span>
@@ -93,19 +83,9 @@ export default function App() {
           <div key="hojas_ruta" className="page-transition">
             <div style={{ padding: '8px 16px 0 16px' }}>
               <button
+                type="button"
+                className="top-back-btn"
                 onClick={() => setCurrentScreen('dashboard')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--dy-blue)',
-                  fontWeight: 700,
-                  fontSize: '0.88rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  cursor: 'pointer',
-                  padding: '6px 0'
-                }}
               >
                 <ArrowLeft size={18} />
                 <span>Volver a Inicio</span>

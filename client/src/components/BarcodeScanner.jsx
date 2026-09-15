@@ -247,14 +247,16 @@ export default function BarcodeScanner({ onScanSuccess, onError, isPaused = fals
         <div className="modal-overlay" onClick={() => setShowManualModal(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header-row">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Keyboard size={22} style={{ color: 'var(--dy-blue)' }} />
-                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text)' }}>Ingreso Manual</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="modal-header-icon">
+                  <Keyboard size={24} />
+                </div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>Ingreso Manual</h3>
               </div>
             </div>
 
             <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', margin: '8px 0 16px' }}>
-              Ingrese el número de <strong>TransaccionId</strong> o <strong>Comprobante</strong> impreso en el remito.
+              Ingrese el número que figura debajo del código de barras impreso en el remito.
             </p>
 
             <form onSubmit={handleManualSubmit}>
@@ -264,7 +266,7 @@ export default function BarcodeScanner({ onScanSuccess, onError, isPaused = fals
                   autoFocus
                   inputMode="numeric"
                   className="scanner-manual-input"
-                  placeholder="Ej: 1048751 o R-0050-00487512"
+                  placeholder="Ej: 1048751"
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
                 />
@@ -274,7 +276,16 @@ export default function BarcodeScanner({ onScanSuccess, onError, isPaused = fals
                 <button
                   type="button"
                   className="btn-cancel"
-                  style={{ flex: 1, padding: '12px', borderRadius: '12px', background: '#f1f5f9', border: 'none', fontWeight: 600 }}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    borderRadius: '12px',
+                    background: 'var(--surface-hover)',
+                    color: 'var(--text-main)',
+                    border: '1px solid var(--border)',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
                   onClick={() => setShowManualModal(false)}
                 >
                   Cancelar
@@ -283,7 +294,16 @@ export default function BarcodeScanner({ onScanSuccess, onError, isPaused = fals
                   type="submit"
                   disabled={!manualCode.trim()}
                   className="btn-primary"
-                  style={{ flex: 2, padding: '12px', borderRadius: '12px', background: 'var(--dy-blue)', color: '#fff', border: 'none', fontWeight: 700 }}
+                  style={{
+                    flex: 2,
+                    padding: '12px',
+                    borderRadius: '12px',
+                    background: 'var(--dy-blue)',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
                 >
                   Buscar Remito
                 </button>

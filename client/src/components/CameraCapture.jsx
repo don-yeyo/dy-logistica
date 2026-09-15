@@ -17,7 +17,7 @@ export default function CameraCapture({ initialPhotoUrl, onPhotoCaptured, onPhot
     try {
       setCompressing(true);
       const result = await compressImage(file, { quality: 0.70 });
-      
+
       setPreviewUrl(result.dataUrl);
       setStats({
         originalSizeKb: result.originalSizeKb,
@@ -109,7 +109,7 @@ export default function CameraCapture({ initialPhotoUrl, onPhotoCaptured, onPhot
           ) : (
             <>
               <Camera size={16} />
-              <span>Tomar Foto del Comprobante (Opcional)</span>
+              <span>Tomar Foto del Documento (Opcional)</span>
             </>
           )}
         </button>

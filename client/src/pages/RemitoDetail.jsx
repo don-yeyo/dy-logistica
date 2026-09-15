@@ -5,15 +5,15 @@ import { useAuth } from '../config/AuthContext';
 import CameraCapture from '../components/CameraCapture';
 import BottomBar from '../components/BottomBar';
 import AlertModal from '../components/AlertModal';
-import { 
-  Building2, 
-  Truck, 
-  XCircle, 
-  MapPin, 
-  Calendar, 
-  FileText, 
+import {
+  Building2,
+  Truck,
+  XCircle,
+  MapPin,
+  Calendar,
+  FileText,
   CheckCircle2,
-  Check, 
+  Check,
   MessageSquare
 } from 'lucide-react';
 
@@ -48,20 +48,21 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
     try {
       setSaving(true);
 
-      let fotoUrl = remito.foto_url;
-      let fotoNombreArchivo = remito.foto_nombre_archivo;
-      let fotoSharepointUrl = remito.foto_sharepoint_url;
+      let fotoUrl = null;
+      let fotoNombreArchivo = null;
+      let fotoSharepointUrl = null;
 
-      // 1. Si se capturó una foto nueva y hay internet, subirla al servidor
+      // 1. Si se capturó una foto nueva en esta sesión y hay internet, subirla al servidor
       if (capturedPhoto && capturedPhoto.file && navigator.onLine) {
         try {
           const formData = new FormData();
           formData.append('foto', capturedPhoto.file);
           formData.append('remito_id', remito.id);
           formData.append('comprobante', remito.finne_Comprobante || '');
+          formData.append('ejemplar', ejemplar || 'ORIGINAL');
 
           const uploadRes = await uploadFotoRemito(formData);
-          if (uploadRes && uploadRes.ok) {
+          if (uploadRes && uploadRes.ok && uploadRes.foto) {
             fotoUrl = uploadRes.foto.url;
             fotoNombreArchivo = uploadRes.foto.fileName;
             fotoSharepointUrl = uploadRes.foto.sharepointUrl;
@@ -142,8 +143,8 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
       {/* 1. SELECCIÓN DE EJEMPLAR (3 Columnas x 2 Filas) */}
       <div className="detail-section-compact">
         <div className="section-label-compact">
-          <FileText size={14} style={{ color: 'var(--dy-blue)' }} />
-          <span>1. ¿De cuál ejemplar se trata?</span>
+          <FileText size={20} style={{ color: 'var(--dy-blue)' }} />
+          <span>¿De cuál ejemplar se trata?</span>
         </div>
 
         <div className="ejemplar-grid-3col">
@@ -168,8 +169,8 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
       {/* 2. SELECCIÓN DE FIRMA / RECEPTOR (3 Columnas) */}
       <div className="detail-section-compact">
         <div className="section-label-compact">
-          <CheckCircle2 size={14} style={{ color: 'var(--dy-blue)' }} />
-          <span>2. ¿Está firmado? Receptor</span>
+          <CheckCircle2 size={20} style={{ color: 'var(--dy-blue)' }} />
+          <span>¿Está firmado? Receptor</span>
         </div>
 
         <div className="firma-grid-3col">
@@ -205,10 +206,10 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
         </div>
       </div>
 
-      {/* 3. FOTOGRAFÍA OPCIONAL (Módulo Compacto) */}
+      {/* 3. FOTOGRAFÍA OPCIONAL (Siempre limpia al abrir) */}
       <div className="detail-section-compact">
         <CameraCapture
-          initialPhotoUrl={remito.foto_url}
+          initialPhotoUrl={null}
           onPhotoCaptured={(photoData) => setCapturedPhoto(photoData)}
           onPhotoRemoved={() => setCapturedPhoto(null)}
         />

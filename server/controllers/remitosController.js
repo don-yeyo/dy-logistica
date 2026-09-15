@@ -315,6 +315,41 @@ async function saveControl(req, res) {
     const docType = tipo_documento || (chosenEjemplar === 'RECEPCION_VALORIZADA' ? 'RECEPCION_VALORIZADA' : 'REMITO');
     const isOffline = sincronizado_offline ? 1 : 0;
 
+    // Mapeo de columna OCR según ejemplar
+    const ocrColumnMap = {
+      'ORIGINAL': 'ocr_original',
+      'DUPLICADO': 'ocr_duplicado',
+      'TRIPLICADO': 'ocr_triplicado',
+      'CUATRIPLICADO': 'ocr_cuatriplcado'
+    };
+
+    const targetOcrCol = ocrColumnMap[chosenEjemplar] || null;
+    const effectivePhotoUrl = foto_sharepoint_url || foto_url;
+    let ocrSqlClause = '';
+    let ocrSqlParams = [];
+
+    if (targetOcrCol && effectivePhotoUrl) {
+      const finalName = foto_nombre_archivo || path.basename(effectivePhotoUrl);
+      const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      const ocrObj = {
+        archivo: effectivePhotoUrl,
+        original_filename: finalName,
+        timestamp: nowStr,
+        hojas: [
+          {
+            hoja_numero: 1,
+            archivo: effectivePhotoUrl,
+            original_filename: finalName,
+            firmas: [],
+            sellos: []
+          }
+        ],
+        origen: 'PWA_CHOFER'
+      };
+      ocrSqlClause = `, ${targetOcrCol} = ?`;
+      ocrSqlParams.push(JSON.stringify(ocrObj));
+    }
+
     const sql = `
       UPDATE remitos
       SET 
@@ -331,10 +366,11 @@ async function saveControl(req, res) {
         sincronizado_offline = ?,
         bot_confirmado_cliente = ?,
         bot_confirmado_distribuidor = ?
+        ${ocrSqlClause}
       WHERE id = ?
     `;
 
-    const [result] = await pool.query(sql, [
+    const queryParams = [
       chosenEjemplar,
       estado_firma,
       docType,
@@ -347,8 +383,11 @@ async function saveControl(req, res) {
       isOffline,
       botConfirmadoCliente,
       botConfirmadoDistribuidor,
+      ...ocrSqlParams,
       id
-    ]);
+    ];
+
+    const [result] = await pool.query(sql, queryParams);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({
@@ -385,6 +424,7 @@ async function uploadFoto(req, res) {
     const file = req.file;
     const remitoId = req.body.remito_id;
     const comprobante = req.body.comprobante;
+    const ejemplar = req.body.ejemplar;
 
     if (!file) {
       return res.status(400).json({
@@ -412,23 +452,58 @@ async function uploadFoto(req, res) {
     const spResult = await SharePointService.uploadToSharePoint(newPath, finalFileName, {
       remitoId: remitoId,
       comprobante: comprobante,
+      ejemplar: ejemplar,
       choferEmail: user.email,
       codigoChofer: user.codigo_chofer
     });
 
     const localUrl = `/uploads/${finalFileName}`;
     const sharepointUrl = spResult.isRemote ? spResult.url : null;
+    const effectivePhotoUrl = sharepointUrl || localUrl;
 
     // 3. Si se envió remitoId, actualizar en la base de datos automáticamente
     if (remitoId) {
+      const ocrColumnMap = {
+        'ORIGINAL': 'ocr_original',
+        'DUPLICADO': 'ocr_duplicado',
+        'TRIPLICADO': 'ocr_triplicado',
+        'CUATRIPLICADO': 'ocr_cuatriplcado'
+      };
+
+      const targetOcrCol = ejemplar ? ocrColumnMap[ejemplar] : null;
+      let ocrClause = '';
+      let ocrParams = [];
+
+      if (targetOcrCol) {
+        const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
+        const ocrObj = {
+          archivo: effectivePhotoUrl,
+          original_filename: finalFileName,
+          timestamp: nowStr,
+          hojas: [
+            {
+              hoja_numero: 1,
+              archivo: effectivePhotoUrl,
+              original_filename: finalFileName,
+              firmas: [],
+              sellos: []
+            }
+          ],
+          origen: 'PWA_CHOFER'
+        };
+        ocrClause = `, ${targetOcrCol} = ?`;
+        ocrParams.push(JSON.stringify(ocrObj));
+      }
+
       await pool.query(`
         UPDATE remitos
         SET 
           foto_url = ?,
           foto_sharepoint_url = ?,
           foto_nombre_archivo = ?
+          ${ocrClause}
         WHERE id = ?
-      `, [localUrl, sharepointUrl, finalFileName, remitoId]);
+      `, [localUrl, sharepointUrl, finalFileName, ...ocrParams, remitoId]);
     }
 
     return res.json({

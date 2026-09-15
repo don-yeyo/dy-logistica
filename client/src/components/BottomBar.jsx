@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, Camera, Check, RefreshCw } from 'lucide-react';
 
 export default function BottomBar({
@@ -9,7 +10,7 @@ export default function BottomBar({
   saveDisabled = false,
   saveLabel = 'Guardar Control'
 }) {
-  return (
+  const barElement = (
     <div className="bottom-bar">
       <div className="bottom-bar-inner">
         {onBack && (
@@ -58,4 +59,9 @@ export default function BottomBar({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined'
+    ? createPortal(barElement, document.body)
+    : barElement;
 }
+

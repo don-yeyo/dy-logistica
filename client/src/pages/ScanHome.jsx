@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import BarcodeScanner from '../components/BarcodeScanner';
+import AlertModal from '../components/AlertModal';
 import { searchRemitoByCode } from '../services/api';
 import { searchCachedRemitoByCode, getCachedRemitos } from '../services/offlineStorage';
 import { useAuth } from '../config/AuthContext';
@@ -136,32 +137,15 @@ export default function ScanHome({ onSelectRemito }) {
       )}
 
       {/* Modal / Alerta de Remito No Encontrado */}
-      {searchError && (
-        <div className="modal-overlay" onClick={() => setSearchError(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#fee2e2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-              <AlertCircle size={32} />
-            </div>
-            <h3 style={{ fontSize: '1.2rem', color: 'var(--text)', margin: '0 0 6px', textAlign: 'center' }}>
-              Remito No Encontrado
-            </h3>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textAlign: 'center', margin: '0 0 16px' }}>
-              {searchError.message}
-            </p>
-            <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '8px', fontSize: '0.85rem', color: '#475569', marginBottom: '16px', textAlign: 'center' }}>
-              Código leído: <strong>{searchError.code}</strong>
-            </div>
-            <button
-              type="button"
-              className="btn-primary"
-              style={{ width: '100%', padding: '12px', borderRadius: '12px', background: 'var(--dy-blue)', color: '#fff', border: 'none', fontWeight: 700 }}
-              onClick={() => setSearchError(null)}
-            >
-              Reintentar Escaneo
-            </button>
-          </div>
-        </div>
-      )}
+      <AlertModal
+        isOpen={Boolean(searchError)}
+        onClose={() => setSearchError(null)}
+        type="warning"
+        title="Remito No Encontrado"
+        message={searchError?.message}
+        details={searchError?.code ? `Código leído: ${searchError.code}` : null}
+        buttonText="Reintentar Escaneo"
+      />
 
       {/* Historial Reciente de Remitos Controlados */}
       {recentControls.length > 0 && (
