@@ -1,14 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  X, 
-  Send, 
-  Bot, 
-  User, 
-  Sparkles, 
-  HelpCircle, 
-  BookOpen, 
-  Camera, 
-  WifiOff, 
+import {
+  X,
+  Send,
+  Bot,
+  User,
+  Sparkles,
+  HelpCircle,
+  BookOpen,
+  Camera,
+  WifiOff,
   FileText,
   RotateCcw
 } from 'lucide-react';
@@ -105,7 +105,7 @@ export default function HelpChatModal({ isOpen, onClose }) {
 
   const findAnswer = (query) => {
     const cleanQuery = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    
+
     // Buscar coincidencia en la base de conocimiento
     for (const item of KNOWLEDGE_BASE) {
       const match = item.keywords.some((kw) => cleanQuery.includes(kw));
@@ -170,7 +170,7 @@ Si necesitas asistencia de soporte técnico, comunícate con la central de Logí
   };
 
   return (
-    <div 
+    <div
       style={{
         position: 'fixed',
         top: 0,
@@ -188,7 +188,7 @@ Si necesitas asistencia de soporte técnico, comunícate con la central de Logí
       }}
       onClick={onClose}
     >
-      <div 
+      <div
         className="glass"
         style={{
           width: '100%',
@@ -235,10 +235,10 @@ Si necesitas asistencia de soporte técnico, comunícate con la central de Logí
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, color: 'var(--text)' }}>
-                  Asistente Chofer
+                  Robot Ayudante
                 </h3>
                 <span style={{ fontSize: '0.65rem', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', padding: '2px 6px', borderRadius: '50px', fontWeight: 800 }}>
-                  ONLINE
+                  Con conexión
                 </span>
               </div>
               <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>

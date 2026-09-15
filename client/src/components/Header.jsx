@@ -12,6 +12,9 @@ import {
   User
 } from 'lucide-react';
 import logo from '../assets/logo-don-yeyo-png-sin-fondo.png';
+import pkg from '../../package.json';
+
+const appVersion = pkg.version;
 
 export default function Header({ onMenuClick }) {
   const { user, logout, isOnline, pendingSyncCount, syncing, triggerSyncOffline } = useAuth();
@@ -51,7 +54,9 @@ export default function Header({ onMenuClick }) {
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span className="brand-title">Logística</span>
-                <span className="brand-badge">PWA</span>
+                <span className="brand-badge" title={`Versión ${appVersion}`}>
+                  v{appVersion}
+                </span>
               </div>
             </div>
           </div>
@@ -84,10 +89,10 @@ export default function Header({ onMenuClick }) {
               {syncing
                 ? 'Sincronizando...'
                 : !isOnline
-                ? 'Offline'
+                ? 'Sin conexión'
                 : pendingSyncCount > 0
                 ? `${pendingSyncCount} pend.`
-                : 'Online'}
+                : 'Con conexión'}
             </span>
           </button>
 
