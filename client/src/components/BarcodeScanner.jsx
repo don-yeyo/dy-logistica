@@ -90,7 +90,7 @@ export default function BarcodeScanner({ onScanSuccess, onError, isPaused = fals
             // Feedback sonoro y háptico
             if (soundEnabled) playBeepSound();
             if (navigator.vibrate) {
-              try { navigator.vibrate([80, 40, 80]); } catch (e) {}
+              try { navigator.vibrate([80, 40, 80]); } catch (e) { }
             }
 
             console.log(`[BarcodeScanner] Código 1D detectado: ${decodedText}`);
@@ -120,8 +120,8 @@ export default function BarcodeScanner({ onScanSuccess, onError, isPaused = fals
         if (isMounted) {
           setCameraActive(false);
           setErrorMessage(
-            err.message?.includes('Permission') 
-              ? 'Permiso de cámara denegado. Habilite el acceso a la cámara en los permisos de su navegador.' 
+            err.message?.includes('Permission')
+              ? 'Permiso de cámara denegado. Habilite el acceso a la cámara en los permisos de su navegador.'
               : 'No se pudo acceder a la cámara trasera. Puede ingresar el código manualmente.'
           );
           if (onError) onError(err);
@@ -238,7 +238,7 @@ export default function BarcodeScanner({ onScanSuccess, onError, isPaused = fals
           onClick={() => setShowManualModal(true)}
         >
           <Keyboard size={18} />
-          <span>Ingresar TransaccionId manualmente</span>
+          <span>Ingresar número manualmente</span>
         </button>
       </div>
 
