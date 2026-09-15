@@ -2132,6 +2132,13 @@ body {
   box-shadow: 0 4px 12px rgba(51, 65, 85, 0.35);
 }
 
+.dark-theme .ejemplar-btn-original.selected {
+  background: #475569;
+  border-color: #cbd5e1;
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(203, 213, 225, 0.3);
+}
+
 /* 2. DUPLICADO (Ámbar / Amarillo Sutil) */
 .ejemplar-btn-duplicado {
   background: rgba(245, 158, 11, 0.12);
@@ -2149,6 +2156,14 @@ body {
   border-color: #d97706;
   color: #ffffff;
   box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4);
+}
+
+.dark-theme .ejemplar-btn-duplicado.selected {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border-color: #fef08a;
+  color: #000000;
+  font-weight: 800;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.6);
 }
 
 /* 3. TRIPLICADO (Azul / Celeste Sutil) */
@@ -2170,6 +2185,14 @@ body {
   box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
 }
 
+.dark-theme .ejemplar-btn-triplicado.selected {
+  background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+  border-color: #e0f2fe;
+  color: #000000;
+  font-weight: 800;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.6);
+}
+
 /* 4. CUATRIPLICADO (Púrpura / Violeta Sutil) */
 .ejemplar-btn-cuatriplicado {
   background: rgba(147, 51, 234, 0.12);
@@ -2187,6 +2210,14 @@ body {
   border-color: #9333ea;
   color: #ffffff;
   box-shadow: 0 4px 12px rgba(147, 51, 234, 0.4);
+}
+
+.dark-theme .ejemplar-btn-cuatriplicado.selected {
+  background: linear-gradient(135deg, #c084fc 0%, #9333ea 100%);
+  border-color: #f3e8ff;
+  color: #000000;
+  font-weight: 800;
+  box-shadow: 0 0 16px rgba(192, 132, 252, 0.6);
 }
 
 /* 5. RECEPCIÓN VALORIZADA (Esmeralda / Verde Sutil) */
@@ -2208,6 +2239,14 @@ body {
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
 }
 
+.dark-theme .ejemplar-btn-recepcion-valorizada.selected {
+  background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+  border-color: #d1fae5;
+  color: #000000;
+  font-weight: 800;
+  box-shadow: 0 0 16px rgba(52, 211, 153, 0.6);
+}
+
 /* 6. OTRO (Rosa / Índigo Sutil) */
 .ejemplar-btn-otro {
   background: rgba(236, 72, 153, 0.12);
@@ -2225,6 +2264,14 @@ body {
   border-color: #db2777;
   color: #ffffff;
   box-shadow: 0 4px 12px rgba(219, 39, 119, 0.4);
+}
+
+.dark-theme .ejemplar-btn-otro.selected {
+  background: linear-gradient(135deg, #f472b6 0%, #db2777 100%);
+  border-color: #fce7f3;
+  color: #000000;
+  font-weight: 800;
+  box-shadow: 0 0 16px rgba(244, 114, 182, 0.6);
 }
 
 /* Botones de Receptor: Misma altura de 52px */
@@ -2274,6 +2321,14 @@ body {
   box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
 }
 
+.dark-theme .firma-btn-3col.btn-cliente.selected {
+  background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+  border-color: #a7f3d0;
+  color: #ffffff;
+  font-weight: 800;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.6);
+}
+
 .firma-btn-3col.btn-interm {
   background: rgba(2, 132, 199, 0.08);
   border-color: rgba(2, 132, 199, 0.28);
@@ -2291,6 +2346,14 @@ body {
   box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
 }
 
+.dark-theme .firma-btn-3col.btn-interm.selected {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  border-color: #bae6fd;
+  color: #ffffff;
+  font-weight: 800;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.6);
+}
+
 .firma-btn-3col.btn-nofirma {
   background: rgba(239, 68, 68, 0.08);
   border-color: rgba(239, 68, 68, 0.28);
@@ -2306,6 +2369,14 @@ body {
   border-color: #e11d48;
   color: #ffffff;
   box-shadow: 0 4px 12px rgba(225, 29, 72, 0.4);
+}
+
+.dark-theme .firma-btn-3col.btn-nofirma.selected {
+  background: linear-gradient(135deg, #ef4444 0%, #be123c 100%);
+  border-color: #fecdd3;
+  color: #ffffff;
+  font-weight: 800;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.6);
 }
 
 /* Recuadro de Tomar Foto: Misma altura de 52px */
@@ -2456,7 +2527,7 @@ body {
   right: 0 !important;
   width: 100vw !important;
   max-width: 100vw !important;
-  z-index: 9999 !important;
+  z-index: 9000 !important;
   background: var(--surface);
   border-top: 1px solid var(--border);
   padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px)) 14px;
@@ -2496,6 +2567,12 @@ body {
   background: var(--surface-hover);
 }
 
+.dark-theme .btn-back-square {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
 .btn-primary-action {
   height: 48px;
   flex: 1;
@@ -2526,6 +2603,183 @@ body {
 .btn-primary-action:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.dark-theme .btn-primary-action {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.45);
+}
+
+.dark-theme .btn-primary-action:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 6px 20px rgba(56, 189, 248, 0.55);
+}
+
+/* ==============================================================================
+   DRAWER LATERAL DESLIZABLE CON Z-INDEX SUPERIOR (10000+)
+   ============================================================================== */
+.drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 10000 !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.drawer-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 82%;
+  max-width: 320px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  z-index: 10001 !important;
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
+}
+
+.drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.drawer-nav-item {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  color: var(--text);
+  border: 1.5px solid transparent;
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.drawer-nav-item:hover {
+  background: var(--surface-hover);
+}
+
+.drawer-nav-item.active {
+  background: rgba(13, 44, 92, 0.08);
+  color: var(--dy-blue);
+  border-color: rgba(13, 44, 92, 0.25);
+  font-weight: 800;
+}
+
+.dark-theme .drawer-nav-item.active {
+  background: rgba(56, 189, 248, 0.16);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.14);
+  font-weight: 800;
+}
+
+.drawer-nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: color 0.18s ease;
+}
+
+.drawer-nav-item.active .drawer-nav-icon {
+  color: var(--dy-blue);
+}
+
+.dark-theme .drawer-nav-item.active .drawer-nav-icon {
+  color: #38bdf8;
+}
+
+.drawer-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 50px;
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--text-muted);
+}
+
+.drawer-badge.primary {
+  background: rgba(13, 44, 92, 0.12);
+  color: var(--dy-blue);
+}
+
+.dark-theme .drawer-badge.primary {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+}
+
+.drawer-footer-actions {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawer-action-btn {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.drawer-action-btn:hover {
+  background: var(--surface-hover);
+}
+
+.drawer-action-btn.logout {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: var(--error);
+  font-weight: 700;
+}
+
+.drawer-action-btn.logout:hover {
+  background: rgba(239, 68, 68, 0.15);
 }
 
 /* Transiciones de Pantalla Suaves y Dinámicas */

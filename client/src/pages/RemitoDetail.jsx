@@ -29,8 +29,8 @@ const EJEMPLARES = [
 export default function RemitoDetail({ remito, onBack, onSaved }) {
   const { user, isOnline, refreshPendingCount } = useAuth();
 
-  const [ejemplar, setEjemplar] = useState(remito.ejemplar || 'ORIGINAL');
-  const [estadoFirma, setEstadoFirma] = useState(remito.estado_firma !== 'PENDIENTE' ? remito.estado_firma : 'FIRMADO_CLIENTE');
+  const [ejemplar, setEjemplar] = useState(null);
+  const [estadoFirma, setEstadoFirma] = useState(null);
   const [observaciones, setObservaciones] = useState(remito.observaciones || '');
   const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -45,6 +45,15 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
 
   // Manejo de guardado del control
   const handleSave = async () => {
+    if (!ejemplar) {
+      setErrorMessage('Por favor seleccione qué ejemplar del comprobante tiene en mano (Original, Duplicado, etc.).');
+      return;
+    }
+    if (!estadoFirma) {
+      setErrorMessage('Por favor especifique por quién está firmado (Cliente, Intermediario o No Firmado).');
+      return;
+    }
+
     try {
       setSaving(true);
 

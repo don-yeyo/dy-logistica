@@ -51,12 +51,7 @@ class SharePointService {
       const payload = {
         filename: finalFileName,
         imagebase64: base64Data,
-        use_ia: false, // Es una foto tomada por chofer, no requiere OCR destructivo
-        source: 'PWA_CHOFER',
-        metadata: {
-          ...metadata,
-          uploadedAt: new Date().toISOString()
-        }
+        use_ia: false
       };
 
       const response = await axios.post(powerAutomateUrl, payload, {
