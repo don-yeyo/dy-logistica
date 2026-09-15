@@ -51,13 +51,11 @@ export default function Header({ onMenuClick }) {
               alt="Don Yeyo"
               style={{ height: '32px', width: 'auto', objectFit: 'contain' }}
             />
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span className="brand-title">Logística</span>
-                <span className="brand-badge" title={`Versión ${appVersion}`}>
-                  v{appVersion}
-                </span>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span className="brand-title desktop-only">Logística</span>
+              <span className="brand-badge" title={`Versión ${appVersion}`}>
+                v{appVersion}
+              </span>
             </div>
           </div>
         </div>

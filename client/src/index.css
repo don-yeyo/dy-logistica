@@ -163,6 +163,34 @@ body {
   text-transform: uppercase;
 }
 
+/* Utilidades Responsivas */
+.desktop-only {
+  display: inline-block;
+}
+.mobile-only {
+  display: none !important;
+}
+
+@media (max-width: 600px) {
+  .desktop-only {
+    display: none !important;
+  }
+  .mobile-only {
+    display: inline-block !important;
+  }
+  .brand-title {
+    display: none !important;
+  }
+  .app-header {
+    padding: 10px 12px;
+  }
+  .connection-pill {
+    padding: 4px 8px;
+    font-size: 0.72rem;
+    gap: 4px;
+  }
+}
+
 .user-section {
   display: flex;
   align-items: center;
