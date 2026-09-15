@@ -149,11 +149,12 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
         <div className="ejemplar-grid-3col">
           {EJEMPLARES.map((item) => {
             const isSelected = ejemplar === item.key;
+            const itemKeyClass = `ejemplar-btn-${item.key.toLowerCase().replace(/_/g, '-')}`;
             return (
               <button
                 key={item.key}
                 type="button"
-                className={`ejemplar-btn-3col ${isSelected ? 'selected' : ''}`}
+                className={`ejemplar-btn-3col ${itemKeyClass} ${isSelected ? 'selected' : ''}`}
                 onClick={() => setEjemplar(item.key)}
               >
                 <span>{item.label}</span>
@@ -213,11 +214,10 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
         />
       </div>
 
-      {/* 4. OBSERVACIONES (Al final de todo) */}
-      <div className="detail-section-compact">
+      {/* 4. OBSERVACIONES (Ocupa el alto sobrante sin scroll) */}
+      <div className="detail-section-compact detail-section-obs">
         <textarea
           className="obs-textarea-compact"
-          rows={2}
           value={observaciones}
           onChange={(e) => setObservaciones(e.target.value)}
           placeholder="En caso de tener aclaraciones para hacer, escríbalas aquí"
