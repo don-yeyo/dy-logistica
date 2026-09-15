@@ -66,7 +66,7 @@ export default function RemitoCard({ remito, onSelect }) {
           {remito.finne_Cliente || 'Cliente no especificado'}
         </div>
         <div className="cliente-address">
-          <MapPin size={14} style={{ flexShrink: 0, color: 'var(--dy-red)' }} />
+          <MapPin size={14} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
           <span>{remito.finne_domicilio || 'Domicilio en hoja de ruta'}</span>
         </div>
       </div>

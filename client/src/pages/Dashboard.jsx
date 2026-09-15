@@ -1,29 +1,17 @@
 import React, { useState } from 'react';
-import {
-  ScanLine,
-  Truck,
-  PackageMinus,
-  Boxes,
-  FileText,
-  RefreshCw,
-  Info,
-  X,
-  CheckCircle,
-  Calendar,
-  User as UserIcon,
-  ChevronRight
+import { 
+  ScanLine, 
+  Truck, 
+  PackageMinus, 
+  Boxes, 
+  FileText, 
+  RefreshCw 
 } from 'lucide-react';
 import { useAuth } from '../config/AuthContext';
 
 export default function Dashboard({ onStartScan, onOpenHojasRuta }) {
-  const { user, isOnline, pendingSyncCount, triggerSyncOffline, syncing } = useAuth();
+  const { user, pendingSyncCount, triggerSyncOffline, syncing } = useAuth();
   const [modalInfo, setModalInfo] = useState(null);
-
-  const todayStr = new Intl.DateTimeFormat('es-AR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long'
-  }).format(new Date());
 
   const handleModuleClick = (moduleName, description, icon) => {
     setModalInfo({
@@ -33,38 +21,15 @@ export default function Dashboard({ onStartScan, onOpenHojasRuta }) {
     });
   };
 
-  return (
-    <div className="dashboard-container">
-      {/* Banner de Bienvenida y Chofer */}
-      <div className="dashboard-welcome glass">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.78rem', textTransform: 'capitalize' }}>
-            <Calendar size={13} />
-            <span>{todayStr}</span>
-          </div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text)', margin: 0, letterSpacing: '-0.02em' }}>
-            ¡Hola, {user?.nombre?.split(' ')[0] || 'Chofer'}!
-          </h2>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-            {user?.codigo_chofer ? `Legajo Chofer #${user.codigo_chofer}` : `Rol: ${user?.rol || 'Chofer'}`}
-          </span>
-        </div>
+  const firstName = user?.nombre?.split(' ')[0] || 'Chofer';
 
-        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-          <span style={{
-            fontSize: '0.7rem',
-            fontWeight: 800,
-            padding: '4px 8px',
-            borderRadius: 'var(--radius-pill)',
-            background: 'var(--surface-active)',
-            color: 'var(--text)'
-          }}>
-            Ruta Activa
-          </span>
-          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--dy-red)' }}>
-            Don Yeyo Logística
-          </span>
-        </div>
+  return (
+    <div className="dashboard-container page-transition">
+      {/* Saludo Simple y Limpio */}
+      <div style={{ padding: '8px 4px 4px 4px' }}>
+        <h2 style={{ fontSize: '1.45rem', fontWeight: 900, color: 'var(--text)', margin: 0, letterSpacing: '-0.02em' }}>
+          ¡Hola, {firstName}!
+        </h2>
       </div>
 
       {/* Grid de 2 Columnas de Botones / Acciones */}
@@ -81,7 +46,7 @@ export default function Dashboard({ onStartScan, onOpenHojasRuta }) {
             Registrar Remito
           </div>
           <div className="dashboard-card-desc" style={{ fontSize: '0.82rem' }}>
-            Escanear código de barras o ingresar remito manualmente
+            Escanear código 1D o ingresar remito manualmente
           </div>
         </div>
 
@@ -163,8 +128,8 @@ export default function Dashboard({ onStartScan, onOpenHojasRuta }) {
       </div>
 
       {/* Barra de Estado Rápida / Sync */}
-      <div
-        className="glass"
+      <div 
+        className="glass" 
         onClick={triggerSyncOffline}
         style={{
           padding: '10px 14px',
@@ -180,7 +145,7 @@ export default function Dashboard({ onStartScan, onOpenHojasRuta }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <RefreshCw size={15} className={syncing ? 'spin' : ''} style={{ color: pendingSyncCount > 0 ? 'var(--warning)' : 'var(--success)' }} />
+          <RefreshCw size={15} className={syncing ? 'spin' : ''} style={{ color: pendingSyncCount > 0 ? '#f59e0b' : '#10b981' }} />
           <span style={{ fontWeight: 600 }}>
             {pendingSyncCount > 0
               ? `${pendingSyncCount} remitos guardados offline listos para enviar`
@@ -196,7 +161,7 @@ export default function Dashboard({ onStartScan, onOpenHojasRuta }) {
 
       {/* Modal Informativo para Módulos de la Próxima Fase */}
       {modalInfo && (
-        <div
+        <div 
           style={{
             position: 'fixed',
             top: 0,
@@ -214,8 +179,8 @@ export default function Dashboard({ onStartScan, onOpenHojasRuta }) {
           }}
           onClick={() => setModalInfo(null)}
         >
-          <div
-            className="glass"
+          <div 
+            className="glass page-transition"
             style={{
               width: '100%',
               maxWidth: '380px',

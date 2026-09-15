@@ -52,17 +52,19 @@ export default function App() {
 
       <main className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {selectedRemito ? (
-          <RemitoDetail
-            remito={selectedRemito}
-            onBack={() => setSelectedRemito(null)}
-            onSaved={(updatedRemito) => {
-              setSelectedRemito(null);
-              // Volver al dashboard tras guardar
-              setCurrentScreen('dashboard');
-            }}
-          />
+          <div key="detail" className="page-transition" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <RemitoDetail
+              remito={selectedRemito}
+              onBack={() => setSelectedRemito(null)}
+              onSaved={(updatedRemito) => {
+                setSelectedRemito(null);
+                // Volver al dashboard tras guardar
+                setCurrentScreen('dashboard');
+              }}
+            />
+          </div>
         ) : currentScreen === 'scan' ? (
-          <div>
+          <div key="scan" className="page-transition">
             <div style={{ padding: '8px 16px 0 16px' }}>
               <button
                 onClick={() => setCurrentScreen('dashboard')}
@@ -88,7 +90,7 @@ export default function App() {
             />
           </div>
         ) : currentScreen === 'hojas_ruta' ? (
-          <div>
+          <div key="hojas_ruta" className="page-transition">
             <div style={{ padding: '8px 16px 0 16px' }}>
               <button
                 onClick={() => setCurrentScreen('dashboard')}
@@ -114,10 +116,12 @@ export default function App() {
             />
           </div>
         ) : (
-          <Dashboard
-            onStartScan={() => setCurrentScreen('scan')}
-            onOpenHojasRuta={() => setCurrentScreen('hojas_ruta')}
-          />
+          <div key="dashboard" className="page-transition">
+            <Dashboard
+              onStartScan={() => setCurrentScreen('scan')}
+              onOpenHojasRuta={() => setCurrentScreen('hojas_ruta')}
+            />
+          </div>
         )}
       </main>
 

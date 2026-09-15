@@ -90,7 +90,7 @@ export default function Drawer({ isOpen, onClose, onNavigate, currentScreen }) {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ color: isActive ? 'var(--dy-red)' : 'var(--text-muted)' }}>
+                  <span style={{ color: isActive ? 'var(--dy-blue)' : 'var(--text-muted)' }}>
                     {item.icon}
                   </span>
                   <span>{item.label}</span>
