@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'logo.png', 'robots.txt'],
+      includeAssets: ['favicon.svg', 'icons/*.png'],
       manifest: {
         name: 'Don Yeyo Logística',
         short_name: 'DY Log',
@@ -19,15 +19,20 @@ export default defineConfig({
         orientation: 'portrait',
         scope: '/',
         start_url: '/',
+        lang: 'es',
         icons: [
           {
-            src: '/icon-192.png',
+            src: '/icons/icon-192x192.png',
             sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable'
+            type: 'image/png'
           },
           {
-            src: '/icon-512.png',
+            src: '/icons/icon-512x512.png',
+            sizes: '512x512',
+            type: 'image/png'
+          },
+          {
+            src: '/icons/icon-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'

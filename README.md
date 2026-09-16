@@ -56,9 +56,11 @@ dy_logistica_app/
 │   ├── .env.template          # Plantilla de entorno exclusiva del Frontend
 │   ├── public/
 │   │   ├── favicon.ico
+│   │   ├── favicon.svg
 │   │   ├── logo.png
-│   │   ├── icon-192.png
-│   │   └── icon-512.png
+│   │   └── icons/
+│   │       ├── icon-192x192.png
+│   │       └── icon-512x512.png
 │   └── src/
 │       ├── index.css          # Vanilla CSS con tokens Don Yeyo y dark-theme
 │       ├── main.jsx           # Entrypoint React + ThemeProvider + PWA
