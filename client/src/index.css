@@ -3226,3 +3226,216 @@ body {
 .bottom-nav-btn.needs-hr {
   opacity: 0.72;
 }
+
+
+/* ==============================================================================
+   MÓDULO 4.2.1: LOGÍSTICA DY - ENTREGAS (CORTES DE CONTROL Y GRILLA EDITABLE)
+   ============================================================================== */
+.module-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.module-count-text {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.module-helper-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dark-theme .module-helper-btn {
+  color: #34d399;
+}
+
+.entregas-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lugar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lugar-header-banner {
+  background: #dbeafe;
+  color: #0d2c5c;
+  border: 1.5px solid #93c5fd;
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 0.88rem;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  box-shadow: var(--shadow-sm);
+}
+
+.dark-theme .lugar-header-banner {
+  background: rgba(56, 189, 248, 0.18);
+  color: #e0f2fe;
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.lugar-remitos-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.remito-grid-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.remito-cut-header {
+  background: var(--surface-hover);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.entregas-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.entregas-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.entregas-table th {
+  background: #e2e8f0;
+  color: #1e293b;
+  font-weight: 800;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+.dark-theme .entregas-table th {
+  background: #334155;
+  color: #f8fafc;
+}
+
+.entregas-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.entregas-table tr:last-child td {
+  border-bottom: none;
+}
+
+.prod-name-cell {
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.25;
+}
+
+.remitido-cell {
+  text-align: center;
+  font-weight: 800;
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.entregado-cell {
+  background: #dcfce7;
+  padding: 4px 6px !important;
+}
+
+.dark-theme .entregado-cell {
+  background: rgba(16, 185, 129, 0.18);
+}
+
+.entregado-input {
+  width: 100%;
+  height: 36px;
+  border-radius: 8px;
+  border: 1.5px solid #86efac;
+  background: #ffffff;
+  color: #064e3b;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 800;
+  outline: none;
+}
+
+.dark-theme .entregado-input {
+  background: #0f172a;
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.5);
+}
+
+.entregado-input:focus {
+  border-color: #059669;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+}
+
+.entregado-input.invalid {
+  border-color: #ef4444 !important;
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+}
+
+.module-save-footer {
+  margin-top: 6px;
+  padding-top: 6px;
+  padding-bottom: 14px;
+}
+
+.module-save-btn {
+  width: 100%;
+  height: 50px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.module-save-btn:active {
+  transform: scale(0.98);
+}
+
+.module-save-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
