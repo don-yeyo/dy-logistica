@@ -9,14 +9,14 @@ import {
   Wifi, 
   WifiOff, 
   RefreshCw,
-  User
+  HelpCircle
 } from 'lucide-react';
 import logo from '../assets/logo-don-yeyo-png-sin-fondo.png';
 import pkg from '../../package.json';
 
 const appVersion = pkg.version;
 
-export default function Header({ onMenuClick }) {
+export default function Header({ onMenuClick, onOpenHelp }) {
   const { user, logout, isOnline, pendingSyncCount, syncing, triggerSyncOffline } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -93,6 +93,19 @@ export default function Header({ onMenuClick }) {
                 : 'Con conexión'}
             </span>
           </button>
+
+          {/* Botón de Ayuda / Asistente Virtual */}
+          {onOpenHelp && (
+            <button
+              type="button"
+              className="mode-toggle"
+              onClick={onOpenHelp}
+              style={{ border: 'none', color: '#ffffff', background: 'rgba(255,255,255,0.1)' }}
+              title="Ayuda y Manual de Usuario"
+            >
+              <HelpCircle size={18} />
+            </button>
+          )}
 
           {/* Toggle Modo Claro / Oscuro */}
           <button

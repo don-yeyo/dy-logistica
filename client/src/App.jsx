@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from './config/AuthContext';
 import Header from './components/Header';
 import Drawer from './components/Drawer';
 import BottomNav from './components/BottomNav';
 import HelpChatModal from './components/HelpChatModal';
+import AlertModal from './components/AlertModal';
 import OfflineBanner from './components/OfflineBanner';
-import Dashboard from './pages/Dashboard';
+import HojasRutaPage from './pages/HojasRutaPage';
+import EntregasPage from './pages/EntregasPage';
+import DevolucionesPage from './pages/DevolucionesPage';
+import CajonesPage from './pages/CajonesPage';
 import ScanHome from './pages/ScanHome';
 import RemitosList from './pages/RemitosList';
 import RemitoDetail from './pages/RemitoDetail';
@@ -16,8 +20,38 @@ export default function App() {
   const { user, loading } = useAuth();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [currentScreen, setCurrentScreen] = useState('dashboard'); // 'dashboard' | 'scan' | 'hojas_ruta'
+  const [currentScreen, setCurrentScreen] = useState('hojas_ruta'); // 'hojas_ruta' | 'entregas' | 'devoluciones' | 'cajones' | 'remitos' | 'scan'
+  const [selectedHojaRuta, setSelectedHojaRuta] = useState(() => {
+    try {
+      const saved = localStorage.getItem('dy_selected_hoja_ruta');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [selectedRemito, setSelectedRemito] = useState(null);
+  const [navWarning, setNavWarning] = useState(null);
+
+  useEffect(() => {
+    if (!user) {
+      setSelectedHojaRuta(null);
+      setSelectedRemito(null);
+      setCurrentScreen('hojas_ruta');
+    }
+  }, [user]);
+
+  const handleSelectHojaRuta = (hr) => {
+    setSelectedHojaRuta(hr);
+    try {
+      if (hr) {
+        localStorage.setItem('dy_selected_hoja_ruta', JSON.stringify(hr));
+      } else {
+        localStorage.removeItem('dy_selected_hoja_ruta');
+      }
+    } catch {
+      // Ignorar errores de cuota de almacenamiento
+    }
+  };
 
   if (loading) {
     return (
@@ -33,19 +67,34 @@ export default function App() {
   }
 
   const handleNavigate = (screenId) => {
+    const requiresHojaRuta = ['entregas', 'devoluciones', 'cajones', 'remitos', 'scan'].includes(screenId);
+
+    if (requiresHojaRuta && !selectedHojaRuta) {
+      setNavWarning(
+        'Debe seleccionar previamente una Hoja de Ruta del listado antes de acceder a Entregas, Devoluciones, Cajones o Remitos.'
+      );
+      setCurrentScreen('hojas_ruta');
+      return;
+    }
+
     setSelectedRemito(null);
     setCurrentScreen(screenId);
   };
 
   return (
     <div className="app-container">
-      <Header onMenuClick={() => setIsDrawerOpen(true)} />
+      <Header
+        onMenuClick={() => setIsDrawerOpen(true)}
+        onOpenHelp={() => setIsHelpOpen(true)}
+      />
 
       <Drawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         onNavigate={handleNavigate}
+        onOpenHelp={() => setIsHelpOpen(true)}
         currentScreen={currentScreen}
+        selectedHojaRuta={selectedHojaRuta}
       />
 
       <OfflineBanner />
@@ -56,63 +105,84 @@ export default function App() {
             <RemitoDetail
               remito={selectedRemito}
               onBack={() => setSelectedRemito(null)}
-              onSaved={(updatedRemito) => {
+              onSaved={() => {
                 setSelectedRemito(null);
-                // Volver al dashboard tras guardar
-                setCurrentScreen('dashboard');
+                setCurrentScreen('remitos');
               }}
             />
           </div>
+        ) : currentScreen === 'entregas' ? (
+          <EntregasPage
+            key={`entregas-${selectedHojaRuta?.Transaccionid}`}
+            hojaRuta={selectedHojaRuta}
+            onChangeHojaRuta={() => handleNavigate('hojas_ruta')}
+          />
+        ) : currentScreen === 'devoluciones' ? (
+          <DevolucionesPage
+            key={`devoluciones-${selectedHojaRuta?.Transaccionid}`}
+            hojaRuta={selectedHojaRuta}
+            onChangeHojaRuta={() => handleNavigate('hojas_ruta')}
+          />
+        ) : currentScreen === 'cajones' ? (
+          <CajonesPage
+            key={`cajones-${selectedHojaRuta?.Transaccionid}`}
+            hojaRuta={selectedHojaRuta}
+            onChangeHojaRuta={() => handleNavigate('hojas_ruta')}
+          />
         ) : currentScreen === 'scan' ? (
           <div key="scan" className="page-transition">
-            <div style={{ padding: '8px 16px 0 16px' }}>
+            <div style={{ padding: '4px 4px 8px 4px' }}>
               <button
                 type="button"
                 className="top-back-btn"
-                onClick={() => setCurrentScreen('dashboard')}
+                onClick={() => setCurrentScreen('remitos')}
               >
                 <ArrowLeft size={18} />
-                <span>Volver a Inicio</span>
+                <span>Volver a Remitos ({selectedHojaRuta?.Hoja_de_ruta})</span>
               </button>
             </div>
             <ScanHome
+              hojaRuta={selectedHojaRuta}
               onSelectRemito={(remito) => setSelectedRemito(remito)}
             />
           </div>
-        ) : currentScreen === 'hojas_ruta' ? (
-          <div key="hojas_ruta" className="page-transition">
-            <div style={{ padding: '8px 16px 0 16px' }}>
-              <button
-                type="button"
-                className="top-back-btn"
-                onClick={() => setCurrentScreen('dashboard')}
-              >
-                <ArrowLeft size={18} />
-                <span>Volver a Inicio</span>
-              </button>
-            </div>
+        ) : currentScreen === 'remitos' ? (
+          <div key={`remitos-${selectedHojaRuta?.Transaccionid}`} className="page-transition">
             <RemitosList
+              hojaRuta={selectedHojaRuta}
+              onChangeHojaRuta={() => handleNavigate('hojas_ruta')}
+              onOpenScan={() => handleNavigate('scan')}
               onSelectRemito={(remito) => setSelectedRemito(remito)}
             />
           </div>
         ) : (
-          <div key="dashboard" className="page-transition">
-            <Dashboard
-              onStartScan={() => setCurrentScreen('scan')}
-              onOpenHojasRuta={() => setCurrentScreen('hojas_ruta')}
-            />
-          </div>
+          <HojasRutaPage
+            key="hojas_ruta"
+            selectedHojaRuta={selectedHojaRuta}
+            onSelectHojaRuta={handleSelectHojaRuta}
+            onNavigateModule={handleNavigate}
+          />
         )}
       </main>
 
-      {/* Barra Inferior Persistente (BottomNav) */}
+      {/* Barra Inferior Persistente (Sección 4.2: Entregas, Devoluciones, Cajones, Remitos) */}
       {!selectedRemito && (
         <BottomNav
           currentScreen={currentScreen}
           onNavigate={handleNavigate}
-          onOpenHelp={() => setIsHelpOpen(true)}
+          hasSelectedHojaRuta={Boolean(selectedHojaRuta)}
         />
       )}
+
+      {/* Alerta cuando se intenta operar sin elegir Hoja de Ruta */}
+      <AlertModal
+        isOpen={Boolean(navWarning)}
+        onClose={() => setNavWarning(null)}
+        type="warning"
+        title="Seleccione una Hoja de Ruta"
+        message={navWarning}
+        confirmText="Ir a Hojas de Ruta"
+      />
 
       {/* Modal Interactivo de Ayuda y Chatbot Chofer */}
       <HelpChatModal

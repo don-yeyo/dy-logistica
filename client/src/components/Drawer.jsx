@@ -1,14 +1,14 @@
 import React from 'react';
 import {
   X,
-  Home,
-  ScanLine,
-  Truck,
+  ClipboardList,
+  PackageCheck,
   PackageMinus,
   Boxes,
-  FileText,
+  FileSignature,
+  ScanLine,
+  HelpCircle,
   LogOut,
-  Shield,
   Sun,
   Moon
 } from 'lucide-react';
@@ -16,17 +16,24 @@ import { useAuth } from '../config/AuthContext';
 import { useTheme } from '../config/ThemeContext';
 import logo from '../assets/logo-don-yeyo-png-sin-fondo.png';
 
-export default function Drawer({ isOpen, onClose, onNavigate, currentScreen }) {
+export default function Drawer({
+  isOpen,
+  onClose,
+  onNavigate,
+  onOpenHelp,
+  currentScreen,
+  selectedHojaRuta
+}) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard Principal', icon: <Home size={20} />, badge: null },
-    { id: 'scan', label: 'Registrar Remito', icon: <ScanLine size={20} />, badge: null },
-    { id: 'entregas', label: 'Entregas de Mercadería', icon: <Truck size={20} />, badge: 'Próx.' },
-    { id: 'devoluciones', label: 'Devoluciones', icon: <PackageMinus size={20} />, badge: 'Próx.' },
-    { id: 'cajones', label: 'Movimiento de Cajones', icon: <Boxes size={20} />, badge: 'Próx.' },
-    { id: 'hojas_ruta', label: 'Mis Hojas de Ruta', icon: <FileText size={20} />, badge: null },
+    { id: 'hojas_ruta', label: 'Hojas de Ruta', icon: <ClipboardList size={20} />, badge: selectedHojaRuta ? selectedHojaRuta.Hoja_de_ruta : null },
+    { id: 'entregas', label: 'Entregas de Mercadería', icon: <PackageCheck size={20} />, badge: null },
+    { id: 'devoluciones', label: 'Devoluciones', icon: <PackageMinus size={20} />, badge: null },
+    { id: 'cajones', label: 'Movimiento de Cajones', icon: <Boxes size={20} />, badge: null },
+    { id: 'remitos', label: 'Remitos de la Hoja', icon: <FileSignature size={20} />, badge: null },
+    { id: 'scan', label: 'Escanear Código 1D', icon: <ScanLine size={20} />, badge: null }
   ];
 
   const handleItemClick = (id) => {
@@ -81,13 +88,30 @@ export default function Drawer({ isOpen, onClose, onNavigate, currentScreen }) {
                   <span>{item.label}</span>
                 </div>
                 {item.badge && (
-                  <span className={`drawer-badge ${item.badge === 'Próx.' ? '' : 'primary'}`}>
+                  <span className="drawer-badge primary">
                     {item.badge}
                   </span>
                 )}
               </button>
             );
           })}
+
+          {onOpenHelp && (
+            <button
+              onClick={() => {
+                onClose();
+                onOpenHelp();
+              }}
+              className="drawer-nav-item"
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span className="drawer-nav-icon">
+                  <HelpCircle size={20} />
+                </span>
+                <span>Ayuda / Manual</span>
+              </div>
+            </button>
+          )}
 
           <div className="drawer-footer-actions">
             {/* Toggle de Modo Claro / Oscuro */}

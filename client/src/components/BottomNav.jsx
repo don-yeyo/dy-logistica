@@ -1,39 +1,35 @@
 import React from 'react';
-import { Home, ScanLine, FileText, HelpCircle } from 'lucide-react';
+import { PackageCheck, PackageMinus, Boxes, FileSignature } from 'lucide-react';
 
-export default function BottomNav({ currentScreen, onNavigate, onOpenHelp }) {
-  const isHomeActive = currentScreen === 'dashboard';
-  const isScanActive = currentScreen === 'scan';
-  const isViajesActive = currentScreen === 'hojas_ruta';
-
+/**
+ * Barra inferior operativa (Sección 4.2):
+ * Entregas, Devoluciones, Cajones, Remitos.
+ */
+export default function BottomNav({ currentScreen, onNavigate, hasSelectedHojaRuta }) {
   const navItems = [
     {
-      id: 'dashboard',
-      label: 'Inicio',
-      icon: <Home size={22} />,
-      isActive: isHomeActive,
-      onClick: () => onNavigate('dashboard')
+      id: 'entregas',
+      label: 'Entregas',
+      icon: <PackageCheck size={21} />,
+      isActive: currentScreen === 'entregas'
     },
     {
-      id: 'scan',
-      label: 'Escanear',
-      icon: <ScanLine size={22} />,
-      isActive: isScanActive,
-      onClick: () => onNavigate('scan')
+      id: 'devoluciones',
+      label: 'Devoluciones',
+      icon: <PackageMinus size={21} />,
+      isActive: currentScreen === 'devoluciones'
     },
     {
-      id: 'hojas_ruta',
-      label: 'Viajes',
-      icon: <FileText size={22} />,
-      isActive: isViajesActive,
-      onClick: () => onNavigate('hojas_ruta')
+      id: 'cajones',
+      label: 'Cajones',
+      icon: <Boxes size={21} />,
+      isActive: currentScreen === 'cajones'
     },
     {
-      id: 'help',
-      label: 'Ayuda',
-      icon: <HelpCircle size={22} />,
-      isActive: false,
-      onClick: onOpenHelp
+      id: 'remitos',
+      label: 'Remitos',
+      icon: <FileSignature size={21} />,
+      isActive: currentScreen === 'remitos' || currentScreen === 'scan'
     }
   ];
 
@@ -44,8 +40,8 @@ export default function BottomNav({ currentScreen, onNavigate, onOpenHelp }) {
           <button
             key={item.id}
             type="button"
-            className={`bottom-nav-btn ${item.isActive ? 'active' : ''}`}
-            onClick={item.onClick}
+            className={`bottom-nav-btn ${item.isActive ? 'active' : ''} ${!hasSelectedHojaRuta ? 'needs-hr' : ''}`}
+            onClick={() => onNavigate(item.id)}
             title={item.label}
           >
             <div className={`nav-btn-circle ${item.isActive ? 'active' : ''}`}>
@@ -60,5 +56,3 @@ export default function BottomNav({ currentScreen, onNavigate, onOpenHelp }) {
     </nav>
   );
 }
-
-

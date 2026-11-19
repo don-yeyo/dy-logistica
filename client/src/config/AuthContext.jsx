@@ -1,7 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { PublicClientApplication } from '@azure/msal-browser';
 import { msalConfig, loginRequest } from './msalConfig';
-import { fetchCurrentUser, syncOfflineBatch } from '../services/api';
+import {
+  fetchCurrentUser,
+  loginWithCredentials,
+  syncOfflineBatch,
+  saveEntregasHojaRuta,
+  saveDevolucionesHojaRuta,
+  saveCajonesHojaRuta
+} from '../services/api';
 import { getPendingControls, clearPendingControls } from '../services/offlineStorage';
 
 const AuthContext = createContext(null);
@@ -24,6 +31,7 @@ export function AuthProvider({ children }) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const syncingRef = useRef(false);
 
   // Actualizar contador de pendientes
   const refreshPendingCount = useCallback(async () => {
@@ -35,10 +43,11 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  // Función para sincronizar la cola offline con el backend
+  // Función para sincronizar la cola offline unificada con el backend
   const triggerSyncOffline = useCallback(async () => {
-    if (!navigator.onLine || syncing) return;
+    if (!navigator.onLine || syncingRef.current) return;
     try {
+      syncingRef.current = true;
       setSyncing(true);
       const pending = await getPendingControls();
       if (pending.length === 0) {
@@ -46,19 +55,52 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      console.log(`[Sync] Sincronizando ${pending.length} controles offline...`);
-      const response = await syncOfflineBatch(pending);
-      if (response && response.ok) {
-        await clearPendingControls();
-        setPendingSyncCount(0);
-        console.log('✔ [Sync] Controles offline sincronizados con éxito.');
+      console.log(`[Sync] Sincronizando ${pending.length} operaciones offline...`);
+
+      const remitoItems = pending.filter(p => !p.op_type || p.op_type === 'remito');
+      const otherItems = pending.filter(p => p.op_type && p.op_type !== 'remito');
+      const syncedIds = [];
+
+      if (remitoItems.length > 0) {
+        try {
+          const response = await syncOfflineBatch(remitoItems);
+          if (response && response.ok) {
+            remitoItems.forEach(item => syncedIds.push(item.queue_id));
+          }
+        } catch (err) {
+          console.error('[Sync] Error sincronizando remitos offline:', err);
+        }
       }
+
+      for (const op of otherItems) {
+        try {
+          if (op.op_type === 'entregas') {
+            await saveEntregasHojaRuta(op.transaccionId, op.items);
+            syncedIds.push(op.queue_id);
+          } else if (op.op_type === 'devoluciones') {
+            await saveDevolucionesHojaRuta(op.transaccionId, op.clientes);
+            syncedIds.push(op.queue_id);
+          } else if (op.op_type === 'cajones') {
+            await saveCajonesHojaRuta(op.transaccionId, op.items);
+            syncedIds.push(op.queue_id);
+          }
+        } catch (opErr) {
+          console.error(`[Sync] Error sincronizando operación ${op.op_type}:`, opErr);
+        }
+      }
+
+      if (syncedIds.length > 0) {
+        await clearPendingControls(syncedIds);
+        console.log(`✔ [Sync] ${syncedIds.length} operaciones offline sincronizadas con éxito.`);
+      }
+      await refreshPendingCount();
     } catch (err) {
-      console.error('[Sync] Error al sincronizar controles offline:', err);
+      console.error('[Sync] Error al sincronizar operaciones offline:', err);
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
     }
-  }, [syncing]);
+  }, [refreshPendingCount]);
 
   // Cargar usuario autenticado inicial
   const loadUser = useCallback(async (email) => {
@@ -75,8 +117,8 @@ export function AuthProvider({ children }) {
     } catch (err) {
       console.warn('[AuthContext] Error al cargar usuario:', err.message);
       const storedEmail = localStorage.getItem('dy_user_email');
-      if (storedEmail) {
-        // Fallback offline / local
+      if (storedEmail && !navigator.onLine) {
+        // Fallback offline cuando no hay red
         setUser({
           id: 1,
           email: storedEmail,
@@ -86,7 +128,9 @@ export function AuthProvider({ children }) {
           activo: 1
         });
       } else {
+        localStorage.removeItem('dy_user_email');
         setUser(null);
+        setError(err.response?.data?.error || 'No se pudo validar el acceso del usuario.');
       }
     } finally {
       setLoading(false);
@@ -109,9 +153,8 @@ export function AuthProvider({ children }) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Cargar sesión existente si el usuario ya inició sesión
+    // Cargar sesión existente si el usuario ya inició sesión (no almacena contraseña)
     const storedEmail = localStorage.getItem('dy_user_email');
-
     if (storedEmail) {
       loadUser(storedEmail);
     } else {
@@ -126,8 +169,35 @@ export function AuthProvider({ children }) {
     };
   }, [loadUser, refreshPendingCount, triggerSyncOffline]);
 
-  // Login con Microsoft Entra ID
-  const loginWithMicrosoft = async () => {
+  // Login con Email y Contraseña validados contra Microsoft Entra ID (Sección 4.1)
+  const loginWithEmailPassword = async (email, password) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      const data = await loginWithCredentials(cleanEmail, password);
+      if (data && data.ok && data.user) {
+        localStorage.setItem('dy_user_email', data.user.email);
+        setUser(data.user);
+        await refreshPendingCount();
+        return { ok: true };
+      }
+      throw new Error('Las credenciales ingresadas no son válidas.');
+    } catch (err) {
+      const apiMsg = err.response?.data?.error || err.message || 'Las credenciales ingresadas no son válidas.';
+      setError(apiMsg);
+      return {
+        ok: false,
+        error: apiMsg,
+        require_sso_popup: Boolean(err.response?.data?.require_sso_popup)
+      };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Login con Microsoft Entra ID (Popup SSO)
+  const loginWithMicrosoft = async (loginHint = '') => {
     try {
       setLoading(true);
       setError(null);
@@ -136,7 +206,11 @@ export function AuthProvider({ children }) {
         throw new Error('MSAL no está configurado. Configure VITE_AZURE_AD_CLIENT_ID en el archivo .env.');
       }
 
-      const loginResponse = await msalInstance.loginPopup(loginRequest);
+      const reqPayload = loginHint && loginHint.includes('@')
+        ? { ...loginRequest, loginHint: loginHint.trim() }
+        : loginRequest;
+
+      const loginResponse = await msalInstance.loginPopup(reqPayload);
       const email = loginResponse.account?.username || loginResponse.account?.idTokenClaims?.email;
 
       if (!email) {
@@ -146,7 +220,7 @@ export function AuthProvider({ children }) {
       await loadUser(email);
     } catch (err) {
       console.error('[MSAL] Error en login Microsoft:', err);
-      setError(err.message || 'Error al iniciar sesión con Microsoft.');
+      setError(err.message || 'Las credenciales ingresadas no son válidas.');
     } finally {
       setLoading(false);
     }
@@ -160,7 +234,9 @@ export function AuthProvider({ children }) {
   // Cerrar Sesión
   const logout = async () => {
     localStorage.removeItem('dy_user_email');
+    localStorage.removeItem('dy_selected_hoja_ruta');
     setUser(null);
+    setError(null);
     if (msalInstance && msalInstance.getAllAccounts().length > 0) {
       try {
         await msalInstance.logoutPopup();
@@ -174,9 +250,11 @@ export function AuthProvider({ children }) {
     user,
     loading,
     error,
+    setError,
     isOnline,
     pendingSyncCount,
     syncing,
+    loginWithEmailPassword,
     loginWithMicrosoft,
     loginMock,
     logout,

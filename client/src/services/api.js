@@ -22,11 +22,19 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      console.warn('[API] Sesión no identificada o expirada.');
+      console.warn('[API] Sesión no identificada o credenciales rechazadas.');
     }
     return Promise.reject(error);
   }
 );
+
+/**
+ * Validar email y contraseña contra Microsoft Entra ID (Sección 4.1)
+ */
+export async function loginWithCredentials(email, password) {
+  const { data } = await api.post('/auth/login', { email, password });
+  return data;
+}
 
 /**
  * Obtener datos del chofer/usuario logueado
@@ -41,6 +49,62 @@ export async function fetchCurrentUser() {
  */
 export async function fetchUsersList() {
   const { data } = await api.get('/auth/users');
+  return data;
+}
+
+/**
+ * Sección 4.2: Obtener listado de hojas de ruta asignadas (HOJAS_DE_RUTA_A_ENTREGAR)
+ */
+export async function fetchHojasDeRuta(params = {}) {
+  const { data } = await api.get('/hojas-ruta', { params });
+  return data;
+}
+
+/**
+ * Sección 4.2.1: Obtener ítems a entregar (ITEMS_A_ENTREGAR) de una hoja de ruta
+ */
+export async function fetchEntregasHojaRuta(transaccionId) {
+  const { data } = await api.get(`/hojas-ruta/${transaccionId}/entregas`);
+  return data;
+}
+
+/**
+ * Sección 4.2.1: Guardar confirmación de descarga (HOJA_RUTA_ITEM_REMITO)
+ */
+export async function saveEntregasHojaRuta(transaccionId, items) {
+  const { data } = await api.put(`/hojas-ruta/${transaccionId}/entregas`, { items });
+  return data;
+}
+
+/**
+ * Sección 4.2.2: Obtener devoluciones (HOJA_DE_RUTA_DEVOLUCIONES) y catálogos
+ */
+export async function fetchDevolucionesHojaRuta(transaccionId) {
+  const { data } = await api.get(`/hojas-ruta/${transaccionId}/devoluciones`);
+  return data;
+}
+
+/**
+ * Sección 4.2.2: Guardar / actualizar REMITO_DEVOLUCIONES y REMITO_DEVOLUCIONES_ITEMS
+ */
+export async function saveDevolucionesHojaRuta(transaccionId, clientes) {
+  const { data } = await api.post(`/hojas-ruta/${transaccionId}/devoluciones`, { clientes });
+  return data;
+}
+
+/**
+ * Sección 4.2.3: Obtener movimientos de cajones por hoja de ruta
+ */
+export async function fetchCajonesHojaRuta(transaccionId) {
+  const { data } = await api.get(`/hojas-ruta/${transaccionId}/cajones`);
+  return data;
+}
+
+/**
+ * Sección 4.2.3: Guardar entrega y devolución de cajones
+ */
+export async function saveCajonesHojaRuta(transaccionId, items) {
+  const { data } = await api.post(`/hojas-ruta/${transaccionId}/cajones`, { items });
   return data;
 }
 
@@ -63,7 +127,7 @@ export async function fetchMisRemitos(params = {}) {
 }
 
 /**
- * Obtener lista de viajes/hojas de ruta asignadas
+ * Obtener lista de viajes/hojas de ruta asignadas (resumen de remitos)
  */
 export async function fetchViajes(params = {}) {
   const { data } = await api.get('/remitos/viajes', { params });
