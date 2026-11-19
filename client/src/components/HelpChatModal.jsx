@@ -49,11 +49,31 @@ Debes seleccionar la copia física que te firmaron:
 * 🟢 **Recepción Valorizada** (Documento adjunto con montos)`
   },
   {
-    keywords: ['firma', 'firmado', 'rechazado', 'no firmo', 'cliente', 'intermediario'],
-    response: `✍️ **Estados de Firma:**
-* 🟢 **Firmado por Cliente:** Sellado y firmado por el receptor en el local o supermercado.
-* 🔵 **Firmado por Intermediario:** Conformado por un distribuidor u operador logístico.
-* 🔴 **No Firmado / Rechazado:** Si el cliente rechazó la entrega o no colocó la firma.`
+    keywords: ['firma', 'firmado', 'rechazado', 'no firmo', 'cliente', 'intermediario', 'digital', 'dedo', 'pantalla'],
+    response: `✍️ **Firma de Remitos y Firma Digital:**
+* Selecciona el receptor: **Cliente**, **Intermediario** o **No Firmado**.
+* Toca **"Capturar Firma Digital en Pantalla"** para que el responsable firme directamente con su dedo e ingrese aclaración/DNI.`
+  },
+  {
+    keywords: ['entrega', 'entregas', 'descarga', 'remitido', 'entregado', 'cantidad'],
+    response: `📦 **Confirmación de Descarga (Entregas):**
+1. Selecciona tu Hoja de Ruta al ingresar y toca **Entregas**.
+2. Verás los productos agrupados por **Lugar de Entrega** y **Remito**.
+3. Ingresa en **Entregado** únicamente números enteros positivos (o usa "Completar vacíos con Remitido") y presiona **Guardar**.`
+  },
+  {
+    keywords: ['devolucion', 'devoluciones', 'vencimiento', 'motivo', 'fisico', 'virtual', 'agregar'],
+    response: `🔄 **Registro de Devoluciones:**
+1. En la Hoja de Ruta seleccionada toca **Devoluciones**.
+2. Expande el **Lugar de Entrega** y luego el **Cliente** (o agrega uno con el buscador).
+3. Completa **Producto**, **Cantidad**, **Vencimiento**, **Motivo** y **Tipo** (**Físico** o **Virtual**). Usa **+ Agregar** para sumar ítems y presiona **Guardar**.`
+  },
+  {
+    keywords: ['cajon', 'cajones', 'envase', 'diferencia'],
+    response: `🗃️ **Entrega y Devolución de Cajones:**
+1. Toca **Cajones** en la barra inferior.
+2. Ingresa la cantidad de cajones **Entregados**, **Devueltos** y observaciones por cliente.
+3. El sistema calcula automáticamente la diferencia y guarda todo al presionar **Guardar**.`
   },
   {
     keywords: ['foto', 'fotografia', 'camara', 'comprimir', 'sharepoint', 'borrosa'],
@@ -68,18 +88,18 @@ Debes seleccionar la copia física que te firmaron:
 Puedes cambiar el tema tocando el icono de **Sol / Luna** en la esquina superior derecha o desde el menú lateral para descansar la vista en ruta nocturna.`
   },
   {
-    keywords: ['hoja de ruta', 'viaje', 'reparto', 'chofer', 'legajo'],
-    response: `🚚 **Hojas de Ruta y Viajes:**
-Toca el botón **"Viajes"** en la barra inferior o en el Dashboard para consultar las últimas 4 hojas de ruta asignadas con el total de remitos pendientes y conformados.`
+    keywords: ['hoja de ruta', 'viaje', 'reparto', 'chofer', 'legajo', 'patente'],
+    response: `🚚 **Selección de Hoja de Ruta:**
+Al iniciar sesión verás tus Hojas de Ruta asignadas (con fecha, chofer y patentes). Selecciona una hoja de ruta para habilitar los módulos inferiores: **Entregas**, **Devoluciones**, **Cajones** y **Remitos**.`
   }
 ];
 
 const QUICK_QUESTIONS = [
+  '¿Cómo confirmo entregas?',
+  '¿Cómo cargo devoluciones?',
+  '¿Cómo registro cajones?',
   '¿Cómo escaneo un remito?',
-  '¿Qué hacer si no tengo señal?',
-  '¿Cómo ingresar remito manual?',
-  '¿Qué ejemplar debo seleccionar?',
-  '¿Cómo tomar la foto correctamente?'
+  '¿Qué hacer si no tengo señal?'
 ];
 
 export default function HelpChatModal({ isOpen, onClose }) {

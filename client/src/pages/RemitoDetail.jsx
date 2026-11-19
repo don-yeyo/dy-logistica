@@ -3,6 +3,7 @@ import { submitControlRemito, uploadFotoRemito } from '../services/api';
 import { queuePendingControl } from '../services/offlineStorage';
 import { useAuth } from '../config/AuthContext';
 import CameraCapture from '../components/CameraCapture';
+import SignaturePad from '../components/SignaturePad';
 import BottomBar from '../components/BottomBar';
 import AlertModal from '../components/AlertModal';
 import {
@@ -13,8 +14,7 @@ import {
   Calendar,
   FileText,
   CheckCircle2,
-  Check,
-  MessageSquare
+  Check
 } from 'lucide-react';
 
 const EJEMPLARES = [
@@ -27,12 +27,17 @@ const EJEMPLARES = [
 ];
 
 export default function RemitoDetail({ remito, onBack, onSaved }) {
-  const { user, isOnline, refreshPendingCount } = useAuth();
+  const { refreshPendingCount } = useAuth();
 
-  const [ejemplar, setEjemplar] = useState(null);
-  const [estadoFirma, setEstadoFirma] = useState(null);
+  const [ejemplar, setEjemplar] = useState(remito.estado_firma !== 'PENDIENTE' ? remito.ejemplar : null);
+  const [estadoFirma, setEstadoFirma] = useState(remito.estado_firma !== 'PENDIENTE' ? remito.estado_firma : null);
   const [observaciones, setObservaciones] = useState(remito.observaciones || '');
   const [capturedPhoto, setCapturedPhoto] = useState(null);
+  const [signatureInfo, setSignatureInfo] = useState({
+    firma_digital_base64: remito.firma_digital_base64 || null,
+    firma_receptor_aclaracion: remito.firma_receptor_aclaracion || '',
+    firma_receptor_dni: remito.firma_receptor_dni || ''
+  });
   const [saving, setSaving] = useState(false);
   const [successModal, setSuccessModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
@@ -91,16 +96,18 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
         foto_url: fotoUrl,
         foto_sharepoint_url: fotoSharepointUrl,
         foto_nombre_archivo: fotoNombreArchivo,
+        firma_digital_base64: signatureInfo.firma_digital_base64 || null,
+        firma_receptor_aclaracion: signatureInfo.firma_receptor_aclaracion || null,
+        firma_receptor_dni: signatureInfo.firma_receptor_dni || null,
         sincronizado_offline: !navigator.onLine ? 1 : 0
       };
 
       if (navigator.onLine) {
-        // En línea: Guardar directamente en backend
         await submitControlRemito(remito.id, payload);
       } else {
-        // Sin conexión: Encolar en IndexedDB
         console.log('[RemitoDetail] Sin conexión: Guardando en cola local...');
         await queuePendingControl({
+          op_type: 'remito',
           remito_id: remito.id,
           comprobante: remito.finne_Comprobante,
           ...payload,
@@ -115,10 +122,9 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
         if (onSaved) onSaved({ ...remito, ...payload });
         if (onBack) onBack();
       }, 1100);
-
     } catch (error) {
       console.error('[RemitoDetail] Error al guardar control:', error);
-      setErrorMessage(error?.message || 'Ocurrió un error inesperado al guardar el control del remito.');
+      setErrorMessage(error?.response?.data?.error || error?.message || 'Ocurrió un error inesperado al guardar el control del remito.');
     } finally {
       setSaving(false);
     }
@@ -126,7 +132,7 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
 
   return (
     <div className="detail-container-no-scroll">
-      {/* Cabecera Resumen del Remito (Compacta y Neutra sin Tx, HR ni importe) */}
+      {/* Cabecera Resumen del Remito */}
       <div className="remito-summary-card">
         <div className="remito-summary-top">
           <span className="remito-summary-cbte">{remito.finne_Comprobante || 'Sin Comprobante'}</span>
@@ -152,7 +158,7 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
       {/* 1. SELECCIÓN DE EJEMPLAR (3 Columnas x 2 Filas) */}
       <div className="detail-section-compact">
         <div className="section-label-compact">
-          <FileText size={20} style={{ color: 'var(--dy-blue)' }} />
+          <FileText size={18} style={{ color: 'var(--dy-blue)' }} />
           <span>¿De cuál ejemplar se trata?</span>
         </div>
 
@@ -178,44 +184,58 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
       {/* 2. SELECCIÓN DE FIRMA / RECEPTOR (3 Columnas) */}
       <div className="detail-section-compact">
         <div className="section-label-compact">
-          <CheckCircle2 size={20} style={{ color: 'var(--dy-blue)' }} />
+          <CheckCircle2 size={18} style={{ color: 'var(--dy-blue)' }} />
           <span>¿Está firmado? Receptor</span>
         </div>
 
         <div className="firma-grid-3col">
-          {/* Opción 1: Cliente */}
           <button
             type="button"
             className={`firma-btn-3col btn-cliente ${estadoFirma === 'FIRMADO_CLIENTE' ? 'selected' : ''}`}
             onClick={() => setEstadoFirma('FIRMADO_CLIENTE')}
           >
-            <Building2 size={20} />
+            <Building2 size={19} />
             <span>Cliente</span>
           </button>
 
-          {/* Opción 2: Intermediario */}
           <button
             type="button"
             className={`firma-btn-3col btn-interm ${estadoFirma === 'FIRMADO_INTERMEDIARIO' ? 'selected' : ''}`}
             onClick={() => setEstadoFirma('FIRMADO_INTERMEDIARIO')}
           >
-            <Truck size={20} />
+            <Truck size={19} />
             <span>Intermediario</span>
           </button>
 
-          {/* Opción 3: No Firmado */}
           <button
             type="button"
             className={`firma-btn-3col btn-nofirma ${estadoFirma === 'NO_FIRMADO' ? 'selected' : ''}`}
             onClick={() => setEstadoFirma('NO_FIRMADO')}
           >
-            <XCircle size={20} />
+            <XCircle size={19} />
             <span>No Firmado</span>
           </button>
         </div>
       </div>
 
-      {/* 3. FOTOGRAFÍA OPCIONAL (Siempre limpia al abrir) */}
+      {/* 3. CAPTURA DE FIRMA DIGITAL EN PANTALLA (Sección 4.2.4) */}
+      <div className="detail-section-compact">
+        <SignaturePad
+          signatureDataUrl={signatureInfo.firma_digital_base64}
+          aclaracion={signatureInfo.firma_receptor_aclaracion}
+          dni={signatureInfo.firma_receptor_dni}
+          onConfirm={(sigData) => setSignatureInfo(sigData)}
+          onClear={() =>
+            setSignatureInfo({
+              firma_digital_base64: null,
+              firma_receptor_aclaracion: '',
+              firma_receptor_dni: ''
+            })
+          }
+        />
+      </div>
+
+      {/* 4. FOTOGRAFÍA OPCIONAL */}
       <div className="detail-section-compact">
         <CameraCapture
           initialPhotoUrl={null}
@@ -224,7 +244,7 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
         />
       </div>
 
-      {/* 4. OBSERVACIONES (Ocupa el alto sobrante sin scroll) */}
+      {/* 5. OBSERVACIONES */}
       <div className="detail-section-compact detail-section-obs">
         <textarea
           className="obs-textarea-compact"
@@ -270,4 +290,3 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
     </div>
   );
 }
-

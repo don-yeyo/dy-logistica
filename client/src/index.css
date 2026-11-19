@@ -1981,17 +1981,17 @@ body {
 }
 
 /* ==============================================================================
-   PANTALLA DE CONTROL Y DETALLE DE REMITO (NO-SCROLL Y ALTURAS UNIFICADAS)
+   PANTALLA DE CONTROL Y DETALLE DE REMITO (COMPACTA Y ADAPTABLE)
    ============================================================================== */
 .detail-container-no-scroll {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 62px);
-  max-height: calc(100dvh - 62px);
-  padding: 10px 14px calc(74px + env(safe-area-inset-bottom, 0px));
+  min-height: calc(100dvh - 62px);
+  padding: 10px 14px calc(82px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
-  overflow: hidden;
+  overflow-y: auto;
   justify-content: flex-start;
+  gap: 4px;
 }
 
 @media (min-height: 800px) {
@@ -2059,13 +2059,13 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Secciones con mayor separación vertical exclusivamente en registro de remito */
+/* Secciones compactas en registro de remito */
 .detail-container-no-scroll .detail-section-compact {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 28px;
-  margin-bottom: 28px;
+  gap: 6px;
+  margin-top: 8px;
+  margin-bottom: 8px;
   flex-shrink: 0;
 }
 
@@ -2491,9 +2491,9 @@ body {
 
 .obs-textarea-compact {
   width: 100%;
-  height: 130px;
-  min-height: 70px;
-  max-height: 200px;
+  height: 84px;
+  min-height: 64px;
+  max-height: 160px;
   border-radius: 12px;
   border: 1.5px solid var(--border);
   background: var(--surface);
@@ -3780,4 +3780,229 @@ body {
 .module-save-btn.devoluciones {
   background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
   box-shadow: 0 4px 14px rgba(234, 88, 12, 0.35);
+}
+
+
+/* ==============================================================================
+   MÓDULO 4.2.3: CAJONES Y MÓDULO 4.2.4: FIRMA DIGITAL Y ESCÁNER DE REMITOS
+   ============================================================================== */
+.cajones-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.cajon-stat-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cajon-stat-box span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.cajon-stat-box strong {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: var(--text-main);
+}
+
+.cajon-stat-box.balanced {
+  border-color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.cajon-stat-box.diff {
+  border-color: #fcd34d;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.cajones-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cajon-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cajon-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cajon-client-name {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.cajon-lugar-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.cajon-diff-badge {
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 4px 9px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+.cajon-diff-badge.zero {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.cajon-diff-badge.pos {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.cajon-diff-badge.neg {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.cajon-inputs-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.cajon-input-box {
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  border-radius: 10px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dark-theme .cajon-input-box {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.cajon-input-box label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #065f46;
+  text-transform: uppercase;
+}
+
+.dark-theme .cajon-input-box label {
+  color: #34d399;
+}
+
+.cajon-input-box input {
+  width: 100%;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #86efac;
+  background: #ffffff;
+  color: #064e3b;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 800;
+  outline: none;
+}
+
+.dark-theme .cajon-input-box input {
+  background: #0f172a;
+  color: #f8fafc;
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
+.cajon-obs-input {
+  width: 100%;
+  height: 38px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--surface-hover);
+  color: var(--text-main);
+  padding: 0 10px;
+  font-size: 0.82rem;
+  outline: none;
+}
+
+.module-save-btn.cajones {
+  background: linear-gradient(135deg, #7e22ce 0%, #6b21a8 100%);
+  box-shadow: 0 4px 14px rgba(126, 34, 206, 0.35);
+}
+
+.remitos-scan-cta {
+  width: 100%;
+  height: 48px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #0d2c5c 0%, #1a4b8c 100%);
+  color: #ffffff;
+  font-size: 0.92rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+}
+
+.signature-module-compact {
+  width: 100%;
+}
+
+.signature-canvas-box {
+  position: relative;
+  width: 100%;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.signature-canvas {
+  display: block;
+  width: 100%;
+  height: 170px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.signature-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 600;
+  pointer-events: none;
 }

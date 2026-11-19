@@ -1,19 +1,25 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { fetchMisRemitos, fetchViajes } from '../services/api';
+import { fetchMisRemitos } from '../services/api';
 import { cacheRemitos, getCachedRemitos } from '../services/offlineStorage';
 import { useAuth } from '../config/AuthContext';
+import HojaRutaHeader from '../components/HojaRutaHeader';
 import SearchBar from '../components/SearchBar';
 import RemitoCard from '../components/RemitoCard';
-import { RefreshCw, Filter, Inbox, CheckCircle2, Clock } from 'lucide-react';
+import { RefreshCw, Inbox, CheckCircle2, Clock, ScanLine } from 'lucide-react';
 
-export default function RemitosList({ onSelectRemito }) {
-  const { user, isOnline } = useAuth();
+export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, onSelectRemito }) {
+  const { user } = useAuth();
   const [remitos, setRemitos] = useState([]);
-  const [viajes, setViajes] = useState([]);
-  const [selectedRoute, setSelectedRoute] = useState('TODAS');
+  const [selectedRoute, setSelectedRoute] = useState(hojaRuta?.Hoja_de_ruta || 'TODAS');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (hojaRuta?.Hoja_de_ruta) {
+      setSelectedRoute(hojaRuta.Hoja_de_ruta);
+    }
+  }, [hojaRuta]);
 
   // Cargar remitos desde API o Caché Offline
   const loadData = useCallback(async (isSilent = false) => {
@@ -21,31 +27,25 @@ export default function RemitosList({ onSelectRemito }) {
       if (!isSilent) setLoading(true);
       else setRefreshing(true);
 
-      if (navigator.onLine) {
-        // En línea: Cargar desde API
-        const [remitosRes, viajesRes] = await Promise.allSettled([
-          fetchMisRemitos({ n_viajes: 4 }),
-          fetchViajes({ n_viajes: 4 })
-        ]);
+      const queryParams = { n_viajes: 4 };
+      if (hojaRuta?.Hoja_de_ruta) {
+        queryParams.hoja_ruta = hojaRuta.Hoja_de_ruta;
+      }
 
-        if (remitosRes.status === 'fulfilled' && remitosRes.value?.ok) {
-          const list = remitosRes.value.remitos || [];
+      if (navigator.onLine) {
+        const remitosRes = await fetchMisRemitos(queryParams);
+        if (remitosRes && remitosRes.ok) {
+          const list = remitosRes.remitos || [];
           setRemitos(list);
           await cacheRemitos(list);
         }
-
-        if (viajesRes.status === 'fulfilled' && viajesRes.value?.ok) {
-          setViajes(viajesRes.value.viajes || []);
-        }
       } else {
-        // Sin conexión: Cargar desde IndexedDB
         console.log('[RemitosList] Cargando remitos desde caché local offline...');
         const cached = await getCachedRemitos();
         setRemitos(cached);
       }
     } catch (error) {
       console.warn('[RemitosList] Error al cargar remitos:', error);
-      // Fallback a caché local
       const cached = await getCachedRemitos();
       if (cached.length > 0) {
         setRemitos(cached);
@@ -54,7 +54,7 @@ export default function RemitosList({ onSelectRemito }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [hojaRuta]);
 
   useEffect(() => {
     loadData();
@@ -63,23 +63,28 @@ export default function RemitosList({ onSelectRemito }) {
   // Lista de hojas de ruta únicas para los chips
   const routeOptions = useMemo(() => {
     const routesSet = new Set();
-    remitos.forEach(r => {
+    if (hojaRuta?.Hoja_de_ruta) {
+      routesSet.add(hojaRuta.Hoja_de_ruta);
+    }
+    remitos.forEach((r) => {
       if (r.nro_hoja_ruta) routesSet.add(r.nro_hoja_ruta);
     });
     return Array.from(routesSet);
-  }, [remitos]);
+  }, [remitos, hojaRuta]);
 
   // Filtrado predictivo instantáneo por texto y hoja de ruta
   const filteredRemitos = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
 
     return remitos.filter((remito) => {
-      // Filtro por hoja de ruta
-      if (selectedRoute !== 'TODAS' && remito.nro_hoja_ruta !== selectedRoute) {
-        return false;
+      if (selectedRoute !== 'TODAS') {
+        const normRoute = String(selectedRoute).replace(/^HR-/i, '');
+        const normRemito = String(remito.nro_hoja_ruta || '').replace(/^HR-/i, '');
+        if (normRemito !== normRoute) {
+          return false;
+        }
       }
 
-      // Filtro por buscador predictivo
       if (!q) return true;
 
       const comprobante = (remito.finne_Comprobante || '').toLowerCase();
@@ -101,13 +106,33 @@ export default function RemitosList({ onSelectRemito }) {
   // Contadores rápidos
   const stats = useMemo(() => {
     const total = filteredRemitos.length;
-    const pendientes = filteredRemitos.filter(r => r.estado_firma === 'PENDIENTE').length;
+    const pendientes = filteredRemitos.filter((r) => r.estado_firma === 'PENDIENTE').length;
     const completados = total - pendientes;
     return { total, pendientes, completados };
   }, [filteredRemitos]);
 
   return (
-    <div className="remitos-page">
+    <div className="module-page">
+      {hojaRuta && (
+        <HojaRutaHeader
+          hojaRuta={hojaRuta}
+          title="Logística DY - Remitos"
+          onChangeHojaRuta={onChangeHojaRuta}
+        />
+      )}
+
+      {/* Botón Directo de Escáner 1D */}
+      {onOpenScan && (
+        <button
+          type="button"
+          className="remitos-scan-cta"
+          onClick={onOpenScan}
+        >
+          <ScanLine size={20} />
+          <span>Escanear Código de Barras 1D del Remito</span>
+        </button>
+      )}
+
       {/* Buscador Predictivo */}
       <SearchBar
         value={searchQuery}
@@ -116,34 +141,36 @@ export default function RemitosList({ onSelectRemito }) {
       />
 
       {/* Selector de Viajes / Hojas de Ruta (Chips horizontales) */}
-      <div className="routes-chips-container">
-        <button
-          type="button"
-          className={`route-chip ${selectedRoute === 'TODAS' ? 'active' : ''}`}
-          onClick={() => setSelectedRoute('TODAS')}
-        >
-          <span>Todos los Viajes</span>
-          <span className="route-chip-badge">{remitos.length}</span>
-        </button>
+      {routeOptions.length > 1 && (
+        <div className="routes-chips-container">
+          <button
+            type="button"
+            className={`route-chip ${selectedRoute === 'TODAS' ? 'active' : ''}`}
+            onClick={() => setSelectedRoute('TODAS')}
+          >
+            <span>Todos</span>
+            <span className="route-chip-badge">{remitos.length}</span>
+          </button>
 
-        {routeOptions.map((route) => {
-          const count = remitos.filter(r => r.nro_hoja_ruta === route).length;
-          return (
-            <button
-              key={route}
-              type="button"
-              className={`route-chip ${selectedRoute === route ? 'active' : ''}`}
-              onClick={() => setSelectedRoute(route)}
-            >
-              <span>{route}</span>
-              <span className="route-chip-badge">{count}</span>
-            </button>
-          );
-        })}
-      </div>
+          {routeOptions.map((route) => {
+            const count = remitos.filter((r) => r.nro_hoja_ruta === route).length;
+            return (
+              <button
+                key={route}
+                type="button"
+                className={`route-chip ${selectedRoute === route ? 'active' : ''}`}
+                onClick={() => setSelectedRoute(route)}
+              >
+                <span>{route}</span>
+                <span className="route-chip-badge">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Barra de Estadísticas y Refresco */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', fontSize: '0.85rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', fontSize: '0.85rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#b45309', fontWeight: 700 }}>
             <Clock size={15} />
@@ -170,16 +197,16 @@ export default function RemitosList({ onSelectRemito }) {
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '50px 0', gap: '12px', color: 'var(--text-muted)' }}>
           <RefreshCw size={32} className="spin" style={{ color: 'var(--dy-blue)' }} />
-          <p style={{ fontWeight: 600 }}>Cargando remitos de tus viajes...</p>
+          <p style={{ fontWeight: 600 }}>Cargando remitos de la hoja de ruta...</p>
         </div>
       ) : filteredRemitos.length === 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', background: 'var(--surface)', borderRadius: 'var(--radius-lg)', textAlign: 'center', gap: '12px' }}>
-          <Inbox size={48} style={{ color: 'var(--text-muted)' }} />
-          <h3 style={{ fontSize: '1.1rem', color: 'var(--text-main)' }}>No se encontraron remitos</h3>
-          <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', maxWidth: '280px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '50px 20px', background: 'var(--surface)', borderRadius: 'var(--radius-lg)', textAlign: 'center', gap: '12px' }}>
+          <Inbox size={44} style={{ color: 'var(--text-muted)' }} />
+          <h3 style={{ fontSize: '1.05rem', color: 'var(--text-main)', margin: 0 }}>No se encontraron remitos</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '280px', margin: 0 }}>
             {searchQuery
               ? `No hay remitos que coincidan con "${searchQuery}".`
-              : 'No hay remitos asignados en las hojas de ruta seleccionadas.'}
+              : 'No hay remitos asignados en la hoja de ruta seleccionada.'}
           </p>
           {searchQuery && (
             <button
