@@ -38,6 +38,9 @@ async function buscarRemito(req, res) {
         foto_url,
         foto_sharepoint_url,
         foto_nombre_archivo,
+        firma_digital_base64,
+        firma_receptor_aclaracion,
+        firma_receptor_dni,
         fecha_control,
         controlado_por_chofer_id,
         controlado_por_chofer_email,
@@ -138,6 +141,7 @@ async function getMisRemitos(req, res) {
     const defaultN = parseInt(process.env.MAX_VIAJES_HISTORICOS_DEFAULT || '4', 10);
     const limitN = parseInt(req.query.n_viajes || defaultN, 10);
     const selectedRoute = req.query.hoja_ruta;
+    const selectedTxId = req.query.transaccion_id;
     const searchQuery = (req.query.q || '').trim();
 
     // 1. Obtener las N hojas de ruta recientes
@@ -156,10 +160,17 @@ async function getMisRemitos(req, res) {
     )`);
     params.push(user.codigo_chofer || '', user.codigo_chofer || '', user.email || '', user.rol);
 
-    // Filtro por hoja de ruta
+    // Filtro por hoja de ruta (soporta tanto "HR-25430" como "25430")
     if (selectedRoute && selectedRoute !== 'TODAS') {
-      whereClauses.push('nro_hoja_ruta = ?');
-      params.push(selectedRoute);
+      const cleanRoute = String(selectedRoute).trim();
+      const withoutPrefix = cleanRoute.replace(/^HR-/i, '');
+      const withPrefix = cleanRoute.toUpperCase().startsWith('HR-') ? cleanRoute : `HR-${cleanRoute}`;
+      whereClauses.push('(nro_hoja_ruta = ? OR nro_hoja_ruta = ? OR nro_hoja_ruta = ?)');
+      params.push(cleanRoute, withPrefix, withoutPrefix);
+    } else if (selectedTxId) {
+      const txClean = String(selectedTxId).trim();
+      whereClauses.push('(nro_hoja_ruta = ? OR nro_hoja_ruta = ?)');
+      params.push(`HR-${txClean}`, txClean);
     } else if (recentRoutes.length > 0) {
       const placeholders = recentRoutes.map(() => '?').join(',');
       whereClauses.push(`nro_hoja_ruta IN (${placeholders})`);
@@ -200,6 +211,9 @@ async function getMisRemitos(req, res) {
         foto_url,
         foto_sharepoint_url,
         foto_nombre_archivo,
+        firma_digital_base64,
+        firma_receptor_aclaracion,
+        firma_receptor_dni,
         fecha_control,
         controlado_por_chofer_id,
         controlado_por_chofer_email,
@@ -297,6 +311,9 @@ async function saveControl(req, res) {
       foto_url,
       foto_sharepoint_url,
       foto_nombre_archivo,
+      firma_digital_base64,
+      firma_receptor_aclaracion,
+      firma_receptor_dni,
       sincronizado_offline
     } = req.body;
 
@@ -360,6 +377,9 @@ async function saveControl(req, res) {
         foto_url = COALESCE(?, foto_url),
         foto_sharepoint_url = COALESCE(?, foto_sharepoint_url),
         foto_nombre_archivo = COALESCE(?, foto_nombre_archivo),
+        firma_digital_base64 = COALESCE(?, firma_digital_base64),
+        firma_receptor_aclaracion = COALESCE(?, firma_receptor_aclaracion),
+        firma_receptor_dni = COALESCE(?, firma_receptor_dni),
         fecha_control = NOW(),
         controlado_por_chofer_id = ?,
         controlado_por_chofer_email = ?,
@@ -378,6 +398,9 @@ async function saveControl(req, res) {
       foto_url || null,
       foto_sharepoint_url || null,
       foto_nombre_archivo || null,
+      firma_digital_base64 || null,
+      firma_receptor_aclaracion || null,
+      firma_receptor_dni || null,
       user.id || null,
       user.email,
       isOffline,
@@ -549,7 +572,18 @@ async function syncOffline(req, res) {
 
     for (const item of items) {
       try {
-        const { remito_id, ejemplar, estado_firma, tipo_documento, observaciones, foto_url, foto_nombre_archivo } = item;
+        const {
+          remito_id,
+          ejemplar,
+          estado_firma,
+          tipo_documento,
+          observaciones,
+          foto_url,
+          foto_nombre_archivo,
+          firma_digital_base64,
+          firma_receptor_aclaracion,
+          firma_receptor_dni
+        } = item;
         
         if (!remito_id || !estado_firma) continue;
 
@@ -566,6 +600,9 @@ async function syncOffline(req, res) {
             observaciones = ?,
             foto_url = COALESCE(?, foto_url),
             foto_nombre_archivo = COALESCE(?, foto_nombre_archivo),
+            firma_digital_base64 = COALESCE(?, firma_digital_base64),
+            firma_receptor_aclaracion = COALESCE(?, firma_receptor_aclaracion),
+            firma_receptor_dni = COALESCE(?, firma_receptor_dni),
             fecha_control = NOW(),
             controlado_por_chofer_id = ?,
             controlado_por_chofer_email = ?,
@@ -580,6 +617,9 @@ async function syncOffline(req, res) {
           observaciones || null,
           foto_url || null,
           foto_nombre_archivo || null,
+          firma_digital_base64 || null,
+          firma_receptor_aclaracion || null,
+          firma_receptor_dni || null,
           user.id,
           user.email,
           botCliente,

@@ -3,6 +3,9 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 
+// Validar usuario y contraseña contra Microsoft Entra ID
+router.post('/login', authController.loginWithCredentials);
+
 // Obtener datos del chofer/usuario logueado
 router.get('/me', authMiddleware, authController.getMe);
 
