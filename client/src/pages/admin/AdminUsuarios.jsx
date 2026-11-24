@@ -6,11 +6,12 @@ import {
   updateAdminUsuario,
   deleteAdminUsuario
 } from '../../services/api';
+import { useAuth } from '../../config/AuthContext';
+import AdminPagination from './AdminPagination';
 import {
   UserPlus,
   Edit2,
   Trash2,
-  RefreshCw,
   Search,
   X,
   Check,
@@ -18,10 +19,17 @@ import {
   ShieldCheck
 } from 'lucide-react';
 
+const DEFAULT_PAGE_SIZE = Number(import.meta.env.VITE_ADMIN_PAGE_SIZE || 15);
+
 export default function AdminUsuarios({ currentUser }) {
+  const { refreshAvailableUsers } = useAuth();
   const isSysAdmin = currentUser?.rol === 'sysadmin';
 
   const [usuarios, setUsuarios] = useState([]);
+  const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [pagination, setPagination] = useState({ page: 1, page_size: DEFAULT_PAGE_SIZE, total: 0, total_pages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -38,23 +46,32 @@ export default function AdminUsuarios({ currentUser }) {
   const [formOrgLabel, setFormOrgLabel] = useState('');
   const [formActivo, setFormActivo] = useState(true);
 
-  // Buscador de Organizaciones del ERP para mapear chofer
   const [orgQuery, setOrgQuery] = useState('');
   const [orgs, setOrgs] = useState([]);
   const [orgsLoading, setOrgsLoading] = useState(false);
 
-  const loadUsuarios = useCallback(async () => {
+  const loadUsuarios = useCallback(async (overrides = {}) => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetchAdminUsuarios();
+      const nextPage = overrides.page !== undefined ? overrides.page : page;
+      const nextSize = overrides.pageSize !== undefined ? overrides.pageSize : pageSize;
+      const nextQ = overrides.q !== undefined ? overrides.q : q;
+      const res = await fetchAdminUsuarios({
+        q: nextQ,
+        page: nextPage,
+        page_size: nextSize
+      });
       setUsuarios(res.usuarios || []);
+      if (res.pagination) {
+        setPagination(res.pagination);
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Error al obtener la lista de usuarios.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [q, page, pageSize]);
 
   useEffect(() => {
     loadUsuarios();
@@ -144,6 +161,7 @@ export default function AdminUsuarios({ currentUser }) {
 
       setModalOpen(false);
       await loadUsuarios();
+      if (refreshAvailableUsers) refreshAvailableUsers();
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo guardar el usuario.');
     } finally {
@@ -162,6 +180,7 @@ export default function AdminUsuarios({ currentUser }) {
       const res = await deleteAdminUsuario(u.id);
       setSuccessMsg(res.message || 'Operación completada.');
       await loadUsuarios();
+      if (refreshAvailableUsers) refreshAvailableUsers();
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo completar la acción.');
     }
@@ -169,35 +188,55 @@ export default function AdminUsuarios({ currentUser }) {
 
   return (
     <div className="admin-section">
-      <div className="admin-section-toolbar">
-        <div>
-          <h2 className="admin-section-heading">
-            {isSysAdmin ? 'Gestión de Usuarios, Roles y Mapeo ERP' : 'Gestión de Choferes'}
-          </h2>
-          <p className="admin-section-desc">
-            {isSysAdmin
-              ? 'Alta y asignación de roles (sysadmin, logistica, chofer) vinculando su email Microsoft 365 con su Organización en el ERP.'
-              : 'Administrá las cuentas corporativas de los choferes y su mapeo al identificador de Organización en el ERP.'}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button type="button" className="admin-btn admin-btn-secondary" onClick={loadUsuarios} disabled={loading}>
-            <RefreshCw size={16} className={loading ? 'spin' : ''} />
-            <span>Actualizar</span>
-          </button>
-          <button type="button" className="admin-btn admin-btn-primary" onClick={openCreateModal}>
-            <UserPlus size={16} />
-            <span>{isSysAdmin ? 'Nuevo Usuario' : 'Nuevo Chofer'}</span>
-          </button>
-        </div>
-      </div>
-
       <div className="admin-info-banner">
         <ShieldCheck size={18} />
         <span>
           Los usuarios inician sesión únicamente mediante <strong>SSO Microsoft 365</strong>. Para que un chofer visualice solo sus hojas de ruta, debe estar mapeado a su <code>Organizacionid</code> en el ERP.
         </span>
       </div>
+
+      <form
+        className="admin-filter-bar"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setPage(1);
+          loadUsuarios({ page: 1 });
+        }}
+      >
+        <div className="admin-input-icon-wrap" style={{ flex: '1 1 260px' }}>
+          <Search size={16} />
+          <input
+            type="text"
+            placeholder="Buscar por nombre, email u organización..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="admin-input"
+          />
+        </div>
+        <button type="submit" className="admin-btn admin-btn-secondary">Buscar</button>
+        {q && (
+          <button
+            type="button"
+            className="admin-btn admin-btn-ghost"
+            onClick={() => {
+              setQ('');
+              setPage(1);
+              loadUsuarios({ q: '', page: 1 });
+            }}
+          >
+            Limpiar
+          </button>
+        )}
+        <button
+          type="button"
+          className="admin-btn admin-btn-primary"
+          style={{ marginLeft: 'auto' }}
+          onClick={openCreateModal}
+        >
+          <UserPlus size={16} />
+          <span>{isSysAdmin ? 'Nuevo Usuario' : 'Nuevo Chofer'}</span>
+        </button>
+      </form>
 
       {error && <div className="admin-alert admin-alert-error">{error}</div>}
       {successMsg && <div className="admin-alert admin-alert-success">{successMsg}</div>}
@@ -280,6 +319,16 @@ export default function AdminUsuarios({ currentUser }) {
             </tbody>
           </table>
         </div>
+
+        <AdminPagination
+          pagination={pagination}
+          loading={loading}
+          onPageChange={(nextPage) => setPage(nextPage)}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize);
+            setPage(1);
+          }}
+        />
       </div>
 
       {/* Modal Crear / Editar */}
@@ -355,7 +404,6 @@ export default function AdminUsuarios({ currentUser }) {
                   </div>
                 </div>
 
-                {/* Mapeo a ORGANIZACION */}
                 <div className="admin-subcard">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

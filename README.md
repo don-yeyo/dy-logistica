@@ -125,6 +125,7 @@ node server/setup_glog_app.js
 | `CAJONES_TIPO_ENTREGA`, `CAJONES_TIPO_DEVOLUCION` | Códigos numéricos de `REMITO_CAJONES.tipo` (`1` entrega, `2` devolución) |
 | `MAX_VIAJES_HISTORICOS_DEFAULT` | `4` (cantidad histórica de remitos) |
 | `MAX_HOJAS_RUTA_LIST` | `20` (cantidad máxima de hojas de ruta en app móvil) |
+| `ADMIN_DEFAULT_PAGE_SIZE`, `ADMIN_MAX_PAGE_SIZE` | Tamaño de página por defecto (`15`) y máximo (`100`) en grillas del Gestor de Escritorio |
 | `AZURE_AD_TENANT_ID`, `AZURE_AD_CLIENT_ID`, `AZURE_AD_CLIENT_SECRET` | Credenciales de Microsoft Entra ID |
 | `ENABLE_SHAREPOINT_UPLOAD`, `POWERAUTOMATE_URL`, `SHAREPOINT_FQDN` | Envío de fotos a SharePoint |
 
@@ -133,7 +134,8 @@ node server/setup_glog_app.js
 | :--- | :--- |
 | `VITE_API_URL` | `/api` |
 | `VITE_AZURE_AD_CLIENT_ID`, `VITE_AZURE_AD_TENANT_ID`, `VITE_AZURE_AD_REDIRECT_URI` | Configuración MSAL Entra ID (`localStorage` cache) |
-| `VITE_MOCK_AUTH`, `VITE_DEFAULT_MOCK_EMAIL` | Selector rápido de desarrollo (`false` en producción) |
+| `VITE_MOCK_AUTH`, `VITE_ENABLE_USER_IMPERSONATION`, `VITE_DEFAULT_MOCK_EMAIL` | Bypass de SSO y selector rápido de simulación de usuarios en gestación (`false` en producción) |
+| `VITE_ADMIN_PAGE_SIZE` | Cantidad inicial de filas por página (`15`) en las grillas del Gestor de Escritorio |
 | `VITE_IMAGE_COMPRESSION_QUALITY`, `VITE_IMAGE_MAX_WIDTH`, `VITE_IMAGE_MAX_HEIGHT` | Compresión de imágenes JPEG al 70% |
 
 ### 5. Iniciar en Modo Desarrollo
@@ -156,10 +158,11 @@ npm run dev
 * `GET /api/hojas-ruta/:transaccionId/cajones` y `POST /api/hojas-ruta/:transaccionId/cajones`
 * `GET /api/remitos/mis-remitos`, `GET /api/remitos/buscar`, `PUT /api/remitos/:id/control`, `POST /api/remitos/upload-foto`, `POST /api/remitos/sync-offline`.
 
-### Gestor de Escritorio (`/api/admin`, requiere `sysadmin` o `logistica`)
+### Gestor de Escritorio (`/api/admin`, requiere `sysadmin` o `logistica`, paginado server-side con `page` y `page_size`)
+* Incluye menú lateral contraíble, versión tomada dinámicamente de `client/package.json` y menú de usuario en el header derecho mediante avatar circular (con selector de simulación de usuarios cuando `VITE_ENABLE_USER_IMPERSONATION=true`).
 * `GET /api/admin/dashboard` — KPIs operativos, avance y resumen reciente.
-* `GET /api/admin/hojas-ruta` y `GET /api/admin/hojas-ruta/:transaccionId` — Seguimiento detallado de entregas, devoluciones y cajones.
-* `GET /api/admin/devoluciones` — Consolidado de devoluciones y faltantes (insumo para futuras Notas de Crédito).
-* `GET /api/admin/cajones` — Balance de cajones con filtro de diferencias.
-* `GET/POST/PUT/DELETE /api/admin/usuarios` y `GET /api/admin/organizaciones` — Gestión de usuarios con RBAC y mapeo ERP.
-* `GET /api/admin/auditoria` *(solo `sysadmin`)* — Bitácora de triggers sobre `AUDITORIA`.
+* `GET /api/admin/hojas-ruta` y `GET /api/admin/hojas-ruta/:transaccionId` — Seguimiento paginado y detallado de entregas, devoluciones y cajones.
+* `GET /api/admin/devoluciones` — Consolidado paginado por pestaña (`tab=devoluciones|faltantes`) como insumo para futuras Notas de Crédito.
+* `GET /api/admin/cajones` — Balance paginado de cajones con filtro SQL de diferencias (`solo_con_diferencia=true`).
+* `GET/POST/PUT/DELETE /api/admin/usuarios` y `GET /api/admin/organizaciones` — Gestión paginada de usuarios con RBAC y mapeo ERP.
+* `GET /api/admin/auditoria` *(solo `sysadmin`)* — Bitácora paginada de triggers sobre `AUDITORIA`.

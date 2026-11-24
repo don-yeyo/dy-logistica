@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchAdminCajones } from '../../services/api';
-import { Search, RefreshCw } from 'lucide-react';
+import AdminPagination from './AdminPagination';
+import { Search } from 'lucide-react';
+
+const DEFAULT_PAGE_SIZE = Number(import.meta.env.VITE_ADMIN_PAGE_SIZE || 15);
 
 export default function AdminCajones() {
   const [cajones, setCajones] = useState([]);
   const [q, setQ] = useState('');
   const [soloDiferencia, setSoloDiferencia] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [pagination, setPagination] = useState({ page: 1, page_size: DEFAULT_PAGE_SIZE, total: 0, total_pages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -15,17 +21,24 @@ export default function AdminCajones() {
       setError(null);
       const searchVal = overrides.q !== undefined ? overrides.q : q;
       const diffVal = overrides.soloDiferencia !== undefined ? overrides.soloDiferencia : soloDiferencia;
+      const nextPage = overrides.page !== undefined ? overrides.page : page;
+      const nextSize = overrides.pageSize !== undefined ? overrides.pageSize : pageSize;
       const res = await fetchAdminCajones({
         q: searchVal,
-        solo_con_diferencia: diffVal ? 'true' : 'false'
+        solo_con_diferencia: diffVal ? 'true' : 'false',
+        page: nextPage,
+        page_size: nextSize
       });
       setCajones(res.cajones || []);
+      if (res.pagination) {
+        setPagination(res.pagination);
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Error al cargar control de cajones.');
     } finally {
       setLoading(false);
     }
-  }, [q, soloDiferencia]);
+  }, [q, soloDiferencia, page, pageSize]);
 
   useEffect(() => {
     loadData();
@@ -33,31 +46,19 @@ export default function AdminCajones() {
 
   return (
     <div className="admin-section">
-      <div className="admin-section-toolbar">
-        <div>
-          <h2 className="admin-section-heading">Control de Cajones</h2>
-          <p className="admin-section-desc">
-            Balance entre cajones entregados y devueltos por hoja de ruta, etapa y cliente.
-          </p>
-        </div>
-        <button type="button" className="admin-btn admin-btn-secondary" onClick={() => loadData()} disabled={loading}>
-          <RefreshCw size={16} className={loading ? 'spin' : ''} />
-          <span>Actualizar</span>
-        </button>
-      </div>
-
       <form
         className="admin-filter-bar"
         onSubmit={(e) => {
           e.preventDefault();
-          loadData();
+          setPage(1);
+          loadData({ page: 1 });
         }}
       >
         <div className="admin-input-icon-wrap" style={{ flex: '1 1 260px' }}>
           <Search size={16} />
           <input
             type="text"
-            placeholder="Buscar por Hoja de Ruta, cliente o dirección..."
+            placeholder="Buscar por Hoja de Ruta, chofer, cliente o dirección..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className="admin-input"
@@ -71,13 +72,27 @@ export default function AdminCajones() {
             onChange={(e) => {
               const next = e.target.checked;
               setSoloDiferencia(next);
-              loadData({ soloDiferencia: next });
+              setPage(1);
+              loadData({ soloDiferencia: next, page: 1 });
             }}
           />
           <span>Solo con diferencia</span>
         </label>
 
         <button type="submit" className="admin-btn admin-btn-primary">Filtrar</button>
+        {q && (
+          <button
+            type="button"
+            className="admin-btn admin-btn-ghost"
+            onClick={() => {
+              setQ('');
+              setPage(1);
+              loadData({ q: '', page: 1 });
+            }}
+          >
+            Limpiar
+          </button>
+        )}
       </form>
 
       {error && <div className="admin-alert admin-alert-error">{error}</div>}
@@ -128,6 +143,16 @@ export default function AdminCajones() {
             </tbody>
           </table>
         </div>
+
+        <AdminPagination
+          pagination={pagination}
+          loading={loading}
+          onPageChange={(nextPage) => setPage(nextPage)}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize);
+            setPage(1);
+          }}
+        />
       </div>
     </div>
   );

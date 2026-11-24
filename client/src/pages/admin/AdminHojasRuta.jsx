@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchAdminHojasRuta, fetchAdminHojaRutaDetalle } from '../../services/api';
-import { Search, RefreshCw, Eye, X, Truck, CheckCircle2, RotateCcw, Package } from 'lucide-react';
+import AdminPagination from './AdminPagination';
+import { Search, Eye, X, Truck, CheckCircle2, RotateCcw, Package } from 'lucide-react';
+
+const DEFAULT_PAGE_SIZE = Number(import.meta.env.VITE_ADMIN_PAGE_SIZE || 15);
 
 export default function AdminHojasRuta({ initialTransaccionId, onClearInitialTransaccion }) {
   const [hojasRuta, setHojasRuta] = useState([]);
@@ -11,6 +14,9 @@ export default function AdminHojasRuta({ initialTransaccionId, onClearInitialTra
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
   const [estadoDescarga, setEstadoDescarga] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [pagination, setPagination] = useState({ page: 1, page_size: DEFAULT_PAGE_SIZE, total: 0, total_pages: 1 });
 
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -20,21 +26,27 @@ export default function AdminHojasRuta({ initialTransaccionId, onClearInitialTra
     try {
       setLoading(true);
       setError(null);
+      const nextPage = overrides.page !== undefined ? overrides.page : page;
+      const nextSize = overrides.pageSize !== undefined ? overrides.pageSize : pageSize;
       const params = {
         q: overrides.q !== undefined ? overrides.q : q,
         fecha_desde: overrides.fecha_desde !== undefined ? overrides.fecha_desde : fechaDesde,
         fecha_hasta: overrides.fecha_hasta !== undefined ? overrides.fecha_hasta : fechaHasta,
         estado_descarga: overrides.estado_descarga !== undefined ? overrides.estado_descarga : estadoDescarga,
-        limit: 150
+        page: nextPage,
+        page_size: nextSize
       };
       const res = await fetchAdminHojasRuta(params);
       setHojasRuta(res.hojas_ruta || []);
+      if (res.pagination) {
+        setPagination(res.pagination);
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Error al cargar hojas de ruta.');
     } finally {
       setLoading(false);
     }
-  }, [q, fechaDesde, fechaHasta, estadoDescarga]);
+  }, [q, fechaDesde, fechaHasta, estadoDescarga, page, pageSize]);
 
   useEffect(() => {
     loadList();
@@ -62,7 +74,8 @@ export default function AdminHojasRuta({ initialTransaccionId, onClearInitialTra
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    loadList();
+    setPage(1);
+    loadList({ page: 1 });
   };
 
   const handleReset = () => {
@@ -70,24 +83,12 @@ export default function AdminHojasRuta({ initialTransaccionId, onClearInitialTra
     setFechaDesde('');
     setFechaHasta('');
     setEstadoDescarga('');
-    loadList({ q: '', fecha_desde: '', fecha_hasta: '', estado_descarga: '' });
+    setPage(1);
+    loadList({ q: '', fecha_desde: '', fecha_hasta: '', estado_descarga: '', page: 1 });
   };
 
   return (
     <div className="admin-section">
-      <div className="admin-section-toolbar">
-        <div>
-          <h2 className="admin-section-heading">Seguimiento de Hojas de Ruta</h2>
-          <p className="admin-section-desc">
-            Estado de avance en descargas, devoluciones y cajones por hoja de ruta (excluye firma de remitos).
-          </p>
-        </div>
-        <button type="button" className="admin-btn admin-btn-secondary" onClick={() => loadList()} disabled={loading}>
-          <RefreshCw size={16} className={loading ? 'spin' : ''} />
-          <span>Actualizar</span>
-        </button>
-      </div>
-
       <form className="admin-filter-bar" onSubmit={handleSubmit}>
         <div className="admin-input-icon-wrap" style={{ flex: '1 1 240px' }}>
           <Search size={16} />
@@ -122,6 +123,7 @@ export default function AdminHojasRuta({ initialTransaccionId, onClearInitialTra
           <option value="pendiente">Pendiente (0%)</option>
           <option value="parcial">Parcial (En curso)</option>
           <option value="completa">Completa (100%)</option>
+          <option value="con_diferencias">Con diferencias</option>
         </select>
         <button type="submit" className="admin-btn admin-btn-primary">
           Filtrar
@@ -210,6 +212,16 @@ export default function AdminHojasRuta({ initialTransaccionId, onClearInitialTra
             </tbody>
           </table>
         </div>
+
+        <AdminPagination
+          pagination={pagination}
+          loading={loading}
+          onPageChange={(nextPage) => setPage(nextPage)}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize);
+            setPage(1);
+          }}
+        />
       </div>
 
       {/* Modal de Detalle */}

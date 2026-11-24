@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchAdminAuditoria } from '../../services/api';
-import { Search, RefreshCw, Eye, X, ShieldAlert } from 'lucide-react';
+import AdminPagination from './AdminPagination';
+import { Search, Eye, X, ShieldAlert } from 'lucide-react';
+
+const DEFAULT_PAGE_SIZE = Number(import.meta.env.VITE_ADMIN_PAGE_SIZE || 15);
 
 const TABLAS_AUDITORIA = [
   'APP_USUARIOS',
@@ -21,25 +24,34 @@ export default function AdminAuditoria() {
   const [tabla, setTabla] = useState('');
   const [operacion, setOperacion] = useState('');
   const [usuario, setUsuario] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [pagination, setPagination] = useState({ page: 1, page_size: DEFAULT_PAGE_SIZE, total: 0, total_pages: 1 });
   const [selectedEvent, setSelectedEvent] = useState(null);
 
   const loadAuditoria = useCallback(async (overrides = {}) => {
     try {
       setLoading(true);
       setError(null);
+      const nextPage = overrides.page !== undefined ? overrides.page : page;
+      const nextSize = overrides.pageSize !== undefined ? overrides.pageSize : pageSize;
       const res = await fetchAdminAuditoria({
         tabla: overrides.tabla !== undefined ? overrides.tabla : tabla,
         operacion: overrides.operacion !== undefined ? overrides.operacion : operacion,
         usuario: overrides.usuario !== undefined ? overrides.usuario : usuario,
-        limit: 150
+        page: nextPage,
+        page_size: nextSize
       });
       setLogs(res.auditoria || []);
+      if (res.pagination) {
+        setPagination(res.pagination);
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Error al consultar la tabla de auditoría.');
     } finally {
       setLoading(false);
     }
-  }, [tabla, operacion, usuario]);
+  }, [tabla, operacion, usuario, page, pageSize]);
 
   useEffect(() => {
     loadAuditoria();
@@ -57,24 +69,12 @@ export default function AdminAuditoria() {
 
   return (
     <div className="admin-section">
-      <div className="admin-section-toolbar">
-        <div>
-          <h2 className="admin-section-heading">Auditoría de Base de Datos (Triggers)</h2>
-          <p className="admin-section-desc">
-            Bitácora inmutable generada automáticamente mediante triggers AFTER INSERT / UPDATE / DELETE en MySQL.
-          </p>
-        </div>
-        <button type="button" className="admin-btn admin-btn-secondary" onClick={() => loadAuditoria()} disabled={loading}>
-          <RefreshCw size={16} className={loading ? 'spin' : ''} />
-          <span>Actualizar</span>
-        </button>
-      </div>
-
       <form
         className="admin-filter-bar"
         onSubmit={(e) => {
           e.preventDefault();
-          loadAuditoria();
+          setPage(1);
+          loadAuditoria({ page: 1 });
         }}
       >
         <select value={tabla} onChange={(e) => setTabla(e.target.value)} className="admin-input">
@@ -110,7 +110,8 @@ export default function AdminAuditoria() {
             setTabla('');
             setOperacion('');
             setUsuario('');
-            loadAuditoria({ tabla: '', operacion: '', usuario: '' });
+            setPage(1);
+            loadAuditoria({ tabla: '', operacion: '', usuario: '', page: 1 });
           }}
         >
           Limpiar
@@ -176,6 +177,16 @@ export default function AdminAuditoria() {
             </tbody>
           </table>
         </div>
+
+        <AdminPagination
+          pagination={pagination}
+          loading={loading}
+          onPageChange={(nextPage) => setPage(nextPage)}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize);
+            setPage(1);
+          }}
+        />
       </div>
 
       {/* Modal JSON */}

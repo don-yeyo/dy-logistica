@@ -7,7 +7,6 @@ import {
   RotateCcw,
   Package,
   Users,
-  RefreshCw,
   ArrowRight,
   FileSpreadsheet,
   ShieldAlert
@@ -15,19 +14,15 @@ import {
 
 export default function AdminDashboard({ user, onOpenHojaRuta, onNavigateTab }) {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const loadDashboard = useCallback(async () => {
     try {
-      setLoading(true);
       setError(null);
       const res = await fetchAdminDashboard();
       setData(res);
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudieron cargar las métricas del dashboard.');
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -45,24 +40,6 @@ export default function AdminDashboard({ user, onOpenHojaRuta, onNavigateTab }) 
 
   return (
     <div className="admin-section">
-      <div className="admin-section-toolbar">
-        <div>
-          <h2 className="admin-section-heading">Resumen Operativo</h2>
-          <p className="admin-section-desc">
-            Monitoreo consolidado de hojas de ruta activas, entregas, devoluciones y cajones.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="admin-btn admin-btn-secondary"
-          onClick={loadDashboard}
-          disabled={loading}
-        >
-          <RefreshCw size={16} className={loading ? 'spin' : ''} />
-          <span>Actualizar</span>
-        </button>
-      </div>
-
       {error && <div className="admin-alert admin-alert-error">{error}</div>}
 
       {/* KPIs Principales */}

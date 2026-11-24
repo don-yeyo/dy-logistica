@@ -1,50 +1,63 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchAdminDevoluciones } from '../../services/api';
-import { Search, RefreshCw, RotateCcw, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+import AdminPagination from './AdminPagination';
+import { Search, RotateCcw, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+
+const DEFAULT_PAGE_SIZE = Number(import.meta.env.VITE_ADMIN_PAGE_SIZE || 15);
 
 export default function AdminDevoluciones() {
   const [tab, setTab] = useState('devoluciones'); // 'devoluciones' | 'faltantes'
   const [q, setQ] = useState('');
   const [devoluciones, setDevoluciones] = useState([]);
   const [faltantes, setFaltantes] = useState([]);
+  const [devPage, setDevPage] = useState(1);
+  const [faltPage, setFaltPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [pagination, setPagination] = useState({
+    devoluciones: { page: 1, page_size: DEFAULT_PAGE_SIZE, total: 0, total_pages: 1 },
+    faltantes: { page: 1, page_size: DEFAULT_PAGE_SIZE, total: 0, total_pages: 1 }
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const loadData = useCallback(async (searchOverride) => {
+  const currentPage = tab === 'devoluciones' ? devPage : faltPage;
+
+  const loadData = useCallback(async (overrides = {}) => {
     try {
       setLoading(true);
       setError(null);
+      const activeTab = overrides.tab !== undefined ? overrides.tab : tab;
+      const activePage = overrides.page !== undefined ? overrides.page : (activeTab === 'devoluciones' ? devPage : faltPage);
+      const activeSize = overrides.pageSize !== undefined ? overrides.pageSize : pageSize;
       const res = await fetchAdminDevoluciones({
-        q: searchOverride !== undefined ? searchOverride : q
+        q: overrides.q !== undefined ? overrides.q : q,
+        tab: activeTab,
+        page: activePage,
+        page_size: activeSize
       });
-      setDevoluciones(res.devoluciones || []);
-      setFaltantes(res.faltantes || []);
+      if (activeTab === 'devoluciones') {
+        setDevoluciones(res.devoluciones || []);
+      } else {
+        setFaltantes(res.faltantes || []);
+      }
+      if (res.pagination) {
+        setPagination(res.pagination);
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Error al cargar devoluciones y faltantes.');
     } finally {
       setLoading(false);
     }
-  }, [q]);
+  }, [q, tab, devPage, faltPage, pageSize]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
+  const activePagination = tab === 'devoluciones' ? pagination.devoluciones : pagination.faltantes;
+
   return (
     <div className="admin-section">
-      <div className="admin-section-toolbar">
-        <div>
-          <h2 className="admin-section-heading">Devoluciones y Faltantes</h2>
-          <p className="admin-section-desc">
-            Consolidado de mercadería devuelta y diferencias reportadas durante el reparto.
-          </p>
-        </div>
-        <button type="button" className="admin-btn admin-btn-secondary" onClick={() => loadData()} disabled={loading}>
-          <RefreshCw size={16} className={loading ? 'spin' : ''} />
-          <span>Actualizar</span>
-        </button>
-      </div>
-
       <div className="admin-info-banner">
         <FileSpreadsheet size={18} />
         <span>
@@ -56,7 +69,9 @@ export default function AdminDevoluciones() {
         className="admin-filter-bar"
         onSubmit={(e) => {
           e.preventDefault();
-          loadData();
+          setDevPage(1);
+          setFaltPage(1);
+          loadData({ page: 1 });
         }}
       >
         <div className="admin-input-icon-wrap" style={{ flex: '1 1 280px' }}>
@@ -76,7 +91,9 @@ export default function AdminDevoluciones() {
             className="admin-btn admin-btn-ghost"
             onClick={() => {
               setQ('');
-              loadData('');
+              setDevPage(1);
+              setFaltPage(1);
+              loadData({ q: '', page: 1 });
             }}
           >
             Limpiar
@@ -91,7 +108,7 @@ export default function AdminDevoluciones() {
           onClick={() => setTab('devoluciones')}
         >
           <RotateCcw size={16} />
-          <span>Devoluciones Registradas ({devoluciones.length})</span>
+          <span>Devoluciones Registradas ({pagination.devoluciones?.total ?? devoluciones.length})</span>
         </button>
         <button
           type="button"
@@ -99,7 +116,7 @@ export default function AdminDevoluciones() {
           onClick={() => setTab('faltantes')}
         >
           <AlertTriangle size={16} />
-          <span>Faltantes en Entrega ({faltantes.length})</span>
+          <span>Faltantes en Entrega ({pagination.faltantes?.total ?? faltantes.length})</span>
         </button>
       </div>
 
@@ -155,6 +172,16 @@ export default function AdminDevoluciones() {
               </tbody>
             </table>
           </div>
+          <AdminPagination
+            pagination={{ ...activePagination, page: currentPage }}
+            loading={loading}
+            onPageChange={(nextPage) => setDevPage(nextPage)}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setDevPage(1);
+              setFaltPage(1);
+            }}
+          />
         </div>
       ) : (
         <div className="admin-card">
@@ -205,6 +232,16 @@ export default function AdminDevoluciones() {
               </tbody>
             </table>
           </div>
+          <AdminPagination
+            pagination={{ ...activePagination, page: currentPage }}
+            loading={loading}
+            onPageChange={(nextPage) => setFaltPage(nextPage)}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setDevPage(1);
+              setFaltPage(1);
+            }}
+          />
         </div>
       )}
     </div>
