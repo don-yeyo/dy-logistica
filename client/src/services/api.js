@@ -184,8 +184,8 @@ export async function fetchAdminCajones(params = {}) {
   return data;
 }
 
-export async function fetchAdminUsuarios() {
-  const { data } = await api.get('/admin/usuarios');
+export async function fetchAdminUsuarios(params = {}) {
+  const { data } = await api.get('/admin/usuarios', { params });
   return data;
 }
 

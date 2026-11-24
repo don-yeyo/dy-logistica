@@ -4,6 +4,25 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_ROLES = ['sysadmin', 'logistica', 'chofer'];
 const CAJONES_TIPO_ENTREGA = parseInt(process.env.CAJONES_TIPO_ENTREGA || '1', 10);
 const CAJONES_TIPO_DEVOLUCION = parseInt(process.env.CAJONES_TIPO_DEVOLUCION || '2', 10);
+const ADMIN_DEFAULT_PAGE_SIZE = Math.max(parseInt(process.env.ADMIN_DEFAULT_PAGE_SIZE || '15', 10) || 15, 1);
+const ADMIN_MAX_PAGE_SIZE = Math.max(parseInt(process.env.ADMIN_MAX_PAGE_SIZE || '100', 10) || 100, 10);
+
+function parsePagination(query = {}) {
+  const page = Math.max(parseInt(query.page || '1', 10) || 1, 1);
+  const rawSize = parseInt(query.page_size || query.limit || String(ADMIN_DEFAULT_PAGE_SIZE), 10) || ADMIN_DEFAULT_PAGE_SIZE;
+  const pageSize = Math.min(Math.max(rawSize, 1), ADMIN_MAX_PAGE_SIZE);
+  return { page, pageSize, offset: (page - 1) * pageSize };
+}
+
+function buildPagination(page, pageSize, total) {
+  const totalNum = Number(total || 0);
+  return {
+    page,
+    page_size: pageSize,
+    total: totalNum,
+    total_pages: Math.max(1, Math.ceil(totalNum / pageSize))
+  };
+}
 
 /**
  * Dashboard principal del Gestor de Escritorio (sysadmin / logistica).
@@ -120,15 +139,15 @@ async function getDashboard(req, res) {
 }
 
 /**
- * Listado de Hojas de Ruta para seguimiento en escritorio con filtros y métricas.
+ * Listado de Hojas de Ruta para seguimiento en escritorio con filtros, métricas y paginación server-side.
  */
 async function getHojasRutaAdmin(req, res) {
   try {
     const q = (req.query.q || '').trim();
     const fechaDesde = (req.query.fecha_desde || '').trim();
     const fechaHasta = (req.query.fecha_hasta || '').trim();
-    const estadoDescarga = (req.query.estado_descarga || 'TODOS').trim();
-    const limit = Math.min(Math.max(parseInt(req.query.limit || '50', 10) || 50, 1), 200);
+    const estadoDescarga = (req.query.estado_descarga || 'TODOS').trim().toUpperCase();
+    const { page, pageSize, offset } = parsePagination(req.query);
 
     const whereClauses = ['1=1'];
     const params = [];
@@ -140,9 +159,10 @@ async function getHojasRutaAdmin(req, res) {
         OR tr.Nombre LIKE ?
         OR v.Patente_camion LIKE ?
         OR v.Patente_acoplado LIKE ?
+        OR hr.Usr_viaje LIKE ?
       )`);
       const pat = `%${q}%`;
-      params.push(pat, pat, pat, pat, pat);
+      params.push(pat, pat, pat, pat, pat, pat);
     }
     if (fechaDesde) {
       whereClauses.push('v.Fecha >= ?');
@@ -154,44 +174,50 @@ async function getHojasRutaAdmin(req, res) {
     }
 
     let havingClause = '';
-    if (estadoDescarga === 'PENDIENTES') {
+    if (estadoDescarga === 'PENDIENTE' || estadoDescarga === 'PENDIENTES') {
       havingClause = 'HAVING items_confirmados = 0';
-    } else if (estadoDescarga === 'COMPLETAS') {
+    } else if (estadoDescarga === 'PARCIAL') {
+      havingClause = 'HAVING items_confirmados > 0 AND items_confirmados < total_items';
+    } else if (estadoDescarga === 'COMPLETA' || estadoDescarga === 'COMPLETAS') {
       havingClause = 'HAVING total_items > 0 AND items_confirmados >= total_items';
     } else if (estadoDescarga === 'CON_DIFERENCIAS') {
       havingClause = 'HAVING items_con_diferencia > 0';
     }
 
+    const baseGroupedSql = `
+      SELECT
+        v.Transaccionid,
+        v.Hoja_de_ruta,
+        v.Fecha,
+        hr.Usr_viaje AS Viaje,
+        COALESCE(NULLIF(TRIM(v.Chofer), ''), NULLIF(TRIM(tr.Nombre), ''), 'Sin Chofer Asignado') AS Chofer,
+        COALESCE(NULLIF(TRIM(tr.Nombre), ''), 'Transporte No Informado') AS Transporte,
+        v.Patente_camion,
+        v.Patente_acoplado,
+        COUNT(DISTINCT etapa.Id_etapa) AS total_paradas,
+        COUNT(ir.Hojarutaitemid) AS total_items,
+        COUNT(CASE WHEN ir.cantidad_descargada_Chofer IS NOT NULL THEN 1 END) AS items_confirmados,
+        COUNT(CASE WHEN ir.cantidad_descargada_Chofer IS NOT NULL AND ir.cantidad_descargada_Chofer <> ir.Cantidad THEN 1 END) AS items_con_diferencia
+      FROM HOJAS_DE_RUTA_A_ENTREGAR v
+      LEFT JOIN HOJA_DE_RUTA hr ON hr.Transaccionid = v.Transaccionid
+      LEFT JOIN ORGANIZACION tr ON tr.Organizacionid = hr.Organizacionid_transportista
+      LEFT JOIN HOJA_RUTA_ETAPA etapa ON etapa.Transaccionid_hoja_de_ruta = v.Transaccionid
+      LEFT JOIN HOJA_RUTA_ITEM_REMITO ir ON ir.Id_etapa = etapa.Id_etapa
+      WHERE ${whereClauses.join(' AND ')}
+      GROUP BY v.Transaccionid, v.Hoja_de_ruta, v.Fecha, hr.Usr_viaje, v.Chofer, tr.Nombre, v.Patente_camion, v.Patente_acoplado
+      ${havingClause}
+    `;
+
+    const [[countRow]] = await pool.query(`SELECT COUNT(*) AS total FROM (${baseGroupedSql}) AS sub_hr`, params);
     const [rows] = await pool.query(
-      `SELECT
-         v.Transaccionid,
-         v.Hoja_de_ruta,
-         v.Fecha,
-         hr.Usr_viaje AS Viaje,
-         COALESCE(NULLIF(TRIM(v.Chofer), ''), NULLIF(TRIM(tr.Nombre), ''), 'Sin Chofer Asignado') AS Chofer,
-         COALESCE(NULLIF(TRIM(tr.Nombre), ''), 'Transporte No Informado') AS Transporte,
-         v.Patente_camion,
-         v.Patente_acoplado,
-         COUNT(DISTINCT etapa.Id_etapa) AS total_paradas,
-         COUNT(ir.Hojarutaitemid) AS total_items,
-         COUNT(CASE WHEN ir.cantidad_descargada_Chofer IS NOT NULL THEN 1 END) AS items_confirmados,
-         COUNT(CASE WHEN ir.cantidad_descargada_Chofer IS NOT NULL AND ir.cantidad_descargada_Chofer <> ir.Cantidad THEN 1 END) AS items_con_diferencia
-       FROM HOJAS_DE_RUTA_A_ENTREGAR v
-       LEFT JOIN HOJA_DE_RUTA hr ON hr.Transaccionid = v.Transaccionid
-       LEFT JOIN ORGANIZACION tr ON tr.Organizacionid = hr.Organizacionid_transportista
-       LEFT JOIN HOJA_RUTA_ETAPA etapa ON etapa.Transaccionid_hoja_de_ruta = v.Transaccionid
-       LEFT JOIN HOJA_RUTA_ITEM_REMITO ir ON ir.Id_etapa = etapa.Id_etapa
-       WHERE ${whereClauses.join(' AND ')}
-       GROUP BY v.Transaccionid, v.Hoja_de_ruta, v.Fecha, hr.Usr_viaje, v.Chofer, tr.Nombre, v.Patente_camion, v.Patente_acoplado
-       ${havingClause}
-       ORDER BY v.Fecha DESC, v.Transaccionid DESC
-       LIMIT ?`,
-      [...params, limit]
+      `${baseGroupedSql} ORDER BY v.Fecha DESC, v.Transaccionid DESC LIMIT ? OFFSET ?`,
+      [...params, pageSize, offset]
     );
 
     return res.json({
       ok: true,
-      hojas_ruta: rows || []
+      hojas_ruta: rows || [],
+      pagination: buildPagination(page, pageSize, countRow?.total || 0)
     });
   } catch (error) {
     console.error(`[AdminController.getHojasRutaAdmin] Error: ${error.message}`);
@@ -308,52 +334,37 @@ async function getHojaRutaDetalleAdmin(req, res) {
 }
 
 /**
- * Listado global de Devoluciones y Faltantes de Entregas (insumo futuro para Notas de Crédito).
+ * Listado global de Devoluciones y Faltantes de Entregas (insumo futuro para Notas de Crédito) con paginación server-side.
  */
 async function getDevolucionesAdmin(req, res) {
   try {
     const q = (req.query.q || '').trim();
     const tipo = (req.query.tipo || '').trim();
+    const tab = (req.query.tab || 'all').trim().toLowerCase();
+    const { page, pageSize, offset } = parsePagination(req.query);
 
     const devWhere = ['1=1'];
     const devParams = [];
     if (q) {
-      devWhere.push('(hr.Numerocomprobante LIKE ? OR cl.Nombre LIKE ? OR pr.Nombre LIKE ?)');
+      devWhere.push('(hr.Numerocomprobante LIKE ? OR cl.Nombre LIKE ? OR pr.Nombre LIKE ? OR etapa.Direccionentrega LIKE ?)');
       const pat = `%${q}%`;
-      devParams.push(pat, pat, pat);
+      devParams.push(pat, pat, pat, pat);
     }
     if (tipo && ['Físico', 'Virtual'].includes(tipo)) {
       devWhere.push('di.tipo = ?');
       devParams.push(tipo);
     }
 
-    const [devoluciones] = await pool.query(
-      `SELECT
-         di.id_remito_devoluciones_item,
-         de.id_remito_devoluciones,
-         de.fecha,
-         hr.Transaccionid,
-         hr.Numerocomprobante AS Hoja_de_ruta,
-         etapa.Direccionentrega AS Lugar_de_Entrega,
-         COALESCE(cl.Nombre, 'Cliente #' ) AS Cliente,
-         pr.Codigo AS ProductoCodigo,
-         pr.Nombre AS Producto,
-         di.cantidad_check_chofer AS Cantidad,
-         di.vencimiento_check_chofer AS Vencimiento,
-         TRIM(md.Descripcion) AS Motivo,
-         di.tipo AS Tipo
-       FROM REMITO_DEVOLUCIONES_ITEMS di
-       INNER JOIN REMITO_DEVOLUCIONES de ON de.id_remito_devoluciones = di.id_remito_devoluciones
-       LEFT JOIN HOJA_RUTA_ETAPA etapa ON CAST(de.id_etapa AS CHAR) COLLATE utf8mb4_0900_ai_ci = etapa.Id_etapa COLLATE utf8mb4_0900_ai_ci
-       LEFT JOIN HOJA_DE_RUTA hr ON hr.Transaccionid = etapa.Transaccionid_hoja_de_ruta
-       LEFT JOIN ORGANIZACION cl ON cl.Organizacionid = de.id_cliente
-       LEFT JOIN PRODUCTO pr ON pr.Productoid = di.id_producto
-       LEFT JOIN MOTIVO_DIFERENCIA md ON CAST(TRIM(md.Codigo) AS UNSIGNED) = di.codigo_motivo_dif
-       WHERE ${devWhere.join(' AND ')}
-       ORDER BY de.fecha DESC, di.id_remito_devoluciones_item DESC
-       LIMIT 150`,
-      devParams
-    );
+    const devFromJoin = `
+      FROM REMITO_DEVOLUCIONES_ITEMS di
+      INNER JOIN REMITO_DEVOLUCIONES de ON de.id_remito_devoluciones = di.id_remito_devoluciones
+      LEFT JOIN HOJA_RUTA_ETAPA etapa ON CAST(de.id_etapa AS CHAR) COLLATE utf8mb4_0900_ai_ci = etapa.Id_etapa COLLATE utf8mb4_0900_ai_ci
+      LEFT JOIN HOJA_DE_RUTA hr ON hr.Transaccionid = etapa.Transaccionid_hoja_de_ruta
+      LEFT JOIN ORGANIZACION cl ON cl.Organizacionid = de.id_cliente
+      LEFT JOIN PRODUCTO pr ON pr.Productoid = di.id_producto
+      LEFT JOIN MOTIVO_DIFERENCIA md ON CAST(TRIM(md.Codigo) AS UNSIGNED) = di.codigo_motivo_dif
+      WHERE ${devWhere.join(' AND ')}
+    `;
 
     const faltWhere = [
       'Hojarutaitemid IS NOT NULL',
@@ -362,35 +373,75 @@ async function getDevolucionesAdmin(req, res) {
     ];
     const faltParams = [];
     if (q) {
-      faltWhere.push('(Hoja_de_ruta LIKE ? OR Cliente LIKE ? OR Nombre LIKE ? OR Numeroremito LIKE ?)');
+      faltWhere.push('(Hoja_de_ruta LIKE ? OR Cliente LIKE ? OR Nombre LIKE ? OR Numeroremito LIKE ? OR Direccionentrega LIKE ?)');
       const pat = `%${q}%`;
-      faltParams.push(pat, pat, pat, pat);
+      faltParams.push(pat, pat, pat, pat, pat);
     }
 
-    const [faltantes] = await pool.query(
-      `SELECT
-         Hojarutaitemid,
-         Transaccionid,
-         Hoja_de_ruta,
-         Fecha,
-         Direccionentrega AS Lugar_de_Entrega,
-         Numeroremito AS Remito,
-         Cliente,
-         Nombre AS Producto,
-         Cantidad AS Remitido,
-         cantidad_descargada_Chofer AS Entregado,
-         (Cantidad - COALESCE(cantidad_descargada_Chofer, 0)) AS Diferencia
-       FROM ITEMS_A_ENTREGAR
-       WHERE ${faltWhere.join(' AND ')}
-       ORDER BY Fecha DESC, Hojarutaitemid DESC
-       LIMIT 150`,
-      faltParams
-    );
+    const faltFromWhere = `
+      FROM ITEMS_A_ENTREGAR
+      WHERE ${faltWhere.join(' AND ')}
+    `;
+
+    const [[devCountRow]] = await pool.query(`SELECT COUNT(*) AS total ${devFromJoin}`, devParams);
+    const [[faltCountRow]] = await pool.query(`SELECT COUNT(*) AS total ${faltFromWhere}`, faltParams);
+
+    let devoluciones = [];
+    if (tab === 'all' || tab === 'devoluciones') {
+      const [devRows] = await pool.query(
+        `SELECT
+           di.id_remito_devoluciones_item,
+           de.id_remito_devoluciones,
+           de.fecha,
+           hr.Transaccionid,
+           hr.Numerocomprobante AS Hoja_de_ruta,
+           etapa.Direccionentrega AS Lugar_de_Entrega,
+           COALESCE(cl.Nombre, 'Cliente #') AS Cliente,
+           pr.Codigo AS ProductoCodigo,
+           pr.Nombre AS Producto,
+           di.cantidad_check_chofer AS Cantidad,
+           di.vencimiento_check_chofer AS Vencimiento,
+           TRIM(md.Descripcion) AS Motivo,
+           di.tipo AS Tipo
+         ${devFromJoin}
+         ORDER BY de.fecha DESC, di.id_remito_devoluciones_item DESC
+         LIMIT ? OFFSET ?`,
+        [...devParams, pageSize, offset]
+      );
+      devoluciones = devRows || [];
+    }
+
+    let faltantes = [];
+    if (tab === 'all' || tab === 'faltantes') {
+      const [faltRows] = await pool.query(
+        `SELECT
+           Hojarutaitemid,
+           Transaccionid,
+           Hoja_de_ruta,
+           Fecha,
+           Direccionentrega AS Lugar_de_Entrega,
+           Numeroremito AS Remito,
+           Cliente,
+           Nombre AS Producto,
+           Cantidad AS Remitido,
+           cantidad_descargada_Chofer AS Entregado,
+           (Cantidad - COALESCE(cantidad_descargada_Chofer, 0)) AS Diferencia
+         ${faltFromWhere}
+         ORDER BY Fecha DESC, Hojarutaitemid DESC
+         LIMIT ? OFFSET ?`,
+        [...faltParams, pageSize, offset]
+      );
+      faltantes = faltRows || [];
+    }
 
     return res.json({
       ok: true,
-      devoluciones: devoluciones || [],
-      faltantes: faltantes || []
+      devoluciones,
+      faltantes,
+      pagination: {
+        devoluciones: buildPagination(tab === 'faltantes' ? 1 : page, pageSize, devCountRow?.total || 0),
+        faltantes: buildPagination(tab === 'devoluciones' ? 1 : page, pageSize, faltCountRow?.total || 0)
+      }
     });
   } catch (error) {
     console.error(`[AdminController.getDevolucionesAdmin] Error: ${error.message}`);
@@ -403,55 +454,59 @@ async function getDevolucionesAdmin(req, res) {
 }
 
 /**
- * Listado global de movimientos de Cajones por hoja de ruta / etapa / cliente.
+ * Listado global de movimientos de Cajones por hoja de ruta / etapa / cliente con paginación server-side.
  */
 async function getCajonesAdmin(req, res) {
   try {
     const q = (req.query.q || '').trim();
     const soloDiferencias = req.query.solo_con_diferencia === 'true';
+    const { page, pageSize, offset } = parsePagination(req.query);
 
     const whereClauses = ['1=1'];
     const params = [];
 
     if (q) {
-      whereClauses.push('(rce.Hoja_de_ruta LIKE ? OR rce.Cliente LIKE ? OR rce.Direccionentrega LIKE ?)');
+      whereClauses.push('(rce.Hoja_de_ruta LIKE ? OR rce.Cliente LIKE ? OR rce.Direccionentrega LIKE ? OR rce.Chofer LIKE ?)');
       const pat = `%${q}%`;
-      params.push(pat, pat, pat);
+      params.push(pat, pat, pat, pat);
     }
 
+    const baseGroupedSql = `
+      SELECT
+        rce.Transaccionid,
+        rce.Hoja_de_ruta,
+        rce.Fecha,
+        rce.Chofer,
+        rce.Id_etapa,
+        rce.Direccionentrega AS Lugar_de_Entrega,
+        rce.Id_cliente,
+        rce.Cliente,
+        MAX(CASE WHEN rce.tipo = ? THEN COALESCE(rce.cantidad_check_chofer, 0) ELSE 0 END) AS cajones_entregados,
+        MAX(CASE WHEN rce.tipo = ? THEN COALESCE(rce.cantidad_check_chofer, 0) ELSE 0 END) AS cajones_devueltos
+      FROM REMITOS_CAJONES_X_ETAPA rce
+      WHERE ${whereClauses.join(' AND ')}
+      GROUP BY rce.Transaccionid, rce.Hoja_de_ruta, rce.Fecha, rce.Chofer, rce.Id_etapa, rce.Direccionentrega, rce.Id_cliente, rce.Cliente
+      ${soloDiferencias ? 'HAVING (cajones_entregados - cajones_devueltos) <> 0' : ''}
+    `;
+
+    const queryParams = [CAJONES_TIPO_ENTREGA, CAJONES_TIPO_DEVOLUCION, ...params];
+    const [[countRow]] = await pool.query(`SELECT COUNT(*) AS total FROM (${baseGroupedSql}) AS sub_caj`, queryParams);
+
     const [rows] = await pool.query(
-      `SELECT
-         rce.Transaccionid,
-         rce.Hoja_de_ruta,
-         rce.Fecha,
-         rce.Chofer,
-         rce.Id_etapa,
-         rce.Direccionentrega AS Lugar_de_Entrega,
-         rce.Id_cliente,
-         rce.Cliente,
-         MAX(CASE WHEN rce.tipo = ? THEN COALESCE(rce.cantidad_check_chofer, 0) ELSE 0 END) AS cajones_entregados,
-         MAX(CASE WHEN rce.tipo = ? THEN COALESCE(rce.cantidad_check_chofer, 0) ELSE 0 END) AS cajones_devueltos
-       FROM REMITOS_CAJONES_X_ETAPA rce
-       WHERE ${whereClauses.join(' AND ')}
-       GROUP BY rce.Transaccionid, rce.Hoja_de_ruta, rce.Fecha, rce.Chofer, rce.Id_etapa, rce.Direccionentrega, rce.Id_cliente, rce.Cliente
-       ORDER BY rce.Fecha DESC, rce.Transaccionid DESC, rce.Cliente ASC
-       LIMIT 200`,
-      [CAJONES_TIPO_ENTREGA, CAJONES_TIPO_DEVOLUCION, ...params]
+      `${baseGroupedSql} ORDER BY rce.Fecha DESC, rce.Transaccionid DESC, rce.Cliente ASC LIMIT ? OFFSET ?`,
+      [...queryParams, pageSize, offset]
     );
 
-    let mapped = (rows || []).map(r => {
+    const mapped = (rows || []).map((r) => {
       const ent = Number(r.cajones_entregados || 0);
       const dev = Number(r.cajones_devueltos || 0);
       return { ...r, cajones_entregados: ent, cajones_devueltos: dev, diferencia: ent - dev };
     });
 
-    if (soloDiferencias) {
-      mapped = mapped.filter(r => r.diferencia !== 0);
-    }
-
     return res.json({
       ok: true,
-      cajones: mapped
+      cajones: mapped,
+      pagination: buildPagination(page, pageSize, countRow?.total || 0)
     });
   } catch (error) {
     console.error(`[AdminController.getCajonesAdmin] Error: ${error.message}`);
@@ -464,38 +519,57 @@ async function getCajonesAdmin(req, res) {
 }
 
 /**
- * Gestión de Usuarios (APP_USUARIOS) con RBAC:
+ * Gestión de Usuarios (APP_USUARIOS) con RBAC y paginación server-side:
  * - sysadmin gestiona todos los roles (sysadmin, logistica, chofer).
  * - logistica solo puede ver y gestionar usuarios de tipo 'chofer'.
  */
 async function getUsuarios(req, res) {
   try {
     const isSysAdmin = req.user.rol === 'sysadmin';
-    const whereClause = isSysAdmin ? '1=1' : "u.rol = 'chofer'";
+    const q = (req.query.q || '').trim();
+    const { page, pageSize, offset } = parsePagination(req.query);
 
-    const [users] = await pool.query(`
-      SELECT
-        u.id,
-        u.email,
-        u.nombre,
-        u.rol,
-        u.organizacion_id,
-        u.codigo_chofer,
-        u.activo,
-        u.created_by,
-        u.created_at,
-        u.updated_at,
-        org.Nombre AS organizacion_nombre,
-        org.Codigo AS organizacion_codigo
+    const whereClauses = [isSysAdmin ? '1=1' : "u.rol = 'chofer'"];
+    const params = [];
+
+    if (q) {
+      whereClauses.push('(u.nombre LIKE ? OR u.email LIKE ? OR org.Nombre LIKE ?)');
+      const pat = `%${q}%`;
+      params.push(pat, pat, pat);
+    }
+
+    const fromJoin = `
       FROM APP_USUARIOS u
       LEFT JOIN ORGANIZACION org ON org.Organizacionid = u.organizacion_id
-      WHERE ${whereClause}
-      ORDER BY FIELD(u.rol, 'sysadmin', 'logistica', 'chofer'), u.nombre ASC
-    `);
+      WHERE ${whereClauses.join(' AND ')}
+    `;
+
+    const [[countRow]] = await pool.query(`SELECT COUNT(*) AS total ${fromJoin}`, params);
+
+    const [users] = await pool.query(
+      `SELECT
+         u.id,
+         u.email,
+         u.nombre,
+         u.rol,
+         u.organizacion_id,
+         u.codigo_chofer,
+         u.activo,
+         u.created_by,
+         u.created_at,
+         u.updated_at,
+         org.Nombre AS organizacion_nombre,
+         org.Codigo AS organizacion_codigo
+       ${fromJoin}
+       ORDER BY FIELD(u.rol, 'sysadmin', 'logistica', 'chofer'), u.nombre ASC
+       LIMIT ? OFFSET ?`,
+      [...params, pageSize, offset]
+    );
 
     return res.json({
       ok: true,
-      usuarios: users || []
+      usuarios: users || [],
+      pagination: buildPagination(page, pageSize, countRow?.total || 0)
     });
   } catch (error) {
     console.error(`[AdminController.getUsuarios] Error: ${error.message}`);
@@ -742,14 +816,14 @@ async function deleteUsuario(req, res) {
 }
 
 /**
- * Visor de Auditoría (solo sysadmin): consulta registros generados por triggers en AUDITORIA.
+ * Visor de Auditoría (solo sysadmin): consulta registros generados por triggers en AUDITORIA con paginación server-side.
  */
 async function getAuditoria(req, res) {
   try {
     const tabla = (req.query.tabla || '').trim();
     const operacion = (req.query.operacion || '').trim();
     const usuario = (req.query.usuario || '').trim();
-    const limit = Math.min(Math.max(parseInt(req.query.limit || '100', 10) || 100, 1), 300);
+    const { page, pageSize, offset } = parsePagination(req.query);
 
     const whereClauses = ['1=1'];
     const params = [];
@@ -768,6 +842,9 @@ async function getAuditoria(req, res) {
       params.push(pat, pat);
     }
 
+    const whereSql = whereClauses.join(' AND ');
+    const [[countRow]] = await pool.query(`SELECT COUNT(*) AS total FROM AUDITORIA WHERE ${whereSql}`, params);
+
     const [logs] = await pool.query(
       `SELECT
          id_auditoria,
@@ -781,15 +858,16 @@ async function getAuditoria(req, res) {
          datos_anteriores,
          datos_nuevos
        FROM AUDITORIA
-       WHERE ${whereClauses.join(' AND ')}
+       WHERE ${whereSql}
        ORDER BY id_auditoria DESC
-       LIMIT ?`,
-      [...params, limit]
+       LIMIT ? OFFSET ?`,
+      [...params, pageSize, offset]
     );
 
     return res.json({
       ok: true,
-      auditoria: logs || []
+      auditoria: logs || [],
+      pagination: buildPagination(page, pageSize, countRow?.total || 0)
     });
   } catch (error) {
     console.error(`[AdminController.getAuditoria] Error: ${error.message}`);
