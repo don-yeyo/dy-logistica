@@ -23,7 +23,7 @@ Esta aplicación te permite registrar desde tu celular todo lo que pasa en tu re
 3. Si ya habías iniciado sesión hace poco, la aplicación entra directo sin volver a pedirte la clave.
 4. En la esquina superior derecha podés tocar el ícono de la **luna / sol** si preferís usar pantalla oscura (ideal para manejar de noche) o clara.
 
-![Pantalla de inicio de sesión](img/chofer/01_login.png)
+![Pantalla de inicio de sesión](docs/img/chofer/01_login.png)
 
 ---
 
@@ -48,7 +48,7 @@ Cada tarjeta muestra en forma clara:
 
 > Antes de elegir una Hoja de Ruta, los botones de abajo no te dejan entrar a cargar datos para evitar confusiones entre viajes.
 
-![Pantalla de Inicio y Hoja de Ruta seleccionada](img/chofer/02_inicio_hojas_ruta.png)
+![Pantalla de Inicio y Hoja de Ruta seleccionada](docs/img/chofer/02_inicio_hojas_ruta.png)
 
 ---
 
@@ -67,7 +67,7 @@ En la pestaña verde **Entregas** confirmás la mercadería que descargaste en c
   * Tocando el número: **se selecciona solo** para que puedas escribir la nueva cantidad directo sin tener que borrar dígito por dígito.
 * Cuando un número es distinto a lo remitido, **cambia de color** para que a simple vista identifiques dónde hubo diferencias.
 
-![Sección Entregas con acordeón abierto y controles de cantidad](img/chofer/03_entregas_acordeon.png)
+![Sección Entregas con acordeón abierto y controles de cantidad](docs/img/chofer/03_entregas_acordeon.png)
 
 ---
 
@@ -88,7 +88,7 @@ En la pestaña naranja **Devoluciones** anotás la mercadería que vuelve o que 
      * **Desactivado ("Sin retorno del producto"):** usalo cuando la diferencia/devolución no vuelve físicamente en el camión.
 4. Si te equivocaste al agregar una fila nueva, podés quitarla con el botón del tacho rojo.
 
-![Sección Devoluciones](img/chofer/04_devoluciones.png)
+![Sección Devoluciones](docs/img/chofer/04_devoluciones.png)
 
 ---
 
@@ -103,7 +103,7 @@ En la pestaña violeta **Cajones** llevás el control de envases/cajones entrega
 * Podés escribir **Observaciones** si hubo roturas o aclaraciones.
 * Si necesitás sumar una parada o cliente que no estaba en la lista, usá el botón **"Agregar otro cliente / parada"**.
 
-![Sección Cajones](img/chofer/05_cajones.png)
+![Sección Cajones](docs/img/chofer/05_cajones.png)
 
 ---
 
@@ -116,7 +116,7 @@ En la pestaña celeste **Remitos** controlás los comprobantes entregados en el 
 * También podés escribir el número de comprobante, cliente o domicilio en el buscador para filtrarlo de la lista.
 * Arriba ves cuántos remitos están **Pendientes** y cuántos **Listos**, además del resumen en cada tarjeta.
 
-![Listado de Remitos](img/chofer/06_remitos_lista.png)
+![Listado de Remitos](docs/img/chofer/06_remitos_lista.png)
 
 ### Cargar uno o varios ejemplares y quién los firmó
 Al tocar un remito se abre su ficha de control:
@@ -132,7 +132,7 @@ Al tocar un remito se abre su ficha de control:
 4. **Firma Digital en Pantalla (opcional):** al pie podés tocar **"Capturar Firma Digital en Pantalla"** para que quien recibe firme con el dedo en el celular y deje su aclaración/DNI.
 5. Podés guardar ese remito al instante con **"Confirmar y Guardar"** en la barra inferior, o volver atrás y confirmarlo junto con todo el resto de la Hoja de Ruta desde el botón azul flotante.
 
-![Detalle multi-ejemplar de Remito](img/chofer/07_remito_detalle_multiejemplar.png)
+![Detalle multi-ejemplar de Remito](docs/img/chofer/07_remito_detalle_multiejemplar.png)
 
 ---
 
@@ -154,7 +154,7 @@ Para que sea más cómodo y no tengas que ir hasta el final de cada pantalla par
   * **Seguir editando:** cierra el aviso para que sigas cargando cosas tranquilo.
   * **Confirmar ahora:** guarda y confirma todos los cambios pendientes en ese momento.
 
-![Aviso de informes sin confirmar](img/chofer/08_modal_recordatorio.png)
+![Aviso de informes sin confirmar](docs/img/chofer/08_modal_recordatorio.png)
 
 ---
 
@@ -164,7 +164,7 @@ Para que sea más cómodo y no tengas que ir hasta el final de cada pantalla par
 * Tocando el botón de las **tres rayitas** arriba a la izquierda se abre el menú lateral para saltar directo a cualquier sección, cambiar entre **Modo Claro / Modo Oscuro**, abrir la **Ayuda / Manual** o **Cerrar Sesión**.
 * En la barra superior también tenés accesos rápidos para ver el estado de señal (**Con conexión** / **Sin conexión**), abrir el asistente de **Ayuda (`?`)** y cambiar el tema.
 
-![Menú lateral de la aplicación](img/chofer/09_menu_lateral.png)
+![Menú lateral de la aplicación](docs/img/chofer/09_menu_lateral.png)
 
 ### ¿Qué pasa si me quedo sin señal en la ruta?
 * Podés seguir usando toda la aplicación igual: cargar entregas, devoluciones, cajones, remitos, fotos y firmas.

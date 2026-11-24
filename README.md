@@ -19,7 +19,7 @@ Plataforma logística integral para **Don Yeyo S.A.** conectada directamente a l
    - **Borradores persistentes, Guardado Global y Recordatorio**: memoria local en `localStorage` (`draftStorage.js`) para mantener acordeones y ediciones entre pantallas; botón flotante azul único (`SaveFab`) visible en todas las pantallas cuando hay modificaciones pendientes; modal bloqueante con spinner durante el guardado; y modal recordatorio automático tras `VITE_UNSAVED_REMINDER_SECONDS` sobre toda la pantalla (con bloqueo de scroll del fondo).
    - **Modo Offline completo con respaldo ante fallos de red**: almacenamiento en IndexedDB (`idb`) tanto cuando el teléfono está sin señal como ante cortes/timeouts contra el servidor, con sincronización automática al recuperar conectividad.
 
-> 📖 **Manual para Choferes**: Consultá la guía ilustrada paso a paso en [`docs/manual_de_usuario_chofer.md`](docs/manual_de_usuario_chofer.md).
+> 📖 **Manual para Choferes**: Consultá la guía ilustrada paso a paso en [`manual_de_usuario_chofer.md`](manual_de_usuario_chofer.md).
 
 ---
 
@@ -40,10 +40,10 @@ dy_logistica_app/
 ├── package.json               # Scripts globales con concurrently
 ├── .gitignore                 # Reglas Git para Node, Vite y entornos
 ├── netlify.toml               # Configuración de despliegue Netlify + Functions
-├── README.md                  # Documentación del proyecto
+├── README.md                  # Documentación técnica del proyecto
+├── manual_de_usuario_chofer.md # Manual ilustrado paso a paso para choferes (con capturas)
 ├── schema.sql                 # Script SQL histórico de referencia
 ├── docs/
-│   ├── manual_de_usuario_chofer.md # Manual ilustrado paso a paso para choferes (con capturas)
 │   ├── manual_usuario.md           # Base de conocimiento para el Chatbot de Ayuda
 │   ├── img/chofer/                 # Capturas de pantalla de la App Móvil Chofer
 │   ├── Especificacion Funcional app Choferes.docx
