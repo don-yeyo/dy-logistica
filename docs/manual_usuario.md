@@ -48,7 +48,7 @@ La aplicación **Don Yeyo Logística** es una Aplicación Web Progresiva (**PWA*
 2. Presione **Guardar** para registrar el saldo con fecha, hora y usuario.
 
 ### 4.4 Logística DY - Remitos (Escaneo y Firma Digital)
-1. Lista los remitos de la hoja de ruta seleccionada y permite presionar **"Escanear Código de Barras 1D del Remito"** (o usar **Ingreso Manual**).
+1. Lista los remitos de la hoja de ruta seleccionada y permite presionar **"Encontrar Remito por Código de Barras"** (o usar **Ingreso Manual**).
 2. En la ficha del remito, seleccione **Ejemplar**, **Estado de Firma** (`Cliente`, `Intermediario`, `No Firmado`), capture la **Firma Digital en Pantalla** (con aclaración y DNI opcional), tome la **Fotografía** (comprimida al 70% JPEG y enviada a SharePoint) y agregue observaciones antes de presionar **Confirmar y Guardar**.
 
 ---

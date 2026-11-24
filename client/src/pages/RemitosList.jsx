@@ -146,7 +146,7 @@ export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, on
           onClick={onOpenScan}
         >
           <ScanLine size={20} />
-          <span>Escanear Código de Barras 1D del Remito</span>
+          <span>Encontrar Remito por Código de Barras</span>
         </button>
       )}
 

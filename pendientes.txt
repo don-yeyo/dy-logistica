@@ -1,3 +1,4 @@
+- agregar test funcionales con playright y test unitarios con jest
 - ver si mantenemos el nobre del chofer en cada hoja de ruta como dato redundante o solo mostrarlo al principio en la cabecera
 - panel de gestion de usuarios y roles, hace falta?
 - permitir registrar mas de un ejemplar por remito
