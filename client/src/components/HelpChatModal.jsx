@@ -204,7 +204,7 @@ Si necesitas asistencia de soporte técnico, comunícate con la central de Logí
         display: 'flex',
         alignItems: 'flex-end',
         justifyContent: 'center',
-        padding: '0'
+        padding: 'env(safe-area-inset-top, 0px) 0 0 0'
       }}
       onClick={onClose}
     >
@@ -214,7 +214,7 @@ Si necesitas asistencia de soporte técnico, comunícate con la central de Logí
           width: '100%',
           maxWidth: '560px',
           height: '88vh',
-          maxHeight: '750px',
+          maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - 12px)',
           background: 'var(--surface)',
           color: 'var(--text)',
           borderTopLeftRadius: '28px',

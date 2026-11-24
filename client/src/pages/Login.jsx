@@ -67,8 +67,8 @@ export default function Login() {
         className="mode-toggle"
         style={{
           position: 'absolute',
-          top: '20px',
-          right: '20px',
+          top: 'calc(16px + env(safe-area-inset-top, 0px))',
+          right: 'calc(16px + env(safe-area-inset-right, 0px))',
           background: 'var(--surface)',
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-sm)'
