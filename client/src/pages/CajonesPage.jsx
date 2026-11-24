@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import HojaRutaHeader from '../components/HojaRutaHeader';
 import AlertModal from '../components/AlertModal';
+import SaveFab from '../components/SaveFab';
 import { fetchCajonesHojaRuta, saveCajonesHojaRuta } from '../services/api';
 import {
   cacheCajones,
@@ -14,7 +15,6 @@ import {
 } from '../services/draftStorage';
 import { useAuth } from '../config/AuthContext';
 import {
-  Save,
   RefreshCw,
   Boxes,
   MapPin,
@@ -425,16 +425,12 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
       )}
 
       {!loading && isDirty && items.length > 0 && (
-        <button
-          type="button"
-          className="save-fab mod-cajones"
+        <SaveFab
+          variant="cajones"
           onClick={handleGuardar}
-          disabled={saving}
+          saving={saving}
           title="Confirmar y guardar cajones"
-          aria-label="Confirmar y guardar cajones"
-        >
-          {saving ? <RefreshCw size={22} className="spin" /> : <Save size={22} />}
-        </button>
+        />
       )}
 
       {showAddModal && (

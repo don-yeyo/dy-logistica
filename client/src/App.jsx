@@ -23,7 +23,8 @@ import AdminUsuarios from './pages/admin/AdminUsuarios';
 import AdminAuditoria from './pages/admin/AdminAuditoria';
 import { getDirtySummary } from './services/draftStorage';
 import { saveDraftSection } from './services/draftSaver';
-import { RefreshCw, ArrowLeft, AlertTriangle, Save } from 'lucide-react';
+import SaveFab from './components/SaveFab';
+import { RefreshCw, ArrowLeft, AlertTriangle } from 'lucide-react';
 
 const UNSAVED_REMINDER_SECONDS = Math.max(
   parseInt(import.meta.env.VITE_UNSAVED_REMINDER_SECONDS || '60', 10) || 60,
@@ -338,16 +339,12 @@ export default function App() {
       </main>
 
       {showGlobalSaveFab && (
-        <button
-          type="button"
-          className="save-fab mod-global"
+        <SaveFab
+          variant="global"
           onClick={handleConfirmAllPending}
-          disabled={confirmingAll}
+          saving={confirmingAll}
           title="Confirmar todos los cambios pendientes"
-          aria-label="Confirmar todos los cambios pendientes"
-        >
-          {confirmingAll ? <RefreshCw size={22} className="spin" /> : <Save size={22} />}
-        </button>
+        />
       )}
 
       {!selectedRemito && (

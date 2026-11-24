@@ -2822,7 +2822,7 @@ body {
 }
 
 .page-transition {
-  animation: pageSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: pageSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 
@@ -5840,7 +5840,7 @@ body {
 
 .save-fab {
   position: fixed;
-  right: calc(18px + var(--safe-right));
+  right: max(calc(18px + var(--safe-right)), calc((100vw - 650px) / 2 + 18px));
   bottom: calc(84px + var(--safe-bottom));
   width: 56px;
   height: 56px;

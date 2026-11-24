@@ -3,6 +3,7 @@ import HojaRutaHeader from '../components/HojaRutaHeader';
 import AlertModal from '../components/AlertModal';
 import ProductCombobox from '../components/ProductCombobox';
 import BarcodeScanner from '../components/BarcodeScanner';
+import SaveFab from '../components/SaveFab';
 import { fetchDevolucionesHojaRuta, saveDevolucionesHojaRuta } from '../services/api';
 import {
   cacheDevoluciones,
@@ -16,7 +17,6 @@ import {
 } from '../services/draftStorage';
 import { useAuth } from '../config/AuthContext';
 import {
-  Save,
   RefreshCw,
   ChevronDown,
   ChevronRight,
@@ -872,16 +872,12 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
       )}
 
       {!loading && isDirty && (
-        <button
-          type="button"
-          className="save-fab mod-devoluciones"
+        <SaveFab
+          variant="devoluciones"
           onClick={handleGuardar}
-          disabled={saving}
+          saving={saving}
           title="Confirmar y guardar devoluciones"
-          aria-label="Confirmar y guardar devoluciones"
-        >
-          {saving ? <RefreshCw size={22} className="spin" /> : <Save size={22} />}
-        </button>
+        />
       )}
 
       {/* Modal Escáner MTX de Producto */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import HojaRutaHeader from '../components/HojaRutaHeader';
 import AlertModal from '../components/AlertModal';
+import SaveFab from '../components/SaveFab';
 import { fetchEntregasHojaRuta, saveEntregasHojaRuta } from '../services/api';
 import {
   cacheEntregas,
@@ -14,7 +15,6 @@ import {
 } from '../services/draftStorage';
 import { useAuth } from '../config/AuthContext';
 import {
-  Save,
   RefreshCw,
   Inbox,
   MapPin,
@@ -492,16 +492,12 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
       )}
 
       {showSaveFab && (
-        <button
-          type="button"
-          className="save-fab mod-entregas"
+        <SaveFab
+          variant="entregas"
           onClick={handleGuardar}
-          disabled={saving}
+          saving={saving}
           title="Confirmar y guardar entregas"
-          aria-label="Confirmar y guardar entregas"
-        >
-          {saving ? <RefreshCw size={22} className="spin" /> : <Save size={22} />}
-        </button>
+        />
       )}
 
       <AlertModal
