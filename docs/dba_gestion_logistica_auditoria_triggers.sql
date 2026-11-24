@@ -28,6 +28,32 @@ CREATE TABLE IF NOT EXISTS `AUDITORIA` (
   INDEX `idx_aud_usuario` (`usuario_app`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS `APP_REMITO_EJEMPLARES` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `id_transaccion_remito` INT NOT NULL,
+  `id_etapa` VARCHAR(45) DEFAULT NULL,
+  `nro_remito` VARCHAR(45) DEFAULT NULL,
+  `ejemplar` ENUM('ORIGINAL','DUPLICADO','TRIPLICADO','CUATRIPLICADO','RECEPCION_VALORIZADA','OTRO') NOT NULL,
+  `firmado_cliente` TINYINT(1) NOT NULL DEFAULT 0,
+  `firmado_intermediario` TINYINT(1) NOT NULL DEFAULT 0,
+  `no_firmado` TINYINT(1) NOT NULL DEFAULT 0,
+  `observaciones` TEXT DEFAULT NULL,
+  `foto_url` VARCHAR(500) DEFAULT NULL,
+  `foto_sharepoint_url` VARCHAR(500) DEFAULT NULL,
+  `foto_nombre_archivo` VARCHAR(255) DEFAULT NULL,
+  `firma_digital_base64` LONGTEXT DEFAULT NULL,
+  `firma_receptor_aclaracion` VARCHAR(150) DEFAULT NULL,
+  `firma_receptor_dni` VARCHAR(40) DEFAULT NULL,
+  `organizacion_id_chofer` INT DEFAULT NULL,
+  `usuario_email` VARCHAR(150) DEFAULT NULL,
+  `fecha_hora` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_remito_ejemplar` (`id_transaccion_remito`, `ejemplar`),
+  INDEX `idx_are_remito` (`id_transaccion_remito`),
+  INDEX `idx_are_etapa` (`id_etapa`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 DELIMITER $$
 
 -- ------------------------------------------------------------------------------
@@ -315,6 +341,45 @@ BEGIN
     COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
     JSON_OBJECT('Id_transaccion_remito', OLD.Id_transaccion_remito, 'Numeroremito', OLD.Numeroremito, 'firma_cliente_url', OLD.firma_cliente_url, 'firma_distribuidor_url', OLD.firma_distribuidor_url),
     JSON_OBJECT('Id_transaccion_remito', NEW.Id_transaccion_remito, 'Numeroremito', NEW.Numeroremito, 'firma_cliente_url', NEW.firma_cliente_url, 'firma_distribuidor_url', NEW.firma_distribuidor_url)
+  );
+END$$
+
+-- ------------------------------------------------------------------------------
+-- 9. APP_REMITO_EJEMPLARES (recepción multi-ejemplar y múltiples firmantes)
+-- ------------------------------------------------------------------------------
+DROP TRIGGER IF EXISTS `trg_aud_app_remito_ejemplares_ai`$$
+CREATE TRIGGER `trg_aud_app_remito_ejemplares_ai` AFTER INSERT ON `APP_REMITO_EJEMPLARES` FOR EACH ROW
+BEGIN
+  INSERT INTO `AUDITORIA` (`tabla_nombre`, `operacion`, `registro_pk`, `usuario_app`, `usuario_rol`, `usuario_db`, `datos_anteriores`, `datos_nuevos`)
+  VALUES (
+    'APP_REMITO_EJEMPLARES', 'INSERT', CAST(NEW.id AS CHAR),
+    COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
+    NULL,
+    JSON_OBJECT('id', NEW.id, 'id_transaccion_remito', NEW.id_transaccion_remito, 'nro_remito', NEW.nro_remito, 'ejemplar', NEW.ejemplar, 'firmado_cliente', NEW.firmado_cliente, 'firmado_intermediario', NEW.firmado_intermediario, 'no_firmado', NEW.no_firmado, 'observaciones', NEW.observaciones, 'foto_url', NEW.foto_url, 'tiene_firma_digital', IF(NEW.firma_digital_base64 IS NOT NULL, 1, 0), 'usuario_email', NEW.usuario_email)
+  );
+END$$
+
+DROP TRIGGER IF EXISTS `trg_aud_app_remito_ejemplares_au`$$
+CREATE TRIGGER `trg_aud_app_remito_ejemplares_au` AFTER UPDATE ON `APP_REMITO_EJEMPLARES` FOR EACH ROW
+BEGIN
+  INSERT INTO `AUDITORIA` (`tabla_nombre`, `operacion`, `registro_pk`, `usuario_app`, `usuario_rol`, `usuario_db`, `datos_anteriores`, `datos_nuevos`)
+  VALUES (
+    'APP_REMITO_EJEMPLARES', 'UPDATE', CAST(NEW.id AS CHAR),
+    COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
+    JSON_OBJECT('id', OLD.id, 'id_transaccion_remito', OLD.id_transaccion_remito, 'ejemplar', OLD.ejemplar, 'firmado_cliente', OLD.firmado_cliente, 'firmado_intermediario', OLD.firmado_intermediario, 'no_firmado', OLD.no_firmado, 'observaciones', OLD.observaciones, 'foto_url', OLD.foto_url),
+    JSON_OBJECT('id', NEW.id, 'id_transaccion_remito', NEW.id_transaccion_remito, 'ejemplar', NEW.ejemplar, 'firmado_cliente', NEW.firmado_cliente, 'firmado_intermediario', NEW.firmado_intermediario, 'no_firmado', NEW.no_firmado, 'observaciones', NEW.observaciones, 'foto_url', NEW.foto_url)
+  );
+END$$
+
+DROP TRIGGER IF EXISTS `trg_aud_app_remito_ejemplares_ad`$$
+CREATE TRIGGER `trg_aud_app_remito_ejemplares_ad` AFTER DELETE ON `APP_REMITO_EJEMPLARES` FOR EACH ROW
+BEGIN
+  INSERT INTO `AUDITORIA` (`tabla_nombre`, `operacion`, `registro_pk`, `usuario_app`, `usuario_rol`, `usuario_db`, `datos_anteriores`, `datos_nuevos`)
+  VALUES (
+    'APP_REMITO_EJEMPLARES', 'DELETE', CAST(OLD.id AS CHAR),
+    COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
+    JSON_OBJECT('id', OLD.id, 'id_transaccion_remito', OLD.id_transaccion_remito, 'nro_remito', OLD.nro_remito, 'ejemplar', OLD.ejemplar, 'firmado_cliente', OLD.firmado_cliente, 'firmado_intermediario', OLD.firmado_intermediario, 'no_firmado', OLD.no_firmado),
+    NULL
   );
 END$$
 

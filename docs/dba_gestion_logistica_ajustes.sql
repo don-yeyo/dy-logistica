@@ -35,6 +35,9 @@ ALTER TABLE `REMITO_DEVOLUCIONES_ITEMS`
 -- ------------------------------------------------------------------------------
 -- 3. RECOMENDADO: Ampliar URL de imagen y agregar metadatos de firma/auditoría
 --    Las URLs de SharePoint suelen superar los 150 caracteres.
+--    Nota: El soporte multi-ejemplar y múltiples firmantes por ejemplar ya quedó
+--    resuelto mediante la tabla propia de aplicación APP_REMITO_EJEMPLARES
+--    (ver docs/dba_gestion_logistica_auditoria_triggers.sql) sin alterar el ERP.
 -- ------------------------------------------------------------------------------
 ALTER TABLE `REMITOS_FIRMADOS`
   MODIFY COLUMN `Url_imagen` VARCHAR(500) NULL,
