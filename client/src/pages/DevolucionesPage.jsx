@@ -55,7 +55,7 @@ function buildDevolucionesTree(rows = []) {
         Lugar_de_Entrega: lugarKey,
         id_cliente: row.id_cliente || null,
         Cliente: row.Cliente || '',
-        id_etapa: row.id_etapa || 1,
+        id_etapa: row.id_etapa || null,
         fecha: row.fecha ? String(row.fecha).slice(0, 10) : '',
         id_remito_devoluciones: row.id_remito_devoluciones || null,
         productos: []
@@ -77,6 +77,7 @@ function buildDevolucionesTree(rows = []) {
         Producto: row.Producto || '',
         Cantidad: row.Cantidad !== null && row.Cantidad !== undefined ? String(row.Cantidad) : '1',
         Vencimiento: row.Vencimiento ? String(row.Vencimiento).slice(0, 10) : '',
+        codigo_motivo_dif: row.codigo_motivo_dif || null,
         Motivo: row.Motivo || '',
         Tipo: row.Tipo === 'Virtual' ? 'Virtual' : 'Físico'
       });
@@ -185,7 +186,7 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
 
   const handleAddProduct = (lugarName, clientKey) => {
     const defaultProd = catalogos.productos[0] || { id_producto: 1, nombre: 'Producto General' };
-    const defaultMotivo = catalogos.motivos[0]?.descripcion || 'Envase Dañado o Roto';
+    const defaultMotivo = catalogos.motivos[0] || null;
 
     setGrupos((prev) =>
       prev.map((g) => {
@@ -205,7 +206,8 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
                   Producto: defaultProd.nombre,
                   Cantidad: '1',
                   Vencimiento: '',
-                  Motivo: defaultMotivo,
+                  codigo_motivo_dif: defaultMotivo?.id_motivo || null,
+                  Motivo: defaultMotivo?.descripcion || '',
                   Tipo: 'Físico'
                 }
               ]
@@ -259,6 +261,14 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
                     ...p,
                     id_producto: Number(value),
                     Producto: found ? found.nombre : p.Producto
+                  };
+                }
+                if (field === 'codigo_motivo_dif') {
+                  const foundMot = catalogos.motivos.find((m) => Number(m.id_motivo) === Number(value));
+                  return {
+                    ...p,
+                    codigo_motivo_dif: Number(value) || null,
+                    Motivo: foundMot ? foundMot.descripcion : ''
                   };
                 }
                 return { ...p, [field]: value };
@@ -335,7 +345,7 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
           Lugar_de_Entrega: cli.Lugar_de_Entrega,
           id_cliente: cli.id_cliente,
           Cliente: cli.Cliente,
-          id_etapa: cli.id_etapa || headerInfo?.id_etapa || 1,
+          id_etapa: cli.id_etapa || `${hojaRuta.Transaccionid}-${cli.id_cliente}`,
           fecha: cli.fecha || (headerInfo?.Fecha ? String(headerInfo.Fecha).slice(0, 10) : new Date().toISOString().slice(0, 10)),
           id_remito_devoluciones: cli.id_remito_devoluciones || null,
           productos: cli.productos.map((p) => ({
@@ -344,6 +354,7 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
             Producto: p.Producto,
             Cantidad: parseInt(String(p.Cantidad).trim(), 10),
             Vencimiento: p.Vencimiento || null,
+            codigo_motivo_dif: p.codigo_motivo_dif || null,
             Motivo: p.Motivo.trim(),
             Tipo: p.Tipo === 'Virtual' ? 'Virtual' : 'Físico'
           }))
@@ -580,20 +591,20 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
                                             <label className="dev-col-label">Motivo</label>
                                             <select
                                               className="dev-green-input"
-                                              value={prod.Motivo}
+                                              value={prod.codigo_motivo_dif || ''}
                                               onChange={(e) =>
                                                 handleProductFieldChange(
                                                   grupo.lugar,
                                                   cli.clientKey,
                                                   prod.localId,
-                                                  'Motivo',
+                                                  'codigo_motivo_dif',
                                                   e.target.value
                                                 )
                                               }
                                             >
                                               <option value="">Seleccionar...</option>
                                               {(catalogos.motivos || []).map((m) => (
-                                                <option key={m.id_motivo} value={m.descripcion}>
+                                                <option key={m.id_motivo} value={m.id_motivo}>
                                                   {m.descripcion}
                                                 </option>
                                               ))}

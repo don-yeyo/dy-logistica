@@ -99,6 +99,8 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
         firma_digital_base64: signatureInfo.firma_digital_base64 || null,
         firma_receptor_aclaracion: signatureInfo.firma_receptor_aclaracion || null,
         firma_receptor_dni: signatureInfo.firma_receptor_dni || null,
+        id_etapa: remito.id_etapa || null,
+        comprobante: remito.finne_Comprobante || null,
         sincronizado_offline: !navigator.onLine ? 1 : 0
       };
 

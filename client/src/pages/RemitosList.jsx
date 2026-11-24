@@ -28,6 +28,9 @@ export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, on
       else setRefreshing(true);
 
       const queryParams = { n_viajes: 4 };
+      if (hojaRuta?.Transaccionid) {
+        queryParams.transaccion_id = hojaRuta.Transaccionid;
+      }
       if (hojaRuta?.Hoja_de_ruta) {
         queryParams.hoja_ruta = hojaRuta.Hoja_de_ruta;
       }

@@ -158,11 +158,16 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
       }
 
       payloadItems.push({
+        Id_etapa: it.Id_etapa || null,
         Lugar_de_Entrega: it.Lugar_de_Entrega,
         id_cliente: it.id_cliente || null,
         Cliente: it.Cliente,
         cajones_entregados: parseInt(entStr, 10),
         cajones_devueltos: parseInt(devStr, 10),
+        id_remito_cajones_entrega: it.id_remito_cajones_entrega || null,
+        id_remito_cajones_item_entrega: it.id_remito_cajones_item_entrega || null,
+        id_remito_cajones_devolucion: it.id_remito_cajones_devolucion || null,
+        id_remito_cajones_item_devolucion: it.id_remito_cajones_item_devolucion || null,
         observaciones: it.observaciones || ''
       });
     }

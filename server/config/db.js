@@ -2,7 +2,6 @@ const mysql = require('mysql2/promise');
 const dotenv = require('dotenv');
 const path = require('path');
 
-// Cargar variables si están en archivo .env local
 if (!process.env.DB_HOST) {
   dotenv.config({ path: path.join(__dirname, '..', '.env') });
 }
@@ -12,7 +11,7 @@ const dbConfig = {
   port: parseInt(process.env.DB_PORT || '3306', 10),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'Firma_de_remitos',
+  database: process.env.DB_NAME || 'Gestion_Logistica',
   waitForConnections: true,
   connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || '5', 10),
   queueLimit: 0,
@@ -22,7 +21,6 @@ const dbConfig = {
   connectTimeout: 10000
 };
 
-// Si conecta a AWS RDS o DB_SSL está activado
 if (process.env.DB_SSL === 'true' || (dbConfig.host && dbConfig.host.includes('rds.amazonaws.com'))) {
   dbConfig.ssl = { rejectUnauthorized: false };
 }
@@ -36,27 +34,49 @@ try {
   console.error(`❌ [DB] Error al inicializar Pool MySQL: ${e.message}`);
 }
 
-// Test no bloqueante
+/**
+ * Ejecuta una operación obteniendo una conexión dedicada e inyectando
+ * las variables de sesión MySQL @app_user_email y @app_user_rol
+ * para que los triggers de AUDITORIA registren el usuario de la aplicación.
+ */
+async function withAuditConnection(user, callback) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.query('SET @app_user_email = ?, @app_user_rol = ?', [
+      user?.email || 'sistema',
+      user?.rol || 'unknown'
+    ]);
+    return await callback(conn);
+  } finally {
+    try {
+      await conn.query('SET @app_user_email = NULL, @app_user_rol = NULL');
+    } catch {
+      // Ignorar si la conexión ya cerró
+    }
+    conn.release();
+  }
+}
+
 async function testConnection() {
   if (!pool) return false;
   try {
     const connection = await pool.getConnection();
-    console.log('✔ [DB] Conexión establecida exitosamente con la base de datos MySQL.');
+    console.log(`✔ [DB] Conexión establecida con ${dbConfig.database}.`);
     connection.release();
     return true;
   } catch (error) {
-    console.warn(`⚠️ [DB] Aviso de conexión a MySQL (${error.code || error.message}).`);
+    console.warn(`⚠️ [DB] Aviso de conexión a ${dbConfig.database} (${error.code || error.message}).`);
     return false;
   }
 }
 
-// Ejecutar test sólo si no estamos en entorno de testing
 if (process.env.NODE_ENV !== 'test') {
   testConnection();
 }
 
 module.exports = {
   pool,
+  withAuditConnection,
   testConnection,
   dbConfig
 };
