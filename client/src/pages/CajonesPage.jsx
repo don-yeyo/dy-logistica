@@ -7,6 +7,11 @@ import {
   getCachedCajones,
   queuePendingControl
 } from '../services/offlineStorage';
+import {
+  getHojaRutaDraft,
+  patchSectionDraft,
+  clearSectionDirty
+} from '../services/draftStorage';
 import { useAuth } from '../config/AuthContext';
 import {
   Save,
@@ -23,12 +28,13 @@ const NON_NEGATIVE_INT_REGEX = /^\d+$/;
 
 /**
  * Módulo 4.2.3: Entrega y Devolución de Cajones (Logística DY - Cajones).
- * Registra cajones entregados, devueltos, diferencia calculada y observaciones.
+ * Mantiene borradores en localStorage hasta confirmar con el botón flotante.
  */
 export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
-  const { refreshPendingCount } = useAuth();
+  const { user, refreshPendingCount } = useAuth();
   const [headerInfo, setHeaderInfo] = useState(hojaRuta);
   const [items, setItems] = useState([]);
+  const [isDirty, setIsDirty] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -74,34 +80,67 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
       }
 
       setHeaderInfo(loadedHeader);
-      setItems(
-        loadedItems.map((it, idx) => ({
-          ...it,
-          localKey: `${it.Lugar_de_Entrega}__${it.Cliente || idx}`,
-          cajones_entregados: String(it.cajones_entregados ?? 0),
-          cajones_devueltos: String(it.cajones_devueltos ?? 0),
-          observaciones: it.observaciones || ''
-        }))
-      );
+      const baseItems = loadedItems.map((it, idx) => ({
+        ...it,
+        localKey: `${it.Lugar_de_Entrega}__${it.Cliente || idx}`,
+        cajones_entregados: String(it.cajones_entregados ?? 0),
+        cajones_devueltos: String(it.cajones_devueltos ?? 0),
+        observaciones: it.observaciones || ''
+      }));
+
+      const draft = getHojaRutaDraft(user?.email, hojaRuta.Transaccionid).cajones;
+      if (draft?.dirty && Array.isArray(draft.items)) {
+        setItems(draft.items);
+        setIsDirty(true);
+      } else {
+        setItems(baseItems);
+        setIsDirty(false);
+      }
     } catch (err) {
       setErrorMsg(err.response?.data?.error || err.message || 'Error al cargar movimiento de cajones.');
     } finally {
       setLoading(false);
     }
-  }, [hojaRuta]);
+  }, [hojaRuta, user?.email]);
 
   useEffect(() => {
     loadCajones();
   }, [loadCajones]);
+
+  useEffect(() => {
+    const onExternalSaved = (e) => {
+      if (
+        Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid) &&
+        Array.isArray(e.detail?.sections) &&
+        e.detail.sections.includes('cajones')
+      ) {
+        loadCajones();
+      }
+    };
+    window.addEventListener('dy-draft-saved', onExternalSaved);
+    return () => window.removeEventListener('dy-draft-saved', onExternalSaved);
+  }, [hojaRuta?.Transaccionid, loadCajones]);
+
+  const persistCajonesDraft = (nextItems) => {
+    setIsDirty(true);
+    patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'cajones', {
+      items: nextItems,
+      headerInfo,
+      dirty: true,
+      dirtySince: Date.now()
+    });
+  };
 
   const handleFieldChange = (localKey, field, value) => {
     if ((field === 'cajones_entregados' || field === 'cajones_devueltos') && value !== '' && !NON_NEGATIVE_INT_REGEX.test(value)) {
       return;
     }
 
-    setItems((prev) =>
-      prev.map((it) => (it.localKey === localKey ? { ...it, [field]: value } : it))
-    );
+    setItems((prev) => {
+      const next = prev.map((it) => (it.localKey === localKey ? { ...it, [field]: value } : it));
+      persistCajonesDraft(next);
+      return next;
+    });
   };
 
   const handleStepCajon = (localKey, field, currentVal, delta) => {
@@ -127,19 +166,23 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
     }
 
     const localKey = `${lugar}__${cliente}__${Date.now()}`;
-    setItems((prev) => [
-      ...prev,
-      {
-        localKey,
-        Transaccionid: hojaRuta.Transaccionid,
-        Lugar_de_Entrega: lugar,
-        id_cliente: null,
-        Cliente: cliente,
-        cajones_entregados: '0',
-        cajones_devueltos: '0',
-        observaciones: ''
-      }
-    ]);
+    setItems((prev) => {
+      const next = [
+        ...prev,
+        {
+          localKey,
+          Transaccionid: hojaRuta.Transaccionid,
+          Lugar_de_Entrega: lugar,
+          id_cliente: null,
+          Cliente: cliente,
+          cajones_entregados: '0',
+          cajones_devueltos: '0',
+          observaciones: ''
+        }
+      ];
+      persistCajonesDraft(next);
+      return next;
+    });
     setNewStop({ Lugar_de_Entrega: '', Cliente: '' });
     setShowAddModal(false);
   };
@@ -196,6 +239,8 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
           hoja_ruta: headerInfo,
           items: payloadItems
         });
+        clearSectionDirty(user?.email, hojaRuta.Transaccionid, 'cajones');
+        setIsDirty(false);
         setSuccessMsg(res?.message || 'Movimientos de cajones guardados con éxito.');
       } else {
         await queuePendingControl({
@@ -207,6 +252,8 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
           hoja_ruta: headerInfo,
           items: payloadItems
         });
+        clearSectionDirty(user?.email, hojaRuta.Transaccionid, 'cajones');
+        setIsDirty(false);
         await refreshPendingCount();
         setSuccessMsg('Sin conexión: movimientos de cajones guardados en cola local.');
       }
@@ -225,7 +272,6 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
         onChangeHojaRuta={onChangeHojaRuta}
       />
 
-      {/* Resumen de Totales de Cajones */}
       {!loading && (
         <div className="cajones-summary-grid">
           <div className="cajon-stat-box">
@@ -375,28 +421,20 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
             <Plus size={16} />
             <span>Agregar otro cliente / parada</span>
           </button>
-
-          <div className="module-save-footer">
-            <button
-              type="button"
-              className="module-save-btn cajones"
-              onClick={handleGuardar}
-              disabled={saving}
-            >
-              {saving ? (
-                <>
-                  <RefreshCw size={19} className="spin" />
-                  <span>Guardando cajones...</span>
-                </>
-              ) : (
-                <>
-                  <Save size={19} />
-                  <span>Guardar</span>
-                </>
-              )}
-            </button>
-          </div>
         </div>
+      )}
+
+      {!loading && isDirty && items.length > 0 && (
+        <button
+          type="button"
+          className="save-fab mod-cajones"
+          onClick={handleGuardar}
+          disabled={saving}
+          title="Confirmar y guardar cajones"
+          aria-label="Confirmar y guardar cajones"
+        >
+          {saving ? <RefreshCw size={22} className="spin" /> : <Save size={22} />}
+        </button>
       )}
 
       {showAddModal && (

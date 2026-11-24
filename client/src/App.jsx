@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './config/AuthContext';
 import Header from './components/Header';
 import Drawer from './components/Drawer';
@@ -21,10 +21,23 @@ import AdminDevoluciones from './pages/admin/AdminDevoluciones';
 import AdminCajones from './pages/admin/AdminCajones';
 import AdminUsuarios from './pages/admin/AdminUsuarios';
 import AdminAuditoria from './pages/admin/AdminAuditoria';
-import { RefreshCw, ArrowLeft } from 'lucide-react';
+import { getDirtySummary } from './services/draftStorage';
+import { saveDraftSection } from './services/draftSaver';
+import { RefreshCw, ArrowLeft, AlertTriangle, Save } from 'lucide-react';
+
+const UNSAVED_REMINDER_SECONDS = Math.max(
+  parseInt(import.meta.env.VITE_UNSAVED_REMINDER_SECONDS || '60', 10) || 60,
+  5
+);
+
+const SECTION_LABELS = {
+  entregas: 'Entregas',
+  devoluciones: 'Devoluciones',
+  cajones: 'Cajones'
+};
 
 export default function App() {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshPendingCount } = useAuth();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState('hojas_ruta');
@@ -39,9 +52,39 @@ export default function App() {
   const [selectedRemito, setSelectedRemito] = useState(null);
   const [navWarning, setNavWarning] = useState(null);
 
+  // Estado de borradores pendientes y recordatorio automático
+  const [dirtySummary, setDirtySummary] = useState({
+    entregas: false,
+    devoluciones: false,
+    cajones: false,
+    anyDirty: false,
+    dirtySections: [],
+    lastDirtyAt: null
+  });
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [reminderResetTick, setReminderResetTick] = useState(0);
+  const [confirmingAll, setConfirmingAll] = useState(false);
+  const [reminderErrorMsg, setReminderErrorMsg] = useState(null);
+  const [reminderSuccessMsg, setReminderSuccessMsg] = useState(null);
+
   // Estado del Gestor de Escritorio (sysadmin y logistica)
   const [adminTab, setAdminTab] = useState('dashboard');
   const [adminDetailTxId, setAdminDetailTxId] = useState(null);
+
+  const syncDirtySummary = useCallback(() => {
+    if (user?.rol === 'chofer' && user?.email && selectedHojaRuta?.Transaccionid) {
+      setDirtySummary(getDirtySummary(user.email, selectedHojaRuta.Transaccionid));
+    } else {
+      setDirtySummary({
+        entregas: false,
+        devoluciones: false,
+        cajones: false,
+        anyDirty: false,
+        dirtySections: [],
+        lastDirtyAt: null
+      });
+    }
+  }, [user?.rol, user?.email, selectedHojaRuta?.Transaccionid]);
 
   useEffect(() => {
     if (!user) {
@@ -50,16 +93,53 @@ export default function App() {
       setCurrentScreen('hojas_ruta');
       setAdminTab('dashboard');
       setAdminDetailTxId(null);
+      setReminderOpen(false);
       return;
     }
 
     if (user.rol !== 'chofer') {
       setAdminTab('dashboard');
+      setReminderOpen(false);
     }
   }, [user]);
 
+  useEffect(() => {
+    syncDirtySummary();
+    const handleDraftChanged = () => syncDirtySummary();
+    window.addEventListener('dy-draft-changed', handleDraftChanged);
+    return () => window.removeEventListener('dy-draft-changed', handleDraftChanged);
+  }, [syncDirtySummary]);
+
+  // Temporizador para recordar cambios locales sin confirmar tras N segundos
+  useEffect(() => {
+    if (
+      user?.rol !== 'chofer' ||
+      !selectedHojaRuta?.Transaccionid ||
+      !dirtySummary.anyDirty ||
+      reminderOpen ||
+      confirmingAll
+    ) {
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      setReminderOpen(true);
+    }, UNSAVED_REMINDER_SECONDS * 1000);
+
+    return () => clearTimeout(timer);
+  }, [
+    user?.rol,
+    selectedHojaRuta?.Transaccionid,
+    dirtySummary.anyDirty,
+    dirtySummary.lastDirtyAt,
+    reminderOpen,
+    confirmingAll,
+    reminderResetTick
+  ]);
+
   const handleSelectHojaRuta = (hr) => {
     setSelectedHojaRuta(hr);
+    setReminderOpen(false);
     try {
       if (hr) {
         localStorage.setItem('dy_selected_hoja_ruta', JSON.stringify(hr));
@@ -68,6 +148,43 @@ export default function App() {
       }
     } catch {
       // Ignorar errores de cuota de almacenamiento
+    }
+  };
+
+  const handleConfirmAllPending = async () => {
+    if (!user?.email || !selectedHojaRuta?.Transaccionid) return;
+    const sectionsToSave = [...dirtySummary.dirtySections];
+    if (sectionsToSave.length === 0) {
+      setReminderOpen(false);
+      return;
+    }
+
+    try {
+      setConfirmingAll(true);
+      setReminderErrorMsg(null);
+      for (const sec of sectionsToSave) {
+        try {
+          await saveDraftSection(sec, {
+            email: user.email,
+            hojaRuta: selectedHojaRuta,
+            refreshPendingCount
+          });
+        } catch (secErr) {
+          setReminderOpen(false);
+          setSelectedRemito(null);
+          setCurrentScreen(sec);
+          setReminderErrorMsg(secErr?.response?.data?.error || secErr?.message || `Revisá los datos de ${SECTION_LABELS[sec] || sec}.`);
+          return;
+        }
+      }
+      setReminderOpen(false);
+      setReminderSuccessMsg(
+        navigator.onLine
+          ? `Se confirmaron correctamente los cambios pendientes (${sectionsToSave.map((s) => SECTION_LABELS[s] || s).join(', ')}).`
+          : 'Sin conexión: los cambios pendientes quedaron encolados para sincronizar.'
+      );
+    } finally {
+      setConfirmingAll(false);
     }
   };
 
@@ -84,7 +201,7 @@ export default function App() {
     return <Login />;
   }
 
-  // Gestor de Escritorio exclusivo para sysadmin y logistica (no acceden a App Mobile)
+  // Gestor de Escritorio exclusivo para sysadmin y logistica
   if (user.rol !== 'chofer') {
     return (
       <AdminLayout
@@ -131,6 +248,11 @@ export default function App() {
     setSelectedRemito(null);
     setCurrentScreen(screenId);
   };
+
+  const showGlobalSaveFab =
+    !selectedRemito &&
+    dirtySummary.anyDirty &&
+    ['hojas_ruta', 'remitos', 'scan'].includes(currentScreen);
 
   return (
     <div className="app-container">
@@ -215,12 +337,79 @@ export default function App() {
         )}
       </main>
 
+      {showGlobalSaveFab && (
+        <button
+          type="button"
+          className="save-fab mod-global"
+          onClick={handleConfirmAllPending}
+          disabled={confirmingAll}
+          title="Confirmar todos los cambios pendientes"
+          aria-label="Confirmar todos los cambios pendientes"
+        >
+          {confirmingAll ? <RefreshCw size={22} className="spin" /> : <Save size={22} />}
+        </button>
+      )}
+
       {!selectedRemito && (
         <BottomNav
           currentScreen={currentScreen}
           onNavigate={handleNavigate}
           hasSelectedHojaRuta={Boolean(selectedHojaRuta)}
+          dirtyModules={dirtySummary}
         />
+      )}
+
+      {/* Modal Recordatorio de Informes sin Confirmar */}
+      {reminderOpen && (
+        <div className="modal-overlay" onClick={() => {
+          setReminderOpen(false);
+          setReminderResetTick((t) => t + 1);
+        }}>
+          <div
+            className="modal-card glass"
+            style={{ maxWidth: '400px', width: '92%', padding: '20px', textAlign: 'left', alignItems: 'stretch' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(245, 158, 11, 0.16)', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <AlertTriangle size={22} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text)' }}>
+                Informes sin confirmar
+              </h3>
+            </div>
+
+            <p style={{ margin: '4px 0 12px', fontSize: '0.88rem', color: 'var(--text-main)', lineHeight: 1.45 }}>
+              Tenés cambios cargados en{' '}
+              <strong>
+                {dirtySummary.dirtySections.map((s) => SECTION_LABELS[s] || s).join(', ')}
+              </strong>{' '}
+              que todavía no fueron confirmados en el sistema.
+            </p>
+
+            <div className="unsaved-modal-actions">
+              <button
+                type="button"
+                className="unsaved-btn-secondary"
+                disabled={confirmingAll}
+                onClick={() => {
+                  setReminderOpen(false);
+                  setReminderResetTick((t) => t + 1);
+                }}
+              >
+                Seguir editando
+              </button>
+              <button
+                type="button"
+                className="unsaved-btn-primary"
+                disabled={confirmingAll}
+                onClick={handleConfirmAllPending}
+              >
+                {confirmingAll ? 'Confirmando...' : 'Confirmar ahora'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <AlertModal
@@ -230,6 +419,24 @@ export default function App() {
         title="Seleccione una Hoja de Ruta"
         message={navWarning}
         confirmText="Entendido"
+      />
+
+      <AlertModal
+        isOpen={Boolean(reminderErrorMsg)}
+        onClose={() => setReminderErrorMsg(null)}
+        type="error"
+        title="No se pudo confirmar"
+        message={reminderErrorMsg}
+        confirmText="Corregir"
+      />
+
+      <AlertModal
+        isOpen={Boolean(reminderSuccessMsg)}
+        onClose={() => setReminderSuccessMsg(null)}
+        type="success"
+        title="Cambios Confirmados"
+        message={reminderSuccessMsg}
+        confirmText="Aceptar"
       />
 
       <HelpChatModal

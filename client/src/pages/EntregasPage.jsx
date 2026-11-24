@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import HojaRutaHeader from '../components/HojaRutaHeader';
 import AlertModal from '../components/AlertModal';
 import { fetchEntregasHojaRuta, saveEntregasHojaRuta } from '../services/api';
@@ -7,6 +7,11 @@ import {
   getCachedEntregas,
   queuePendingControl
 } from '../services/offlineStorage';
+import {
+  getHojaRutaDraft,
+  patchSectionDraft,
+  clearSectionDirty
+} from '../services/draftStorage';
 import { useAuth } from '../config/AuthContext';
 import {
   Save,
@@ -22,29 +27,43 @@ import {
 
 const POSITIVE_INT_REGEX = /^\d+$/;
 
+function computeHasEntregasChanges(currentMap, baseMap) {
+  const keys = Object.keys(baseMap || {});
+  for (const k of keys) {
+    if (String(currentMap?.[k] ?? '') !== String(baseMap[k] ?? '')) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Módulo 4.2.1: Confirmación de Descarga (Logística DY - Entregas).
- * Agrupa ítems de ITEMS_A_ENTREGAR por Lugar_de_Entrega (acordeón) -> Remito.
- * Prellena Entregado con Remitido por defecto e incluye stepper integrado.
+ * Mantiene estado de acordeones y borradores editados en localStorage entre pantallas.
  */
 export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
-  const { refreshPendingCount } = useAuth();
+  const { user, refreshPendingCount } = useAuth();
   const [headerInfo, setHeaderInfo] = useState(hojaRuta);
   const [items, setItems] = useState([]);
   const [entregadoMap, setEntregadoMap] = useState({});
   const [invalidIds, setInvalidIds] = useState({});
-  const [openLugares, setOpenLugares] = useState({});
+  const [openLugares, setOpenLugares] = useState(() => {
+    const draft = getHojaRutaDraft(user?.email, hojaRuta?.Transaccionid);
+    return draft.entregas?.openLugares || {};
+  });
+  const [isDirty, setIsDirty] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+
+  const baseEntregadoMapRef = useRef({});
 
   const loadEntregas = useCallback(async () => {
     if (!hojaRuta?.Transaccionid) return;
     try {
       setLoading(true);
       setErrorMsg(null);
-      setOpenLugares({});
       let loadedHeader = hojaRuta;
       let loadedItems = [];
 
@@ -80,25 +99,58 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
       setHeaderInfo(loadedHeader);
       setItems(loadedItems);
 
-      const initialMap = {};
+      const baseMap = {};
       for (const it of loadedItems) {
-        initialMap[it.Hojarutaitemid] =
+        baseMap[it.Hojarutaitemid] =
           it.Entregado !== null && it.Entregado !== undefined
             ? String(it.Entregado)
             : String(it.Remitido ?? 0);
       }
-      setEntregadoMap(initialMap);
+      baseEntregadoMapRef.current = baseMap;
+
+      const draft = getHojaRutaDraft(user?.email, hojaRuta.Transaccionid).entregas;
+      if (draft?.openLugares !== undefined) {
+        setOpenLugares(draft.openLugares);
+      }
+
+      if (draft?.dirty && draft?.entregadoMap) {
+        const restoredMap = { ...baseMap };
+        for (const it of loadedItems) {
+          if (draft.entregadoMap[it.Hojarutaitemid] !== undefined) {
+            restoredMap[it.Hojarutaitemid] = String(draft.entregadoMap[it.Hojarutaitemid]);
+          }
+        }
+        setEntregadoMap(restoredMap);
+        setIsDirty(computeHasEntregasChanges(restoredMap, baseMap) || true);
+      } else {
+        setEntregadoMap(baseMap);
+        setIsDirty(false);
+      }
       setInvalidIds({});
     } catch (err) {
       setErrorMsg(err.response?.data?.error || err.message || 'Error al cargar los ítems a entregar.');
     } finally {
       setLoading(false);
     }
-  }, [hojaRuta]);
+  }, [hojaRuta, user?.email]);
 
   useEffect(() => {
     loadEntregas();
   }, [loadEntregas]);
+
+  useEffect(() => {
+    const onExternalSaved = (e) => {
+      if (
+        Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid) &&
+        Array.isArray(e.detail?.sections) &&
+        e.detail.sections.includes('entregas')
+      ) {
+        loadEntregas();
+      }
+    };
+    window.addEventListener('dy-draft-saved', onExternalSaved);
+    return () => window.removeEventListener('dy-draft-saved', onExternalSaved);
+  }, [hojaRuta?.Transaccionid, loadEntregas]);
 
   // Agrupación en 2 cortes de control: Lugar_de_Entrega -> Remito
   const groupedData = useMemo(() => {
@@ -135,11 +187,35 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
     return lugares;
   }, [items]);
 
+  const hasUnconfirmedDbItems = useMemo(
+    () => items.some((it) => it.Entregado === null || it.Entregado === undefined),
+    [items]
+  );
+
   const toggleLugar = (lugarKey) => {
-    setOpenLugares((prev) => ({
-      ...prev,
-      [lugarKey]: !prev[lugarKey]
-    }));
+    setOpenLugares((prev) => {
+      const next = {
+        ...prev,
+        [lugarKey]: !prev[lugarKey]
+      };
+      patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'entregas', {
+        openLugares: next
+      });
+      return next;
+    });
+  };
+
+  const syncEntregadoDraft = (nextMap) => {
+    const hasChanges = computeHasEntregasChanges(nextMap, baseEntregadoMapRef.current);
+    setIsDirty(hasChanges);
+    patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'entregas', {
+      openLugares,
+      entregadoMap: nextMap,
+      items,
+      headerInfo,
+      dirty: hasChanges,
+      dirtySince: hasChanges ? Date.now() : null
+    });
   };
 
   const handleEntregadoChange = (hojaRutaItemId, rawValue) => {
@@ -147,10 +223,12 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
       return;
     }
 
-    setEntregadoMap((prev) => ({
-      ...prev,
+    const nextMap = {
+      ...entregadoMap,
       [hojaRutaItemId]: rawValue
-    }));
+    };
+    setEntregadoMap(nextMap);
+    syncEntregadoDraft(nextMap);
 
     if (invalidIds[hojaRutaItemId] && POSITIVE_INT_REGEX.test(rawValue)) {
       setInvalidIds((prev) => {
@@ -166,10 +244,12 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
     const parsedCurrent = POSITIVE_INT_REGEX.test(rawCurrent) ? parseInt(rawCurrent, 10) : 0;
     const nextVal = Math.max(0, parsedCurrent + delta);
 
-    setEntregadoMap((prev) => ({
-      ...prev,
+    const nextMap = {
+      ...entregadoMap,
       [hojaRutaItemId]: String(nextVal)
-    }));
+    };
+    setEntregadoMap(nextMap);
+    syncEntregadoDraft(nextMap);
 
     if (invalidIds[hojaRutaItemId]) {
       setInvalidIds((prev) => {
@@ -214,7 +294,11 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
 
     if (Object.keys(newInvalids).length > 0) {
       setInvalidIds(newInvalids);
-      setOpenLugares((prev) => ({ ...prev, ...invalidLugares }));
+      setOpenLugares((prev) => {
+        const next = { ...prev, ...invalidLugares };
+        patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'entregas', { openLugares: next });
+        return next;
+      });
       setErrorMsg(
         'Todos los productos deben tener una cantidad entregada válida (únicamente números enteros positivos, sin decimales, negativos ni campos vacíos).'
       );
@@ -234,10 +318,18 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
         const res = await saveEntregasHojaRuta(hojaRuta.Transaccionid, payloadItems);
         const finalItems = res?.items || updatedItemsList;
         setItems(finalItems);
+        const nextBase = {};
+        for (const it of finalItems) {
+          nextBase[it.Hojarutaitemid] = String(it.Entregado ?? it.Remitido ?? 0);
+        }
+        baseEntregadoMapRef.current = nextBase;
+        setEntregadoMap(nextBase);
         await cacheEntregas(hojaRuta.Transaccionid, {
           hoja_ruta: headerInfo,
           items: finalItems
         });
+        clearSectionDirty(user?.email, hojaRuta.Transaccionid, 'entregas', { openLugares });
+        setIsDirty(false);
         setSuccessMsg(res?.message || 'Descarga confirmada correctamente.');
       } else {
         await queuePendingControl({
@@ -246,10 +338,17 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
           items: payloadItems
         });
         setItems(updatedItemsList);
+        const nextBase = {};
+        for (const it of updatedItemsList) {
+          nextBase[it.Hojarutaitemid] = String(it.Entregado ?? it.Remitido ?? 0);
+        }
+        baseEntregadoMapRef.current = nextBase;
         await cacheEntregas(hojaRuta.Transaccionid, {
           hoja_ruta: headerInfo,
           items: updatedItemsList
         });
+        clearSectionDirty(user?.email, hojaRuta.Transaccionid, 'entregas', { openLugares });
+        setIsDirty(false);
         await refreshPendingCount();
         setSuccessMsg('Sin conexión: confirmación guardada localmente y encolada para sincronizar.');
       }
@@ -259,6 +358,8 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
       setSaving(false);
     }
   };
+
+  const showSaveFab = !loading && items.length > 0 && (isDirty || hasUnconfirmedDbItems);
 
   return (
     <div className="module-page page-transition">
@@ -285,7 +386,6 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
             const isOpen = Boolean(openLugares[lugarGroup.lugar]);
             return (
               <section key={lugarGroup.lugar} className="lugar-section">
-                {/* Primer Corte: Lugar de Entrega (Acordeón persistente por sección) */}
                 <button
                   type="button"
                   className={`lugar-header-banner lugar-accordion-btn ${isOpen ? 'open' : ''}`}
@@ -304,7 +404,6 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
                   </div>
                 </button>
 
-                {/* Segundo Corte: Remitos dentro de este Lugar de Entrega */}
                 {isOpen && (
                   <div className="lugar-remitos-stack">
                     {lugarGroup.remitos.map((remitoGroup) => (
@@ -389,29 +488,20 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
               </section>
             );
           })}
-
-          {/* Botón Guardar al final del detalle */}
-          <div className="module-save-footer">
-            <button
-              type="button"
-              className="module-save-btn"
-              onClick={handleGuardar}
-              disabled={saving}
-            >
-              {saving ? (
-                <>
-                  <RefreshCw size={19} className="spin" />
-                  <span>Guardando descarga...</span>
-                </>
-              ) : (
-                <>
-                  <Save size={19} />
-                  <span>Guardar</span>
-                </>
-              )}
-            </button>
-          </div>
         </div>
+      )}
+
+      {showSaveFab && (
+        <button
+          type="button"
+          className="save-fab mod-entregas"
+          onClick={handleGuardar}
+          disabled={saving}
+          title="Confirmar y guardar entregas"
+          aria-label="Confirmar y guardar entregas"
+        >
+          {saving ? <RefreshCw size={22} className="spin" /> : <Save size={22} />}
+        </button>
       )}
 
       <AlertModal

@@ -9,6 +9,11 @@ import {
   getCachedDevoluciones,
   queuePendingControl
 } from '../services/offlineStorage';
+import {
+  getHojaRutaDraft,
+  patchSectionDraft,
+  clearSectionDirty
+} from '../services/draftStorage';
 import { useAuth } from '../config/AuthContext';
 import {
   Save,
@@ -97,14 +102,16 @@ function normalizeBarcode(val) {
 
 /**
  * Módulo 4.2.2: Devolución de Mercadería (Logística DY - Devoluciones).
+ * Persiste estado de acordeones y borradores en localStorage hasta confirmar en DB.
  */
 export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
-  const { refreshPendingCount } = useAuth();
+  const { user, refreshPendingCount } = useAuth();
   const [headerInfo, setHeaderInfo] = useState(hojaRuta);
   const [grupos, setGrupos] = useState([]);
   const [catalogos, setCatalogos] = useState({ productos: [], clientes: [], motivos: [] });
   const [expandedLugares, setExpandedLugares] = useState({});
   const [expandedClientes, setExpandedClientes] = useState({});
+  const [isDirty, setIsDirty] = useState(false);
   const [clientModalLugar, setClientModalLugar] = useState(null);
   const [clientSearch, setClientSearch] = useState('');
   const [scannerTarget, setScannerTarget] = useState(null);
@@ -120,27 +127,43 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
   }, [catalogos.motivos]);
 
   const applyLoadedData = useCallback((loadedHeader, rows, loadedCatalogos) => {
-    setHeaderInfo(loadedHeader || hojaRuta);
-    const tree = buildDevolucionesTree(rows || []);
-    setGrupos(tree);
-    setCatalogos(loadedCatalogos || { productos: [], clientes: [], motivos: [] });
+    const resolvedHeader = loadedHeader || hojaRuta;
+    const resolvedCatalogos = loadedCatalogos || { productos: [], clientes: [], motivos: [] };
+    setHeaderInfo(resolvedHeader);
+    setCatalogos(resolvedCatalogos);
 
-    const nextLugares = {};
-    const nextClientes = {};
-    tree.forEach((g, idx) => {
-      const hasItems = g.clientes.some((c) => c.productos.length > 0);
-      if (idx === 0 || hasItems) {
-        nextLugares[g.lugar] = true;
-      }
-      g.clientes.forEach((c) => {
-        if (c.productos.length > 0) {
-          nextClientes[c.clientKey] = true;
+    const tree = buildDevolucionesTree(rows || []);
+    const draft = getHojaRutaDraft(user?.email, hojaRuta?.Transaccionid).devoluciones;
+
+    if (draft?.dirty && Array.isArray(draft.grupos)) {
+      setGrupos(draft.grupos);
+      setIsDirty(true);
+    } else {
+      setGrupos(tree);
+      setIsDirty(false);
+    }
+
+    if (draft?.expandedLugares !== undefined) {
+      setExpandedLugares(draft.expandedLugares);
+      setExpandedClientes(draft.expandedClientes || {});
+    } else {
+      const nextLugares = {};
+      const nextClientes = {};
+      tree.forEach((g, idx) => {
+        const hasItems = g.clientes.some((c) => c.productos.length > 0);
+        if (idx === 0 || hasItems) {
+          nextLugares[g.lugar] = true;
         }
+        g.clientes.forEach((c) => {
+          if (c.productos.length > 0) {
+            nextClientes[c.clientKey] = true;
+          }
+        });
       });
-    });
-    setExpandedLugares(nextLugares);
-    setExpandedClientes(nextClientes);
-  }, [hojaRuta]);
+      setExpandedLugares(nextLugares);
+      setExpandedClientes(nextClientes);
+    }
+  }, [hojaRuta, user?.email]);
 
   const loadDevoluciones = useCallback(async () => {
     if (!hojaRuta?.Transaccionid) return;
@@ -189,17 +212,63 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
     loadDevoluciones();
   }, [loadDevoluciones]);
 
+  useEffect(() => {
+    const onExternalSaved = (e) => {
+      if (
+        Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid) &&
+        Array.isArray(e.detail?.sections) &&
+        e.detail.sections.includes('devoluciones')
+      ) {
+        loadDevoluciones();
+      }
+    };
+    window.addEventListener('dy-draft-saved', onExternalSaved);
+    return () => window.removeEventListener('dy-draft-saved', onExternalSaved);
+  }, [hojaRuta?.Transaccionid, loadDevoluciones]);
+
   const toggleLugar = (lugar) => {
-    setExpandedLugares((prev) => ({ ...prev, [lugar]: !prev[lugar] }));
+    setExpandedLugares((prev) => {
+      const next = { ...prev, [lugar]: !prev[lugar] };
+      patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'devoluciones', {
+        expandedLugares: next,
+        expandedClientes
+      });
+      return next;
+    });
   };
 
   const toggleCliente = (clientKey) => {
-    setExpandedClientes((prev) => ({ ...prev, [clientKey]: !prev[clientKey] }));
+    setExpandedClientes((prev) => {
+      const next = { ...prev, [clientKey]: !prev[clientKey] };
+      patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'devoluciones', {
+        expandedLugares,
+        expandedClientes: next
+      });
+      return next;
+    });
+  };
+
+  const persistGruposDraft = (nextGrupos, nextExpLugares = expandedLugares, nextExpClientes = expandedClientes) => {
+    setIsDirty(true);
+    patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'devoluciones', {
+      grupos: nextGrupos,
+      expandedLugares: nextExpLugares,
+      expandedClientes: nextExpClientes,
+      headerInfo,
+      catalogos,
+      dirty: true,
+      dirtySince: Date.now()
+    });
   };
 
   const handleAddProduct = (lugarName, clientKey) => {
-    setGrupos((prev) =>
-      prev.map((g) => {
+    const nextExpLugares = { ...expandedLugares, [lugarName]: true };
+    const nextExpClientes = { ...expandedClientes, [clientKey]: true };
+    setExpandedLugares(nextExpLugares);
+    setExpandedClientes(nextExpClientes);
+
+    setGrupos((prev) => {
+      const nextGrupos = prev.map((g) => {
         if (g.lugar !== lugarName) return g;
         return {
           ...g,
@@ -218,22 +287,21 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
                   Vencimiento: '',
                   codigo_motivo_dif: null,
                   Motivo: '',
-                  Tipo: 'Físico' // Toggle activado por defecto: Con retorno del producto
+                  Tipo: 'Físico'
                 }
               ]
             };
           })
         };
-      })
-    );
-
-    setExpandedLugares((prev) => ({ ...prev, [lugarName]: true }));
-    setExpandedClientes((prev) => ({ ...prev, [clientKey]: true }));
+      });
+      persistGruposDraft(nextGrupos, nextExpLugares, nextExpClientes);
+      return nextGrupos;
+    });
   };
 
   const handleRemoveUnsavedProduct = (lugarName, clientKey, localId) => {
-    setGrupos((prev) =>
-      prev.map((g) => {
+    setGrupos((prev) => {
+      const nextGrupos = prev.map((g) => {
         if (g.lugar !== lugarName) return g;
         return {
           ...g,
@@ -245,8 +313,10 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
             };
           })
         };
-      })
-    );
+      });
+      persistGruposDraft(nextGrupos);
+      return nextGrupos;
+    });
   };
 
   const handleProductFieldChange = (lugarName, clientKey, localId, field, value) => {
@@ -254,8 +324,8 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
       return;
     }
 
-    setGrupos((prev) =>
-      prev.map((g) => {
+    setGrupos((prev) => {
+      const nextGrupos = prev.map((g) => {
         if (g.lugar !== lugarName) return g;
         return {
           ...g,
@@ -289,8 +359,10 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
             };
           })
         };
-      })
-    );
+      });
+      persistGruposDraft(nextGrupos);
+      return nextGrupos;
+    });
   };
 
   const handleStepCantidad = (lugarName, clientKey, localId, currentVal, delta) => {
@@ -340,12 +412,16 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
     if (!lugarName) return;
 
     const newKey = `${lugarName}__${clienteCatalogo.id_cliente}::${clienteCatalogo.nombre}`;
+    const nextExpLugares = { ...expandedLugares, [lugarName]: true };
+    const nextExpClientes = { ...expandedClientes, [newKey]: true };
+    setExpandedLugares(nextExpLugares);
+    setExpandedClientes(nextExpClientes);
 
     setGrupos((prev) => {
       const targetExists = prev.some((g) => g.lugar === lugarName);
       const baseList = targetExists ? prev : [...prev, { lugar: lugarName, clientes: [] }];
 
-      return baseList.map((g) => {
+      const nextGrupos = baseList.map((g) => {
         if (g.lugar !== lugarName) return g;
         const alreadyInLugar = g.clientes.some(
           (c) => Number(c.id_cliente) === Number(clienteCatalogo.id_cliente)
@@ -369,10 +445,10 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
           ]
         };
       });
+      persistGruposDraft(nextGrupos, nextExpLugares, nextExpClientes);
+      return nextGrupos;
     });
 
-    setExpandedLugares((prev) => ({ ...prev, [lugarName]: true }));
-    setExpandedClientes((prev) => ({ ...prev, [newKey]: true }));
     setClientModalLugar(null);
     setClientSearch('');
   };
@@ -438,6 +514,11 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
             rows: res.rows,
             catalogos
           });
+          clearSectionDirty(user?.email, hojaRuta.Transaccionid, 'devoluciones', {
+            expandedLugares,
+            expandedClientes
+          });
+          setIsDirty(false);
           applyLoadedData(headerInfo, res.rows, catalogos);
           setSuccessMsg(res.message || 'Devoluciones registradas correctamente.');
         }
@@ -447,6 +528,11 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
           transaccionId: hojaRuta.Transaccionid,
           clientes: clientesConProductos
         });
+        clearSectionDirty(user?.email, hojaRuta.Transaccionid, 'devoluciones', {
+          expandedLugares,
+          expandedClientes
+        });
+        setIsDirty(false);
         await refreshPendingCount();
         setSuccessMsg('Sin conexión: devoluciones guardadas localmente para sincronizar automáticamente.');
       }
@@ -782,28 +868,20 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
               </section>
             );
           })}
-
-          <div className="module-save-footer">
-            <button
-              type="button"
-              className="module-save-btn devoluciones"
-              onClick={handleGuardar}
-              disabled={saving}
-            >
-              {saving ? (
-                <>
-                  <RefreshCw size={19} className="spin" />
-                  <span>Guardando devoluciones...</span>
-                </>
-              ) : (
-                <>
-                  <Save size={19} />
-                  <span>Guardar</span>
-                </>
-              )}
-            </button>
-          </div>
         </div>
+      )}
+
+      {!loading && isDirty && (
+        <button
+          type="button"
+          className="save-fab mod-devoluciones"
+          onClick={handleGuardar}
+          disabled={saving}
+          title="Confirmar y guardar devoluciones"
+          aria-label="Confirmar y guardar devoluciones"
+        >
+          {saving ? <RefreshCw size={22} className="spin" /> : <Save size={22} />}
+        </button>
       )}
 
       {/* Modal Escáner MTX de Producto */}

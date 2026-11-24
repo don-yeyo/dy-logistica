@@ -4,9 +4,9 @@ import { Home, PackageCheck, PackageMinus, Boxes, FileSignature } from 'lucide-r
 /**
  * Barra inferior operativa (Sección 4.2):
  * Inicio (azul), Entregas (verde), Devoluciones (naranja), Cajones (violeta), Remitos (cian).
- * Al haber hoja de ruta seleccionada se muestran con borde/ícono coloreado y al entrar se rellenan de color.
+ * Muestra un puntito lleno cuando la sección tiene borradores locales sin confirmar en BD.
  */
-export default function BottomNav({ currentScreen, onNavigate, hasSelectedHojaRuta }) {
+export default function BottomNav({ currentScreen, onNavigate, hasSelectedHojaRuta, dirtyModules = {} }) {
   const navItems = [
     {
       id: 'hojas_ruta',
@@ -51,16 +51,20 @@ export default function BottomNav({ currentScreen, onNavigate, hasSelectedHojaRu
       <div className="bottom-nav-inner">
         {navItems.map((item) => {
           const isEnabled = Boolean(item.alwaysEnabled || hasSelectedHojaRuta);
+          const hasDirty = Boolean(dirtyModules[item.id]);
           return (
             <button
               key={item.id}
               type="button"
               className={`bottom-nav-btn ${item.colorClass} ${item.isActive ? 'active' : ''} ${isEnabled ? 'ready' : 'needs-hr'}`}
               onClick={() => onNavigate(item.id)}
-              title={item.label}
+              title={hasDirty ? `${item.label} (cambios sin confirmar)` : item.label}
             >
               <div className={`nav-btn-circle ${item.isActive ? 'active' : ''}`}>
                 {item.icon}
+                {hasDirty && (
+                  <span className="nav-dirty-dot" aria-label="Cambios sin confirmar" />
+                )}
               </div>
               <span className={`nav-btn-label ${item.isActive ? 'active' : ''}`}>
                 {item.label}
