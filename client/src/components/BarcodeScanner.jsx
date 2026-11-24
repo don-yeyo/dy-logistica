@@ -28,7 +28,17 @@ function playBeepSound() {
   }
 }
 
-export default function BarcodeScanner({ onScanSuccess, onError, isPaused = false }) {
+export default function BarcodeScanner({
+  onScanSuccess,
+  onError,
+  isPaused = false,
+  tipText = 'Alinee el código de barras del remito dentro del recuadro',
+  manualButtonLabel = 'Ingresar número manualmente',
+  manualModalTitle = 'Ingreso Manual',
+  manualModalDescription = 'Ingrese el número que figura debajo del código de barras impreso en el remito.',
+  manualPlaceholder = 'Ej: 1048751',
+  manualSubmitLabel = 'Buscar Remito'
+}) {
   const [scannerId] = useState(() => `reader-${Math.random().toString(36).substring(2, 9)}`);
   const [cameraActive, setCameraActive] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
@@ -190,7 +200,7 @@ export default function BarcodeScanner({ onScanSuccess, onError, isPaused = fals
             <div className="scanner-corner bottom-right"></div>
           </div>
           <p className="scanner-tip-text">
-            Alinee el <strong>código de barras del remito</strong> dentro del recuadro
+            {tipText}
           </p>
         </div>
 
@@ -238,7 +248,7 @@ export default function BarcodeScanner({ onScanSuccess, onError, isPaused = fals
           onClick={() => setShowManualModal(true)}
         >
           <Keyboard size={18} />
-          <span>Ingresar número manualmente</span>
+          <span>{manualButtonLabel}</span>
         </button>
       </div>
 
@@ -251,12 +261,12 @@ export default function BarcodeScanner({ onScanSuccess, onError, isPaused = fals
                 <div className="modal-header-icon">
                   <Keyboard size={24} />
                 </div>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>Ingreso Manual</h3>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>{manualModalTitle}</h3>
               </div>
             </div>
 
             <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', margin: '8px 0 16px' }}>
-              Ingrese el número que figura debajo del código de barras impreso en el remito.
+              {manualModalDescription}
             </p>
 
             <form onSubmit={handleManualSubmit}>
@@ -266,7 +276,7 @@ export default function BarcodeScanner({ onScanSuccess, onError, isPaused = fals
                   autoFocus
                   inputMode="numeric"
                   className="scanner-manual-input"
-                  placeholder="Ej: 1048751"
+                  placeholder={manualPlaceholder}
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
                 />
@@ -305,7 +315,7 @@ export default function BarcodeScanner({ onScanSuccess, onError, isPaused = fals
                     cursor: 'pointer'
                   }}
                 >
-                  Buscar Remito
+                  {manualSubmitLabel}
                 </button>
               </div>
             </form>

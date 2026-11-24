@@ -3842,7 +3842,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--shadow-sm);
 }
 
@@ -3851,6 +3851,7 @@ body {
   background: #dbeafe;
   color: #0d2c5c;
   border: none;
+  border-radius: 13px;
   border-bottom: 1px solid #bfdbfe;
   padding: 10px 12px;
   display: flex;
@@ -3925,7 +3926,7 @@ body {
 .dev-client-card {
   border: 1px solid var(--border);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   background: var(--surface-hover);
 }
 
@@ -3933,6 +3934,7 @@ body {
   width: 100%;
   background: var(--surface);
   border: none;
+  border-radius: 11px;
   padding: 10px 12px;
   display: flex;
   align-items: center;
@@ -5454,4 +5456,213 @@ body {
   padding: 0 4px;
   color: var(--text-muted);
   font-weight: 700;
+}
+
+
+/* ==============================================================================
+   DEVOLUCIONES: BOTÓN ESCÁNER MTX, COMBOBOX BUSCABLE, STEPPER Y TOGGLE RETORNO
+   ============================================================================== */
+.dev-scan-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(29, 78, 216, 0.32);
+  background: rgba(29, 78, 216, 0.1);
+  color: #1d4ed8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+
+.dark-theme .dev-scan-btn {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(56, 189, 248, 0.16);
+  color: #38bdf8;
+}
+
+.product-combobox {
+  position: relative;
+  width: 100%;
+}
+
+.product-combobox-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.product-combobox-input {
+  padding-right: 28px !important;
+}
+
+.product-combobox-input.empty {
+  border-color: #f59e0b;
+}
+
+.product-combobox-chevron {
+  position: absolute;
+  right: 8px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.product-combobox-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1.5px solid var(--dy-blue);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(7, 25, 54, 0.22);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+}
+
+.product-combobox-item {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-main);
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.product-combobox-item:last-child {
+  border-bottom: none;
+}
+
+.product-combobox-item:hover,
+.product-combobox-item.selected {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.product-combobox-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.product-combobox-meta {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.product-combobox-empty {
+  padding: 12px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.dev-qty-stepper {
+  max-width: none;
+  width: 100%;
+}
+
+.dev-qty-stepper .entregado-step-btn,
+.dev-qty-stepper .entregado-input {
+  height: 32px;
+}
+
+.dev-cell-span2 {
+  grid-column: span 2;
+}
+
+.dev-green-input.empty {
+  border-color: #f59e0b;
+}
+
+.dev-toggle-btn {
+  width: 100%;
+  min-height: 36px;
+  border-radius: 8px;
+  border: 1.5px solid #86efac;
+  background: #ffffff;
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.16s ease, border-color 0.16s ease;
+  touch-action: manipulation;
+}
+
+.dark-theme .dev-toggle-btn {
+  background: #0f172a;
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
+.dev-toggle-track {
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.18s ease;
+}
+
+.dev-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.18s ease;
+}
+
+.dev-toggle-btn.on .dev-toggle-track {
+  background: #059669;
+}
+
+.dev-toggle-btn.on .dev-toggle-thumb {
+  transform: translateX(16px);
+}
+
+.dev-toggle-btn.off {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.dark-theme .dev-toggle-btn.off {
+  border-color: rgba(251, 146, 60, 0.5);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.dev-toggle-btn.off .dev-toggle-track {
+  background: #f59e0b;
+}
+
+.dev-toggle-text {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #064e3b;
+}
+
+.dark-theme .dev-toggle-text {
+  color: #f8fafc;
+}
+
+.dev-toggle-btn.off .dev-toggle-text {
+  color: #92400e;
+}
+
+.dark-theme .dev-toggle-btn.off .dev-toggle-text {
+  color: #fcd34d;
 }

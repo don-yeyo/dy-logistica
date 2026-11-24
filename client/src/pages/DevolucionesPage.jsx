@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import HojaRutaHeader from '../components/HojaRutaHeader';
 import AlertModal from '../components/AlertModal';
+import ProductCombobox from '../components/ProductCombobox';
+import BarcodeScanner from '../components/BarcodeScanner';
 import { fetchDevolucionesHojaRuta, saveDevolucionesHojaRuta } from '../services/api';
 import {
   cacheDevoluciones,
@@ -15,10 +17,12 @@ import {
   ChevronRight,
   Search,
   Plus,
+  Minus,
   Trash2,
   MapPin,
   UserPlus,
   Inbox,
+  ScanLine,
   X
 } from 'lucide-react';
 
@@ -73,7 +77,7 @@ function buildDevolucionesTree(rows = []) {
       clienteObj.productos.push({
         localId: `item-${row.id_remito_devoluciones_item || Math.random().toString(36).slice(2)}`,
         id_remito_devoluciones_item: row.id_remito_devoluciones_item || null,
-        id_producto: row.id_producto || 1,
+        id_producto: row.id_producto || null,
         Producto: row.Producto || '',
         Cantidad: row.Cantidad !== null && row.Cantidad !== undefined ? String(row.Cantidad) : '1',
         Vencimiento: row.Vencimiento ? String(row.Vencimiento).slice(0, 10) : '',
@@ -87,9 +91,12 @@ function buildDevolucionesTree(rows = []) {
   return lugares.map(({ lugar, clientes }) => ({ lugar, clientes }));
 }
 
+function normalizeBarcode(val) {
+  return String(val || '').trim().replace(/^0+/, '');
+}
+
 /**
  * Módulo 4.2.2: Devolución de Mercadería (Logística DY - Devoluciones).
- * Datos desde HOJA_DE_RUTA_DEVOLUCIONES agrupados por Lugar_de_Entrega y Cliente (expandibles/colapsables).
  */
 export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
   const { refreshPendingCount } = useAuth();
@@ -100,10 +107,17 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
   const [expandedClientes, setExpandedClientes] = useState({});
   const [clientModalLugar, setClientModalLugar] = useState(null);
   const [clientSearch, setClientSearch] = useState('');
+  const [scannerTarget, setScannerTarget] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+
+  const sortedMotivos = useMemo(() => {
+    return [...(catalogos.motivos || [])].sort((a, b) =>
+      String(a.descripcion || '').localeCompare(String(b.descripcion || ''), 'es', { sensitivity: 'base' })
+    );
+  }, [catalogos.motivos]);
 
   const applyLoadedData = useCallback((loadedHeader, rows, loadedCatalogos) => {
     setHeaderInfo(loadedHeader || hojaRuta);
@@ -111,7 +125,6 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
     setGrupos(tree);
     setCatalogos(loadedCatalogos || { productos: [], clientes: [], motivos: [] });
 
-    // Expandir el primer lugar de entrega y clientes con devoluciones ya cargadas
     const nextLugares = {};
     const nextClientes = {};
     tree.forEach((g, idx) => {
@@ -185,9 +198,6 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
   };
 
   const handleAddProduct = (lugarName, clientKey) => {
-    const defaultProd = catalogos.productos[0] || { id_producto: 1, nombre: 'Producto General' };
-    const defaultMotivo = catalogos.motivos[0] || null;
-
     setGrupos((prev) =>
       prev.map((g) => {
         if (g.lugar !== lugarName) return g;
@@ -202,13 +212,13 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
                 {
                   localId: `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                   id_remito_devoluciones_item: null,
-                  id_producto: defaultProd.id_producto,
-                  Producto: defaultProd.nombre,
+                  id_producto: null,
+                  Producto: '',
                   Cantidad: '1',
                   Vencimiento: '',
-                  codigo_motivo_dif: defaultMotivo?.id_motivo || null,
-                  Motivo: defaultMotivo?.descripcion || '',
-                  Tipo: 'Físico'
+                  codigo_motivo_dif: null,
+                  Motivo: '',
+                  Tipo: 'Físico' // Toggle activado por defecto: Con retorno del producto
                 }
               ]
             };
@@ -256,6 +266,9 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
               productos: c.productos.map((p) => {
                 if (p.localId !== localId) return p;
                 if (field === 'id_producto') {
+                  if (!value) {
+                    return { ...p, id_producto: null, Producto: '' };
+                  }
                   const found = catalogos.productos.find((cp) => Number(cp.id_producto) === Number(value));
                   return {
                     ...p,
@@ -264,7 +277,7 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
                   };
                 }
                 if (field === 'codigo_motivo_dif') {
-                  const foundMot = catalogos.motivos.find((m) => Number(m.id_motivo) === Number(value));
+                  const foundMot = sortedMotivos.find((m) => Number(m.id_motivo) === Number(value));
                   return {
                     ...p,
                     codigo_motivo_dif: Number(value) || null,
@@ -278,6 +291,48 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
         };
       })
     );
+  };
+
+  const handleStepCantidad = (lugarName, clientKey, localId, currentVal, delta) => {
+    const rawStr = String(currentVal ?? '').trim();
+    const currentNum = /^\d+$/.test(rawStr) ? parseInt(rawStr, 10) : 1;
+    const nextVal = Math.max(1, currentNum + delta);
+    handleProductFieldChange(lugarName, clientKey, localId, 'Cantidad', String(nextVal));
+  };
+
+  const handleFocusSelectAll = (e) => {
+    const input = e.target;
+    input.select();
+    requestAnimationFrame(() => input.select());
+  };
+
+  const handleBarcodeDetectedForProduct = (code) => {
+    const target = scannerTarget;
+    if (!target) return;
+
+    const clean = String(code || '').trim();
+    const norm = normalizeBarcode(clean);
+
+    const matched =
+      (catalogos.productos || []).find((p) => {
+        const mtx = String(p.codigomtx || '').trim();
+        return mtx && (mtx === clean || (norm && normalizeBarcode(mtx) === norm));
+      }) ||
+      (catalogos.productos || []).find((p) => String(p.codigo || '').trim() === clean);
+
+    setScannerTarget(null);
+
+    if (matched) {
+      handleProductFieldChange(
+        target.lugar,
+        target.clientKey,
+        target.localId,
+        'id_producto',
+        matched.id_producto
+      );
+    } else {
+      setErrorMsg(`No se encontró ningún producto en el catálogo con código MTX "${clean}".`);
+    }
   };
 
   const handleSelectClienteForLugar = (clienteCatalogo) => {
@@ -330,13 +385,17 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
         if (!cli.productos || cli.productos.length === 0) continue;
 
         for (const prod of cli.productos) {
+          if (!prod.id_producto) {
+            setErrorMsg(`Debe seleccionar un producto válido de la lista para la devolución en ${cli.Cliente}.`);
+            return;
+          }
           const cantStr = String(prod.Cantidad ?? '').trim();
           if (!POSITIVE_INT_NONZERO.test(cantStr)) {
             setErrorMsg(`La cantidad devuelta para "${prod.Producto || 'Producto'}" en ${cli.Cliente} debe ser un entero mayor a 0.`);
             return;
           }
-          if (!prod.Motivo || !String(prod.Motivo).trim()) {
-            setErrorMsg(`Debe indicar al menos un motivo de devolución para "${prod.Producto || 'Producto'}" en ${cli.Cliente}.`);
+          if (!prod.codigo_motivo_dif || !prod.Motivo || !String(prod.Motivo).trim()) {
+            setErrorMsg(`El motivo es obligatorio: seleccione un motivo para "${prod.Producto || 'Producto'}" en ${cli.Cliente}.`);
             return;
           }
         }
@@ -442,7 +501,6 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
 
             return (
               <section key={grupo.lugar} className="dev-lugar-card">
-                {/* Nivel 1: Barra celeste Lugar de Entrega (Expandible / Colapsable) */}
                 <button
                   type="button"
                   className="dev-lugar-toggle"
@@ -477,7 +535,6 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
                         const isCliExpanded = Boolean(expandedClientes[cli.clientKey]);
                         return (
                           <div key={cli.clientKey} className="dev-client-card">
-                            {/* Nivel 2: Barra Cliente (Expandible / Colapsable) */}
                             <div className="dev-client-header-row">
                               <button
                                 type="button"
@@ -505,134 +562,195 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
                                   </p>
                                 ) : (
                                   <div className="dev-products-stack">
-                                    {cli.productos.map((prod) => (
-                                      <div key={prod.localId} className="dev-product-row-card">
-                                        <div className="dev-prod-top-row">
-                                          <div className="dev-field-full">
-                                            <label className="dev-col-label">Producto</label>
-                                            <select
-                                              className="dev-select-plain"
-                                              value={prod.id_producto || ''}
-                                              onChange={(e) =>
-                                                handleProductFieldChange(
-                                                  grupo.lugar,
-                                                  cli.clientKey,
-                                                  prod.localId,
-                                                  'id_producto',
-                                                  e.target.value
-                                                )
-                                              }
-                                            >
-                                              {(catalogos.productos || []).map((cp) => (
-                                                <option key={cp.id_producto} value={cp.id_producto}>
-                                                  {cp.nombre}
-                                                </option>
-                                              ))}
-                                            </select>
-                                          </div>
+                                    {cli.productos.map((prod) => {
+                                      const conRetorno = prod.Tipo !== 'Virtual';
+                                      const qtyNum = /^\d+$/.test(String(prod.Cantidad ?? ''))
+                                        ? parseInt(prod.Cantidad, 10)
+                                        : 1;
 
-                                          {!prod.id_remito_devoluciones_item && (
+                                      return (
+                                        <div key={prod.localId} className="dev-product-row-card">
+                                          <div className="dev-prod-top-row">
                                             <button
                                               type="button"
-                                              className="dev-del-btn"
+                                              className="dev-scan-btn"
                                               onClick={() =>
-                                                handleRemoveUnsavedProduct(grupo.lugar, cli.clientKey, prod.localId)
+                                                setScannerTarget({
+                                                  lugar: grupo.lugar,
+                                                  clientKey: cli.clientKey,
+                                                  localId: prod.localId
+                                                })
                                               }
-                                              title="Quitar ítem"
+                                              title="Escanear código de barras (MTX)"
+                                              aria-label="Escanear código de barras MTX del producto"
                                             >
-                                              <Trash2 size={15} />
+                                              <ScanLine size={16} />
                                             </button>
-                                          )}
+
+                                            <div className="dev-field-full">
+                                              <label className="dev-col-label">Producto *</label>
+                                              <ProductCombobox
+                                                productos={catalogos.productos || []}
+                                                value={prod.id_producto}
+                                                selectedLabel={prod.Producto}
+                                                onSelect={(picked) =>
+                                                  handleProductFieldChange(
+                                                    grupo.lugar,
+                                                    cli.clientKey,
+                                                    prod.localId,
+                                                    'id_producto',
+                                                    picked ? picked.id_producto : null
+                                                  )
+                                                }
+                                              />
+                                            </div>
+
+                                            {!prod.id_remito_devoluciones_item && (
+                                              <button
+                                                type="button"
+                                                className="dev-del-btn"
+                                                onClick={() =>
+                                                  handleRemoveUnsavedProduct(grupo.lugar, cli.clientKey, prod.localId)
+                                                }
+                                                title="Quitar ítem"
+                                              >
+                                                <Trash2 size={15} />
+                                              </button>
+                                            )}
+                                          </div>
+
+                                          <div className="dev-fields-4grid">
+                                            <div className="dev-green-cell">
+                                              <label className="dev-col-label">Cantidad</label>
+                                              <div className="entregado-stepper dev-qty-stepper">
+                                                <button
+                                                  type="button"
+                                                  className="entregado-step-btn"
+                                                  aria-label="Disminuir cantidad devuelta"
+                                                  disabled={qtyNum <= 1 && prod.Cantidad !== ''}
+                                                  onClick={() =>
+                                                    handleStepCantidad(
+                                                      grupo.lugar,
+                                                      cli.clientKey,
+                                                      prod.localId,
+                                                      prod.Cantidad,
+                                                      -1
+                                                    )
+                                                  }
+                                                >
+                                                  <Minus size={14} />
+                                                </button>
+                                                <input
+                                                  type="text"
+                                                  inputMode="numeric"
+                                                  pattern="[0-9]*"
+                                                  className="entregado-input"
+                                                  value={prod.Cantidad}
+                                                  onFocus={handleFocusSelectAll}
+                                                  onKeyDown={(e) => {
+                                                    if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) e.preventDefault();
+                                                  }}
+                                                  onChange={(e) =>
+                                                    handleProductFieldChange(
+                                                      grupo.lugar,
+                                                      cli.clientKey,
+                                                      prod.localId,
+                                                      'Cantidad',
+                                                      e.target.value
+                                                    )
+                                                  }
+                                                />
+                                                <button
+                                                  type="button"
+                                                  className="entregado-step-btn"
+                                                  aria-label="Incrementar cantidad devuelta"
+                                                  onClick={() =>
+                                                    handleStepCantidad(
+                                                      grupo.lugar,
+                                                      cli.clientKey,
+                                                      prod.localId,
+                                                      prod.Cantidad,
+                                                      1
+                                                    )
+                                                  }
+                                                >
+                                                  <Plus size={14} />
+                                                </button>
+                                              </div>
+                                            </div>
+
+                                            <div className="dev-green-cell">
+                                              <label className="dev-col-label">Vencimiento</label>
+                                              <input
+                                                type="date"
+                                                className="dev-green-input"
+                                                value={prod.Vencimiento}
+                                                onChange={(e) =>
+                                                  handleProductFieldChange(
+                                                    grupo.lugar,
+                                                    cli.clientKey,
+                                                    prod.localId,
+                                                    'Vencimiento',
+                                                    e.target.value
+                                                  )
+                                                }
+                                              />
+                                            </div>
+
+                                            <div className="dev-green-cell dev-cell-span2">
+                                              <label className="dev-col-label">Motivo *</label>
+                                              <select
+                                                required
+                                                className={`dev-green-input ${!prod.codigo_motivo_dif ? 'empty' : ''}`}
+                                                value={prod.codigo_motivo_dif || ''}
+                                                onChange={(e) =>
+                                                  handleProductFieldChange(
+                                                    grupo.lugar,
+                                                    cli.clientKey,
+                                                    prod.localId,
+                                                    'codigo_motivo_dif',
+                                                    e.target.value
+                                                  )
+                                                }
+                                              >
+                                                <option value="">Seleccionar motivo...</option>
+                                                {sortedMotivos.map((m) => (
+                                                  <option key={m.id_motivo} value={m.id_motivo}>
+                                                    {m.descripcion}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+
+                                            <div className="dev-green-cell dev-cell-span2">
+                                              <label className="dev-col-label">Tipo de devolución</label>
+                                              <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={conRetorno}
+                                                className={`dev-toggle-btn ${conRetorno ? 'on' : 'off'}`}
+                                                onClick={() =>
+                                                  handleProductFieldChange(
+                                                    grupo.lugar,
+                                                    cli.clientKey,
+                                                    prod.localId,
+                                                    'Tipo',
+                                                    conRetorno ? 'Virtual' : 'Físico'
+                                                  )
+                                                }
+                                              >
+                                                <span className="dev-toggle-track">
+                                                  <span className="dev-toggle-thumb" />
+                                                </span>
+                                                <span className="dev-toggle-text">
+                                                  {conRetorno ? 'Con retorno del producto' : 'Sin retorno del producto'}
+                                                </span>
+                                              </button>
+                                            </div>
+                                          </div>
                                         </div>
-
-                                        <div className="dev-fields-4grid">
-                                          <div className="dev-green-cell">
-                                            <label className="dev-col-label">Cantidad</label>
-                                            <input
-                                              type="text"
-                                              inputMode="numeric"
-                                              pattern="[0-9]*"
-                                              className="dev-green-input center"
-                                              value={prod.Cantidad}
-                                              onKeyDown={(e) => {
-                                                if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) e.preventDefault();
-                                              }}
-                                              onChange={(e) =>
-                                                handleProductFieldChange(
-                                                  grupo.lugar,
-                                                  cli.clientKey,
-                                                  prod.localId,
-                                                  'Cantidad',
-                                                  e.target.value
-                                                )
-                                              }
-                                            />
-                                          </div>
-
-                                          <div className="dev-green-cell">
-                                            <label className="dev-col-label">Vencimiento</label>
-                                            <input
-                                              type="date"
-                                              className="dev-green-input"
-                                              value={prod.Vencimiento}
-                                              onChange={(e) =>
-                                                handleProductFieldChange(
-                                                  grupo.lugar,
-                                                  cli.clientKey,
-                                                  prod.localId,
-                                                  'Vencimiento',
-                                                  e.target.value
-                                                )
-                                              }
-                                            />
-                                          </div>
-
-                                          <div className="dev-green-cell">
-                                            <label className="dev-col-label">Motivo</label>
-                                            <select
-                                              className="dev-green-input"
-                                              value={prod.codigo_motivo_dif || ''}
-                                              onChange={(e) =>
-                                                handleProductFieldChange(
-                                                  grupo.lugar,
-                                                  cli.clientKey,
-                                                  prod.localId,
-                                                  'codigo_motivo_dif',
-                                                  e.target.value
-                                                )
-                                              }
-                                            >
-                                              <option value="">Seleccionar...</option>
-                                              {(catalogos.motivos || []).map((m) => (
-                                                <option key={m.id_motivo} value={m.id_motivo}>
-                                                  {m.descripcion}
-                                                </option>
-                                              ))}
-                                            </select>
-                                          </div>
-
-                                          <div className="dev-green-cell">
-                                            <label className="dev-col-label">Tipo</label>
-                                            <select
-                                              className="dev-green-input"
-                                              value={prod.Tipo}
-                                              onChange={(e) =>
-                                                handleProductFieldChange(
-                                                  grupo.lugar,
-                                                  cli.clientKey,
-                                                  prod.localId,
-                                                  'Tipo',
-                                                  e.target.value
-                                                )
-                                              }
-                                            >
-                                              <option value="Físico">Físico</option>
-                                              <option value="Virtual">Virtual</option>
-                                            </select>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))}
+                                      );
+                                    })}
                                   </div>
                                 )}
 
@@ -642,7 +760,7 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
                                   onClick={() => handleAddProduct(grupo.lugar, cli.clientKey)}
                                 >
                                   <Plus size={16} />
-                                  <span>Agregar</span>
+                                  <span>Agregar devolución</span>
                                 </button>
                               </div>
                             )}
@@ -651,7 +769,6 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
                       })
                     )}
 
-                    {/* Botón para agregar otro cliente dentro del mismo Lugar de Entrega */}
                     <button
                       type="button"
                       className="dev-add-client-link"
@@ -666,7 +783,6 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
             );
           })}
 
-          {/* Botón Guardar al final de la pantalla */}
           <div className="module-save-footer">
             <button
               type="button"
@@ -686,6 +802,45 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
                 </>
               )}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Escáner MTX de Producto */}
+      {scannerTarget && (
+        <div className="modal-overlay" onClick={() => setScannerTarget(null)}>
+          <div
+            className="modal-card glass"
+            style={{ maxWidth: '460px', width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: '16px', alignItems: 'stretch', textAlign: 'left' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header-row" style={{ marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ScanLine size={20} style={{ color: 'var(--dy-blue)' }} />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text)' }}>
+                  Escanear Producto (MTX)
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="mode-toggle"
+                style={{ width: 34, height: 34 }}
+                onClick={() => setScannerTarget(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <BarcodeScanner
+              onScanSuccess={handleBarcodeDetectedForProduct}
+              onError={(err) => console.warn('[Devoluciones Scanner] error:', err)}
+              tipText="Alinee el código de barras del producto (MTX) dentro del recuadro"
+              manualButtonLabel="Ingresar MTX manualmente"
+              manualModalTitle="Ingresar Código MTX"
+              manualModalDescription="Ingrese el código MTX del producto para buscarlo y seleccionarlo."
+              manualPlaceholder="Ej: 7795293202158"
+              manualSubmitLabel="Seleccionar Producto"
+            />
           </div>
         </div>
       )}
