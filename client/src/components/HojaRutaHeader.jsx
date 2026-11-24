@@ -1,44 +1,80 @@
 import React from 'react';
-import { FileText, Calendar, Truck } from 'lucide-react';
+import { FileText, Calendar, Truck, CheckCircle2 } from 'lucide-react';
 
 /**
- * Encabezado reutilizable de Hoja de Ruta para las pantallas operativas:
- * Hoja_de_ruta, Fecha, Viaje y Transporte (omite Chofer porque el usuario autenticado es el chofer).
+ * Componente unificado de card de Hoja de Ruta:
+ * Se utiliza tanto en Inicio (listado seleccionable) como en Entregas, Devoluciones, Cajones y Remitos.
+ * Muestra: Hoja_de_ruta, Fecha, Transportista (100% ancho en 1 línea) y Patentes (Camión / Acoplado).
  */
-export default function HojaRutaHeader({ hojaRuta }) {
+export default function HojaRutaHeader({
+  hojaRuta,
+  selected = true,
+  interactive = false,
+  onSelect = null,
+  showSelectionHint = false
+}) {
   if (!hojaRuta) return null;
 
-  let formattedDate = hojaRuta.Fecha || '';
-  if (formattedDate.includes('T')) {
+  let formattedDate = hojaRuta.Fecha || '-';
+  if (typeof formattedDate === 'string' && formattedDate.includes('T')) {
     formattedDate = formattedDate.split('T')[0];
   }
 
+  const handleKeyDown = (e) => {
+    if (!interactive || !onSelect) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelect(hojaRuta);
+    }
+  };
+
+  const transporteText = hojaRuta.Transporte || 'Transporte No Informado';
+
   return (
-    <div className="hr-detail-header-card">
-      <div className="hr-detail-title-bar">
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+    <div
+      className={`hr-card ${selected ? 'selected' : ''} ${interactive ? 'interactive' : 'static'}`}
+      onClick={interactive && onSelect ? () => onSelect(hojaRuta) : undefined}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={handleKeyDown}
+    >
+      <div className="hr-card-top">
+        <div className="hr-code-badge">
           <FileText size={16} />
-          <span>Hoja de Ruta: <strong>{hojaRuta.Hoja_de_ruta}</strong></span>
-        </span>
+          <span>{hojaRuta.Hoja_de_ruta}</span>
+        </div>
+
+        <div className="hr-date-tag">
+          <Calendar size={14} />
+          <span>{formattedDate}</span>
+        </div>
       </div>
 
-      <div className="hr-detail-meta">
-        <div className="hr-meta-grid">
-          <div className="hr-meta-row">
-            <Calendar size={14} />
-            <span>Fecha: <strong>{formattedDate}</strong></span>
+      <div className="hr-card-body">
+        <div className="hr-transporte-row" title={transporteText}>
+          <Truck size={15} style={{ flexShrink: 0 }} />
+          <span className="hr-transporte-text">{transporteText}</span>
+        </div>
+
+        <div className="hr-patentes-row">
+          <div className="hr-patente-chip">
+            <Truck size={14} style={{ flexShrink: 0 }} />
+            <span>Camión: <strong>{hojaRuta.Patente_camion || '-'}</strong></span>
           </div>
-          {hojaRuta.Viaje && (
-            <div className="hr-meta-row">
-              <span>Viaje: <strong>{hojaRuta.Viaje}</strong></span>
-            </div>
-          )}
-          <div className="hr-meta-row">
-            <Truck size={14} />
-            <span>Transporte: <strong>{hojaRuta.Transporte}</strong></span>
+          <div className="hr-patente-chip">
+            <span>Acoplado: <strong>{hojaRuta.Patente_acoplado || '-'}</strong></span>
           </div>
         </div>
       </div>
+
+      {selected && showSelectionHint && (
+        <div className="hr-selected-actions">
+          <div className="hr-selected-badge">
+            <CheckCircle2 size={15} />
+            <span>Hoja de ruta seleccionada — Elegí una sección en la barra inferior</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

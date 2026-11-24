@@ -3020,27 +3020,35 @@ body {
   border-radius: var(--radius-lg);
   padding: 14px 16px;
   box-shadow: var(--shadow-sm);
-  cursor: pointer;
   transition: all 0.18s ease;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.hr-card:active {
+.hr-card.interactive {
+  cursor: pointer;
+}
+
+.hr-card.interactive:active {
   transform: scale(0.985);
 }
 
+.hr-card.static {
+  cursor: default;
+}
+
 .hr-card.selected {
-  border-color: var(--dy-blue);
-  background: linear-gradient(135deg, var(--surface) 0%, rgba(13, 44, 92, 0.05) 100%);
-  box-shadow: 0 6px 18px rgba(13, 44, 92, 0.16);
+  border-color: rgba(255, 255, 255, 0.25);
+  background: linear-gradient(135deg, #0d2c5c 0%, #2563eb 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 22px rgba(29, 78, 216, 0.34);
 }
 
 .dark-theme .hr-card.selected {
-  border-color: #38bdf8;
-  background: linear-gradient(135deg, var(--surface) 0%, rgba(56, 189, 248, 0.1) 100%);
-  box-shadow: 0 6px 18px rgba(56, 189, 248, 0.18);
+  border-color: rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+  box-shadow: 0 8px 22px rgba(56, 189, 248, 0.32);
 }
 
 .hr-card-top {
@@ -3063,6 +3071,11 @@ body {
   color: #38bdf8;
 }
 
+.hr-card.selected .hr-code-badge,
+.dark-theme .hr-card.selected .hr-code-badge {
+  color: #ffffff;
+}
+
 .hr-date-tag {
   display: inline-flex;
   align-items: center;
@@ -3076,10 +3089,51 @@ body {
   border-radius: var(--radius-pill);
 }
 
+.hr-card.selected .hr-date-tag,
+.dark-theme .hr-card.selected .hr-date-tag {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+
 .hr-card-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.hr-transporte-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-main);
+  min-width: 0;
+}
+
+.hr-transporte-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hr-card.selected .hr-transporte-row,
+.dark-theme .hr-card.selected .hr-transporte-row {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+.hr-card.selected .hr-transporte-text {
+  color: #ffffff;
 }
 
 .hr-info-line {
@@ -3115,11 +3169,24 @@ body {
   padding: 7px 10px;
   font-size: 0.8rem;
   color: var(--text-muted);
+  min-width: 0;
 }
 
 .hr-patente-chip strong {
   color: var(--text-main);
   font-weight: 800;
+}
+
+.hr-card.selected .hr-patente-chip,
+.dark-theme .hr-card.selected .hr-patente-chip {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.hr-card.selected .hr-patente-chip strong,
+.dark-theme .hr-card.selected .hr-patente-chip strong {
+  color: #ffffff;
 }
 
 .hr-selected-actions {
@@ -3128,6 +3195,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.hr-card.selected .hr-selected-actions {
+  border-top-color: rgba(255, 255, 255, 0.28);
 }
 
 .hr-selected-badge {
@@ -3141,6 +3212,11 @@ body {
 
 .dark-theme .hr-selected-badge {
   color: #38bdf8;
+}
+
+.hr-card.selected .hr-selected-badge,
+.dark-theme .hr-card.selected .hr-selected-badge {
+  color: #e0f2fe;
 }
 
 .hr-quick-modules {
