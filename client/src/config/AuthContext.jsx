@@ -10,6 +10,7 @@ import {
   saveCajonesHojaRuta
 } from '../services/api';
 import { getPendingControls, clearPendingControls } from '../services/offlineStorage';
+import { clearAllDrafts } from '../services/draftStorage';
 
 const AuthContext = createContext(null);
 const IMPERSONATION_ENABLED =
@@ -317,6 +318,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('dy_user_rol');
     localStorage.removeItem('dy_impersonated_email');
     localStorage.removeItem('dy_selected_hoja_ruta');
+    clearAllDrafts();
     setIsImpersonating(false);
     setUser(null);
     setError(null);
