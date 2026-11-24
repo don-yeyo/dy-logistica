@@ -229,7 +229,7 @@ export default function App() {
         type="warning"
         title="Seleccione una Hoja de Ruta"
         message={navWarning}
-        confirmText="Ir a Hojas de Ruta"
+        confirmText="Entendido"
       />
 
       <HelpChatModal
