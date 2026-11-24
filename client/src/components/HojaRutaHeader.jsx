@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Calendar, Truck, CheckCircle2 } from 'lucide-react';
+import { FileText, Calendar, Truck } from 'lucide-react';
 
 /**
  * Componente unificado de card de Hoja de Ruta:
@@ -10,8 +10,7 @@ export default function HojaRutaHeader({
   hojaRuta,
   selected = true,
   interactive = false,
-  onSelect = null,
-  showSelectionHint = false
+  onSelect = null
 }) {
   if (!hojaRuta) return null;
 
@@ -66,15 +65,6 @@ export default function HojaRutaHeader({
           </div>
         </div>
       </div>
-
-      {selected && showSelectionHint && (
-        <div className="hr-selected-actions">
-          <div className="hr-selected-badge">
-            <CheckCircle2 size={15} />
-            <span>Hoja de ruta seleccionada — Elegí una sección en la barra inferior</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

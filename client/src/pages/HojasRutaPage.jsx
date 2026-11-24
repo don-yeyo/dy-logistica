@@ -102,7 +102,6 @@ export default function HojasRutaPage({ selectedHojaRuta, onSelectHojaRuta }) {
                 hojaRuta={hr}
                 selected={isSelected}
                 interactive
-                showSelectionHint
                 onSelect={() => onSelectHojaRuta(hr)}
               />
             );
