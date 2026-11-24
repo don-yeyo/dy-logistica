@@ -9,8 +9,8 @@ Plataforma logística integral para **Don Yeyo S.A.** conectada directamente a l
    - **Auditoría DB (Triggers MySQL)** (exclusivo `sysadmin`): bitácora completa (`AUDITORIA`) de `INSERT`, `UPDATE` y `DELETE` sobre las tablas operativas clave.
    - *(Próximo módulo)*: bandeja de devoluciones y faltantes preparada como insumo para la generación de solicitudes de **Notas de Crédito** por Logística.
 
-2. **App Móvil PWA para Choferes** (`chofer` + vista previa opcional para `sysadmin`):
-   - **Selección de Hoja de Ruta** desde `HOJAS_DE_RUTA_A_ENTREGAR`, filtrada por la organización/chofer mapeado al usuario.
+2. **App Móvil PWA para Choferes** (exclusiva rol `chofer`):
+   - **Selección de Hoja de Ruta** desde `HOJAS_DE_RUTA_A_ENTREGAR`, filtrada por la organización/chofer mapeado al usuario y acotada a la ventana configurable de días (`HOJAS_RUTA_DIAS_ATRAS` / `HOJAS_RUTA_DIAS_ADELANTE`, por defecto 1 día atrás y 1 día adelante).
    - **Entregas**: confirmación de descarga (`ITEMS_A_ENTREGAR` → `HOJA_RUTA_ITEM_REMITO`).
    - **Devoluciones**: registro maestro-detalle por cliente y producto (`REMITO_DEVOLUCIONES`, `REMITO_DEVOLUCIONES_ITEMS`).
    - **Cajones**: control de entregas, devoluciones y diferencias (`REMITOS_CAJONES_X_ETAPA` / `REMITO_CAJONES`).
@@ -23,9 +23,9 @@ Plataforma logística integral para **Don Yeyo S.A.** conectada directamente a l
 
 * **Login exclusivo con Microsoft 365 (Entra ID)**: mediante `@azure/msal-browser` (`loginPopup`). Si el token corporativo en caché sigue vigente (`acquireTokenSilent`), la sesión se restaura automáticamente sin volver a pedir credenciales.
 * **Roles**:
-  * `sysadmin`: acceso total al Gestor de Escritorio (incluyendo Auditoría DB y alta de cualquier rol) + vista previa de App Mobile.
-  * `logistica`: acceso al Gestor de Escritorio (Dashboard, seguimiento de Hojas de Ruta, Devoluciones/Faltantes, Cajones) y gestión exclusiva de usuarios con rol `chofer`.
-  * `chofer`: acceso exclusivo a la App Mobile PWA con sus hojas de ruta filtradas según su `organizacion_id` mapeado en `APP_USUARIOS`.
+  * `sysadmin`: acceso total al Gestor de Escritorio (incluyendo Auditoría DB y alta de cualquier rol). No accede a la App Mobile ni a endpoints de choferes (para pruebas en gestación puede usar el bypass de simulación de usuario).
+  * `logistica`: acceso al Gestor de Escritorio (Dashboard, seguimiento de Hojas de Ruta, Devoluciones/Faltantes, Cajones) y gestión exclusiva de usuarios con rol `chofer`. Tampoco accede a la App Mobile.
+  * `chofer`: acceso exclusivo a la App Mobile PWA con sus hojas de ruta filtradas según su `organizacion_id` mapeado en `APP_USUARIOS` y la ventana temporal `HOJAS_RUTA_DIAS_ATRAS` / `HOJAS_RUTA_DIAS_ADELANTE`.
 
 ---
 
@@ -125,6 +125,7 @@ node server/setup_glog_app.js
 | `CAJONES_TIPO_ENTREGA`, `CAJONES_TIPO_DEVOLUCION` | Códigos numéricos de `REMITO_CAJONES.tipo` (`1` entrega, `2` devolución) |
 | `MAX_VIAJES_HISTORICOS_DEFAULT` | `4` (cantidad histórica de remitos) |
 | `MAX_HOJAS_RUTA_LIST` | `20` (cantidad máxima de hojas de ruta en app móvil) |
+| `HOJAS_RUTA_DIAS_ATRAS`, `HOJAS_RUTA_DIAS_ADELANTE` | Ventana de días hacia atrás (`1`) y adelante (`1`) respecto de hoy para listar hojas de ruta al chofer |
 | `ADMIN_DEFAULT_PAGE_SIZE`, `ADMIN_MAX_PAGE_SIZE` | Tamaño de página por defecto (`15`) y máximo (`100`) en grillas del Gestor de Escritorio |
 | `AZURE_AD_TENANT_ID`, `AZURE_AD_CLIENT_ID`, `AZURE_AD_CLIENT_SECRET` | Credenciales de Microsoft Entra ID |
 | `ENABLE_SHAREPOINT_UPLOAD`, `POWERAUTOMATE_URL`, `SHAREPOINT_FQDN` | Envío de fotos a SharePoint |
