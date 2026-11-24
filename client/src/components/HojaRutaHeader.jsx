@@ -1,5 +1,27 @@
 import React from 'react';
-import { FileText, Calendar, Truck } from 'lucide-react';
+import { FileText, Calendar, Truck, UserRound } from 'lucide-react';
+
+function TrailerIcon({ size = 14 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      <rect x="2" y="6" width="16" height="9" rx="1.5" />
+      <path d="M18 13h4" />
+      <circle cx="6.5" cy="17.5" r="2" />
+      <circle cx="14.5" cy="17.5" r="2" />
+    </svg>
+  );
+}
 
 /**
  * Componente unificado de card de Hoja de Ruta:
@@ -27,7 +49,7 @@ export default function HojaRutaHeader({
     }
   };
 
-  const transporteText = hojaRuta.Transporte || 'Transporte No Informado';
+  const transporteText = hojaRuta.Transporte || 'No informado';
 
   return (
     <div
@@ -50,9 +72,11 @@ export default function HojaRutaHeader({
       </div>
 
       <div className="hr-card-body">
-        <div className="hr-transporte-row" title={transporteText}>
-          <Truck size={15} style={{ flexShrink: 0 }} />
-          <span className="hr-transporte-text">{transporteText}</span>
+        <div className="hr-transporte-row" title={`Transporte: ${transporteText}`}>
+          <UserRound size={15} style={{ flexShrink: 0 }} />
+          <span className="hr-transporte-text">
+            Transporte: <strong>{transporteText}</strong>
+          </span>
         </div>
 
         <div className="hr-patentes-row">
@@ -61,6 +85,7 @@ export default function HojaRutaHeader({
             <span>Camión: <strong>{hojaRuta.Patente_camion || '-'}</strong></span>
           </div>
           <div className="hr-patente-chip">
+            <TrailerIcon size={14} />
             <span>Acoplado: <strong>{hojaRuta.Patente_acoplado || '-'}</strong></span>
           </div>
         </div>
