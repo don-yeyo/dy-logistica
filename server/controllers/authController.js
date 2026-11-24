@@ -1,5 +1,10 @@
 const { pool } = require('../config/db');
 
+function parseNonNegativeIntEnv(value, fallback) {
+  const parsed = parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 /**
  * Retorna la información del usuario autenticado (APP_USUARIOS) y sus hojas de ruta activas.
  */
@@ -7,6 +12,9 @@ async function getMe(req, res) {
   try {
     const user = req.user;
     let activeRoutes = [];
+    const diasAtras = parseNonNegativeIntEnv(process.env.HOJAS_RUTA_DIAS_ATRAS, 1);
+    const diasAdelante = parseNonNegativeIntEnv(process.env.HOJAS_RUTA_DIAS_ADELANTE, 1);
+    const dateWindowClause = 'DATE(v.Fecha) BETWEEN DATE_SUB(CURDATE(), INTERVAL ? DAY) AND DATE_ADD(CURDATE(), INTERVAL ? DAY)';
 
     try {
       let query;
@@ -25,22 +33,24 @@ async function getMe(req, res) {
           SELECT v.Hoja_de_ruta, v.Fecha
           FROM HOJAS_DE_RUTA_A_ENTREGAR v
           INNER JOIN HOJA_DE_RUTA hr ON hr.Transaccionid = v.Transaccionid
-          WHERE LOWER(v.EMail) = LOWER(?)
+          WHERE (LOWER(v.EMail) = LOWER(?)
              OR hr.Organizacionid_chofer = ?
-             OR hr.Organizacionid_transportista = ?
+             OR hr.Organizacionid_transportista = ?)
+            AND ${dateWindowClause}
           ORDER BY v.Fecha DESC, v.Transaccionid DESC
           LIMIT 10
         `;
-        params = [user.email, user.organizacion_id, user.organizacion_id];
+        params = [user.email, user.organizacion_id, user.organizacion_id, diasAtras, diasAdelante];
       } else {
         query = `
           SELECT v.Hoja_de_ruta, v.Fecha
           FROM HOJAS_DE_RUTA_A_ENTREGAR v
           WHERE LOWER(v.EMail) = LOWER(?)
+            AND ${dateWindowClause}
           ORDER BY v.Fecha DESC, v.Transaccionid DESC
           LIMIT 10
         `;
-        params = [user.email];
+        params = [user.email, diasAtras, diasAdelante];
       }
 
       const [routes] = await pool.query(query, params);

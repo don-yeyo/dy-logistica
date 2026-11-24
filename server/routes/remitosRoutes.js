@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const remitosController = require('../controllers/remitosController');
-const { authMiddleware } = require('../middlewares/authMiddleware');
+const { authMiddleware, requireRole } = require('../middlewares/authMiddleware');
 const { upload } = require('../middlewares/uploadMiddleware');
 
-// Todas las rutas de remitos requieren identificación de chofer
-router.use(authMiddleware);
+// Todas las rutas de remitos en App Mobile son exclusivas del rol chofer
+router.use(authMiddleware, requireRole('chofer'));
 
 // Buscar remito por código de barras (TransaccionId o Comprobante)
 router.get('/buscar', remitosController.buscarRemito);

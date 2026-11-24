@@ -5,12 +5,13 @@ const POSITIVE_INT_REGEX = /^[1-9]\d*$/;
 const CAJONES_TIPO_ENTREGA = parseInt(process.env.CAJONES_TIPO_ENTREGA || '1', 10);
 const CAJONES_TIPO_DEVOLUCION = parseInt(process.env.CAJONES_TIPO_DEVOLUCION || '2', 10);
 
+function parseNonNegativeIntEnv(value, fallback) {
+  const parsed = parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 function allowUnassignedFallback(user) {
-  return (
-    user?.rol === 'sysadmin' ||
-    user?.rol === 'logistica' ||
-    (!user?.organizacion_id && process.env.ALLOW_UNASSIGNED_HR_FALLBACK === 'true')
-  );
+  return Boolean(!user?.organizacion_id && process.env.ALLOW_UNASSIGNED_HR_FALLBACK === 'true');
 }
 
 function isStageIdTypeMismatch(err) {
@@ -51,11 +52,6 @@ async function findHojaRutaHeader(transaccionId, user) {
     LEFT JOIN ORGANIZACION tr ON tr.Organizacionid = hr.Organizacionid_transportista
   `;
 
-  if (user.rol === 'sysadmin' || user.rol === 'logistica') {
-    const [adminRows] = await pool.query(`${baseSelect} WHERE v.Transaccionid = ? LIMIT 1`, [txId]);
-    return adminRows?.[0] || null;
-  }
-
   if (user.organizacion_id) {
     const [mappedRows] = await pool.query(
       `${baseSelect}
@@ -87,7 +83,7 @@ async function findHojaRutaHeader(transaccionId, user) {
 }
 
 /**
- * Sección 4.2: Listado de hojas de ruta desde HOJAS_DE_RUTA_A_ENTREGAR.
+ * Sección 4.2: Listado de hojas de ruta desde HOJAS_DE_RUTA_A_ENTREGAR (exclusivo chofer, con ventana de días).
  */
 async function getHojasDeRuta(req, res) {
   try {
@@ -95,6 +91,9 @@ async function getHojasDeRuta(req, res) {
     const defaultLimit = parseInt(process.env.MAX_HOJAS_RUTA_LIST || '20', 10);
     const parsedLimit = parseInt(req.query.limit || defaultLimit, 10);
     const limit = Number.isInteger(parsedLimit) && parsedLimit > 0 ? parsedLimit : 20;
+    const diasAtras = parseNonNegativeIntEnv(process.env.HOJAS_RUTA_DIAS_ATRAS, 1);
+    const diasAdelante = parseNonNegativeIntEnv(process.env.HOJAS_RUTA_DIAS_ADELANTE, 1);
+    const dateWindowClause = 'DATE(v.Fecha) BETWEEN DATE_SUB(CURDATE(), INTERVAL ? DAY) AND DATE_ADD(CURDATE(), INTERVAL ? DAY)';
 
     const baseSelect = `
       SELECT
@@ -115,37 +114,34 @@ async function getHojasDeRuta(req, res) {
     let rows = [];
     let fallbackUsed = false;
 
-    if (user.rol === 'sysadmin' || user.rol === 'logistica') {
-      const [allRows] = await pool.query(
-        `${baseSelect} ORDER BY v.Fecha DESC, v.Transaccionid DESC LIMIT ?`,
-        [limit]
-      );
-      rows = allRows || [];
-    } else if (user.organizacion_id) {
+    if (user.organizacion_id) {
       const [mappedRows] = await pool.query(
         `${baseSelect}
-         WHERE LOWER(v.EMail) = LOWER(?)
-            OR hr.Organizacionid_chofer = ?
-            OR hr.Organizacionid_transportista = ?
+         WHERE (LOWER(v.EMail) = LOWER(?) OR hr.Organizacionid_chofer = ? OR hr.Organizacionid_transportista = ?)
+           AND ${dateWindowClause}
          ORDER BY v.Fecha DESC, v.Transaccionid DESC
          LIMIT ?`,
-        [user.email, user.organizacion_id, user.organizacion_id, limit]
+        [user.email, user.organizacion_id, user.organizacion_id, diasAtras, diasAdelante, limit]
       );
       rows = mappedRows || [];
     } else {
       const [emailRows] = await pool.query(
         `${baseSelect}
          WHERE LOWER(v.EMail) = LOWER(?)
+           AND ${dateWindowClause}
          ORDER BY v.Fecha DESC, v.Transaccionid DESC
          LIMIT ?`,
-        [user.email, limit]
+        [user.email, diasAtras, diasAdelante, limit]
       );
       rows = emailRows || [];
 
       if (rows.length === 0 && allowUnassignedFallback(user)) {
         const [fallbackRows] = await pool.query(
-          `${baseSelect} ORDER BY v.Fecha DESC, v.Transaccionid DESC LIMIT ?`,
-          [limit]
+          `${baseSelect}
+           WHERE ${dateWindowClause}
+           ORDER BY v.Fecha DESC, v.Transaccionid DESC
+           LIMIT ?`,
+          [diasAtras, diasAdelante, limit]
         );
         rows = fallbackRows || [];
         fallbackUsed = true;
@@ -155,6 +151,10 @@ async function getHojasDeRuta(req, res) {
     return res.json({
       ok: true,
       fallback_sin_email: fallbackUsed,
+      ventana_dias: {
+        atras: diasAtras,
+        adelante: diasAdelante
+      },
       hojas_ruta: rows
     });
   } catch (error) {

@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const hojasRutaController = require('../controllers/hojasRutaController');
-const { authMiddleware } = require('../middlewares/authMiddleware');
+const { authMiddleware, requireRole } = require('../middlewares/authMiddleware');
 
-// Todas las rutas operativas requieren chofer autenticado
-router.use(authMiddleware);
+// Todas las rutas operativas de la App Mobile son exclusivas del rol chofer
+router.use(authMiddleware, requireRole('chofer'));
 
 // Sección 4.2: Listado de hojas de ruta desde HOJAS_DE_RUTA_A_ENTREGAR filtrando EMail
 router.get('/', hojasRutaController.getHojasDeRuta);
