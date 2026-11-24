@@ -14,6 +14,7 @@ import {
   Boxes,
   MapPin,
   Plus,
+  Minus,
   Inbox,
   X
 } from 'lucide-react';
@@ -101,6 +102,19 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
     setItems((prev) =>
       prev.map((it) => (it.localKey === localKey ? { ...it, [field]: value } : it))
     );
+  };
+
+  const handleStepCajon = (localKey, field, currentVal, delta) => {
+    const rawStr = String(currentVal ?? '').trim();
+    const currentNum = NON_NEGATIVE_INT_REGEX.test(rawStr) ? parseInt(rawStr, 10) : 0;
+    const nextVal = Math.max(0, currentNum + delta);
+    handleFieldChange(localKey, field, String(nextVal));
+  };
+
+  const handleFocusSelectAll = (e) => {
+    const input = e.target;
+    input.select();
+    requestAnimationFrame(() => input.select());
   };
 
   const handleAddStop = (e) => {
@@ -273,30 +287,72 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
                 <div className="cajon-inputs-row">
                   <div className="cajon-input-box">
                     <label>Entregados</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={it.cajones_entregados}
-                      onKeyDown={(e) => {
-                        if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) e.preventDefault();
-                      }}
-                      onChange={(e) => handleFieldChange(it.localKey, 'cajones_entregados', e.target.value)}
-                    />
+                    <div className="entregado-stepper cajon-qty-stepper">
+                      <button
+                        type="button"
+                        className="entregado-step-btn"
+                        aria-label={`Disminuir cajones entregados de ${it.Cliente}`}
+                        disabled={ent <= 0 && it.cajones_entregados !== ''}
+                        onClick={() => handleStepCajon(it.localKey, 'cajones_entregados', it.cajones_entregados, -1)}
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        className="entregado-input"
+                        value={it.cajones_entregados}
+                        onFocus={handleFocusSelectAll}
+                        onKeyDown={(e) => {
+                          if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) e.preventDefault();
+                        }}
+                        onChange={(e) => handleFieldChange(it.localKey, 'cajones_entregados', e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="entregado-step-btn"
+                        aria-label={`Incrementar cajones entregados de ${it.Cliente}`}
+                        onClick={() => handleStepCajon(it.localKey, 'cajones_entregados', it.cajones_entregados, 1)}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="cajon-input-box">
                     <label>Devueltos</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={it.cajones_devueltos}
-                      onKeyDown={(e) => {
-                        if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) e.preventDefault();
-                      }}
-                      onChange={(e) => handleFieldChange(it.localKey, 'cajones_devueltos', e.target.value)}
-                    />
+                    <div className="entregado-stepper cajon-qty-stepper">
+                      <button
+                        type="button"
+                        className="entregado-step-btn"
+                        aria-label={`Disminuir cajones devueltos de ${it.Cliente}`}
+                        disabled={dev <= 0 && it.cajones_devueltos !== ''}
+                        onClick={() => handleStepCajon(it.localKey, 'cajones_devueltos', it.cajones_devueltos, -1)}
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        className="entregado-input"
+                        value={it.cajones_devueltos}
+                        onFocus={handleFocusSelectAll}
+                        onKeyDown={(e) => {
+                          if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) e.preventDefault();
+                        }}
+                        onChange={(e) => handleFieldChange(it.localKey, 'cajones_devueltos', e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="entregado-step-btn"
+                        aria-label={`Incrementar cajones devueltos de ${it.Cliente}`}
+                        onClick={() => handleStepCajon(it.localKey, 'cajones_devueltos', it.cajones_devueltos, 1)}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 

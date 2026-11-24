@@ -4310,23 +4310,18 @@ body {
   color: #34d399;
 }
 
-.cajon-input-box input {
+.cajon-qty-stepper {
+  max-width: none;
   width: 100%;
-  height: 36px;
-  border-radius: 8px;
-  border: 1px solid #86efac;
-  background: #ffffff;
-  color: #064e3b;
-  text-align: center;
-  font-size: 1rem;
-  font-weight: 800;
-  outline: none;
 }
 
-.dark-theme .cajon-input-box input {
-  background: #0f172a;
-  color: #f8fafc;
-  border-color: rgba(52, 211, 153, 0.45);
+.cajon-qty-stepper .entregado-step-btn,
+.cajon-qty-stepper .entregado-input {
+  height: 36px;
+}
+
+.cajon-qty-stepper .entregado-step-btn {
+  width: 30px;
 }
 
 .cajon-obs-input {
