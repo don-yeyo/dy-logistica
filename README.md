@@ -137,6 +137,7 @@ node server/setup_glog_app.js
 | `VITE_AZURE_AD_CLIENT_ID`, `VITE_AZURE_AD_TENANT_ID`, `VITE_AZURE_AD_REDIRECT_URI` | Configuración MSAL Entra ID (`localStorage` cache) |
 | `VITE_MOCK_AUTH`, `VITE_ENABLE_USER_IMPERSONATION`, `VITE_DEFAULT_MOCK_EMAIL` | Bypass de SSO y selector rápido de simulación de usuarios en gestación (`false` en producción) |
 | `VITE_ADMIN_PAGE_SIZE` | Cantidad inicial de filas por página (`15`) en las grillas del Gestor de Escritorio |
+| `VITE_UNSAVED_REMINDER_SECONDS` | Segundos tras cambios locales sin confirmar para mostrar el modal recordatorio al chofer (`60`) |
 | `VITE_IMAGE_COMPRESSION_QUALITY`, `VITE_IMAGE_MAX_WIDTH`, `VITE_IMAGE_MAX_HEIGHT` | Compresión de imágenes JPEG al 70% |
 
 ### 5. Iniciar en Modo Desarrollo
