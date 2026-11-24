@@ -63,6 +63,20 @@ export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, on
     loadData();
   }, [loadData, user]);
 
+  useEffect(() => {
+    const onExternalSaved = (e) => {
+      if (
+        Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid) &&
+        Array.isArray(e.detail?.sections) &&
+        e.detail.sections.includes('remitos')
+      ) {
+        loadData(true);
+      }
+    };
+    window.addEventListener('dy-draft-saved', onExternalSaved);
+    return () => window.removeEventListener('dy-draft-saved', onExternalSaved);
+  }, [hojaRuta?.Transaccionid, loadData]);
+
   // Lista de hojas de ruta únicas para los chips
   const routeOptions = useMemo(() => {
     const routesSet = new Set();

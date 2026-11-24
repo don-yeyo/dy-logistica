@@ -3,12 +3,10 @@ import { createPortal } from 'react-dom';
 import { Save, RefreshCw } from 'lucide-react';
 
 /**
- * Floating Action Button (FAB) de guardado montado vía portal en document.body
- * para garantizar position: fixed respecto al viewport sin verse afectado por
- * transformaciones o animaciones de contenedores padres.
+ * Floating Action Button (FAB) de guardado global montado vía portal en document.body
+ * para garantizar position: fixed respecto al viewport y estilo uniforme azul Don Yeyo.
  */
 export default function SaveFab({
-  variant = 'global',
   onClick,
   disabled = false,
   saving = false,
@@ -19,7 +17,7 @@ export default function SaveFab({
   return createPortal(
     <button
       type="button"
-      className={`save-fab mod-${variant}`}
+      className="save-fab"
       onClick={onClick}
       disabled={disabled || saving}
       title={title}

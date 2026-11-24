@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from './config/AuthContext';
 import Header from './components/Header';
 import Drawer from './components/Drawer';
@@ -34,7 +35,8 @@ const UNSAVED_REMINDER_SECONDS = Math.max(
 const SECTION_LABELS = {
   entregas: 'Entregas',
   devoluciones: 'Devoluciones',
-  cajones: 'Cajones'
+  cajones: 'Cajones',
+  remitos: 'Remitos'
 };
 
 export default function App() {
@@ -58,6 +60,8 @@ export default function App() {
     entregas: false,
     devoluciones: false,
     cajones: false,
+    remitos: false,
+    entregasUnconfirmed: false,
     anyDirty: false,
     dirtySections: [],
     lastDirtyAt: null
@@ -67,6 +71,7 @@ export default function App() {
   const [confirmingAll, setConfirmingAll] = useState(false);
   const [reminderErrorMsg, setReminderErrorMsg] = useState(null);
   const [reminderSuccessMsg, setReminderSuccessMsg] = useState(null);
+  const reminderOverlayRef = useRef(null);
 
   // Estado del Gestor de Escritorio (sysadmin y logistica)
   const [adminTab, setAdminTab] = useState('dashboard');
@@ -80,6 +85,8 @@ export default function App() {
         entregas: false,
         devoluciones: false,
         cajones: false,
+        remitos: false,
+        entregasUnconfirmed: false,
         anyDirty: false,
         dirtySections: [],
         lastDirtyAt: null
@@ -138,6 +145,38 @@ export default function App() {
     reminderResetTick
   ]);
 
+  // Bloquear scroll del documento y evitar propagación en el fondo difuminado mientras el modal recordatorio esté abierto
+  useEffect(() => {
+    if (!reminderOpen) return undefined;
+
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevOverscroll = document.body.style.overscrollBehavior;
+
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'none';
+
+    const overlayEl = reminderOverlayRef.current;
+    const preventScroll = (e) => {
+      e.preventDefault();
+    };
+    if (overlayEl) {
+      overlayEl.addEventListener('wheel', preventScroll, { passive: false });
+      overlayEl.addEventListener('touchmove', preventScroll, { passive: false });
+    }
+
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.overscrollBehavior = prevOverscroll;
+      if (overlayEl) {
+        overlayEl.removeEventListener('wheel', preventScroll);
+        overlayEl.removeEventListener('touchmove', preventScroll);
+      }
+    };
+  }, [reminderOpen]);
+
   const handleSelectHojaRuta = (hr) => {
     setSelectedHojaRuta(hr);
     setReminderOpen(false);
@@ -155,6 +194,14 @@ export default function App() {
   const handleConfirmAllPending = async () => {
     if (!user?.email || !selectedHojaRuta?.Transaccionid) return;
     const sectionsToSave = [...dirtySummary.dirtySections];
+    if (
+      sectionsToSave.length === 0 &&
+      currentScreen === 'entregas' &&
+      !selectedRemito &&
+      dirtySummary.entregasUnconfirmed
+    ) {
+      sectionsToSave.push('entregas');
+    }
     if (sectionsToSave.length === 0) {
       setReminderOpen(false);
       return;
@@ -172,13 +219,18 @@ export default function App() {
           });
         } catch (secErr) {
           setReminderOpen(false);
-          setSelectedRemito(null);
+          if (sec !== 'remitos') {
+            setSelectedRemito(null);
+          }
           setCurrentScreen(sec);
           setReminderErrorMsg(secErr?.response?.data?.error || secErr?.message || `Revisá los datos de ${SECTION_LABELS[sec] || sec}.`);
           return;
         }
       }
       setReminderOpen(false);
+      if (sectionsToSave.includes('remitos')) {
+        setSelectedRemito(null);
+      }
       setReminderSuccessMsg(
         navigator.onLine
           ? `Se confirmaron correctamente los cambios pendientes (${sectionsToSave.map((s) => SECTION_LABELS[s] || s).join(', ')}).`
@@ -251,9 +303,8 @@ export default function App() {
   };
 
   const showGlobalSaveFab =
-    !selectedRemito &&
-    dirtySummary.anyDirty &&
-    ['hojas_ruta', 'remitos', 'scan'].includes(currentScreen);
+    Boolean(selectedHojaRuta?.Transaccionid) &&
+    (dirtySummary.anyDirty || (currentScreen === 'entregas' && !selectedRemito && dirtySummary.entregasUnconfirmed));
 
   return (
     <div className="app-container">
@@ -278,6 +329,7 @@ export default function App() {
           <div key="detail" className="page-transition" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             <RemitoDetail
               remito={selectedRemito}
+              hojaRuta={selectedHojaRuta}
               onBack={() => setSelectedRemito(null)}
               onSaved={() => {
                 setSelectedRemito(null);
@@ -340,7 +392,6 @@ export default function App() {
 
       {showGlobalSaveFab && (
         <SaveFab
-          variant="global"
           onClick={handleConfirmAllPending}
           saving={confirmingAll}
           title="Confirmar todos los cambios pendientes"
@@ -356,12 +407,16 @@ export default function App() {
         />
       )}
 
-      {/* Modal Recordatorio de Informes sin Confirmar */}
-      {reminderOpen && (
-        <div className="modal-overlay" onClick={() => {
-          setReminderOpen(false);
-          setReminderResetTick((t) => t + 1);
-        }}>
+      {/* Modal Recordatorio de Informes sin Confirmar (montado en document.body por encima de todo) */}
+      {reminderOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={reminderOverlayRef}
+          className="modal-overlay unsaved-reminder-overlay"
+          onClick={() => {
+            setReminderOpen(false);
+            setReminderResetTick((t) => t + 1);
+          }}
+        >
           <div
             className="modal-card glass"
             style={{ maxWidth: '400px', width: '92%', padding: '20px', textAlign: 'left', alignItems: 'stretch' }}
@@ -406,7 +461,8 @@ export default function App() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <AlertModal

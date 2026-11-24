@@ -1,17 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import HojaRutaHeader from '../components/HojaRutaHeader';
 import AlertModal from '../components/AlertModal';
-import SaveFab from '../components/SaveFab';
-import { fetchCajonesHojaRuta, saveCajonesHojaRuta } from '../services/api';
+import { fetchCajonesHojaRuta } from '../services/api';
 import {
   cacheCajones,
-  getCachedCajones,
-  queuePendingControl
+  getCachedCajones
 } from '../services/offlineStorage';
 import {
   getHojaRutaDraft,
-  patchSectionDraft,
-  clearSectionDirty
+  patchSectionDraft
 } from '../services/draftStorage';
 import { useAuth } from '../config/AuthContext';
 import {
@@ -31,16 +28,13 @@ const NON_NEGATIVE_INT_REGEX = /^\d+$/;
  * Mantiene borradores en localStorage hasta confirmar con el botón flotante.
  */
 export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
-  const { user, refreshPendingCount } = useAuth();
+  const { user } = useAuth();
   const [headerInfo, setHeaderInfo] = useState(hojaRuta);
   const [items, setItems] = useState([]);
-  const [isDirty, setIsDirty] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newStop, setNewStop] = useState({ Lugar_de_Entrega: '', Cliente: '' });
   const [errorMsg, setErrorMsg] = useState(null);
-  const [successMsg, setSuccessMsg] = useState(null);
 
   const loadCajones = useCallback(async () => {
     if (!hojaRuta?.Transaccionid) return;
@@ -91,10 +85,8 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
       const draft = getHojaRutaDraft(user?.email, hojaRuta.Transaccionid).cajones;
       if (draft?.dirty && Array.isArray(draft.items)) {
         setItems(draft.items);
-        setIsDirty(true);
       } else {
         setItems(baseItems);
-        setIsDirty(false);
       }
     } catch (err) {
       setErrorMsg(err.response?.data?.error || err.message || 'Error al cargar movimiento de cajones.');
@@ -122,7 +114,6 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
   }, [hojaRuta?.Transaccionid, loadCajones]);
 
   const persistCajonesDraft = (nextItems) => {
-    setIsDirty(true);
     patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'cajones', {
       items: nextItems,
       headerInfo,
@@ -200,69 +191,6 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
       { entregados: 0, devueltos: 0, diferencia: 0 }
     );
   }, [items]);
-
-  const handleGuardar = async () => {
-    if (items.length === 0) return;
-
-    const payloadItems = [];
-    for (const it of items) {
-      const entStr = String(it.cajones_entregados ?? '').trim() || '0';
-      const devStr = String(it.cajones_devueltos ?? '').trim() || '0';
-
-      if (!NON_NEGATIVE_INT_REGEX.test(entStr) || !NON_NEGATIVE_INT_REGEX.test(devStr)) {
-        setErrorMsg(`Las cantidades de cajones para "${it.Cliente}" deben ser números enteros positivos o cero.`);
-        return;
-      }
-
-      payloadItems.push({
-        Id_etapa: it.Id_etapa || null,
-        Lugar_de_Entrega: it.Lugar_de_Entrega,
-        id_cliente: it.id_cliente || null,
-        Cliente: it.Cliente,
-        cajones_entregados: parseInt(entStr, 10),
-        cajones_devueltos: parseInt(devStr, 10),
-        id_remito_cajones_entrega: it.id_remito_cajones_entrega || null,
-        id_remito_cajones_item_entrega: it.id_remito_cajones_item_entrega || null,
-        id_remito_cajones_devolucion: it.id_remito_cajones_devolucion || null,
-        id_remito_cajones_item_devolucion: it.id_remito_cajones_item_devolucion || null,
-        observaciones: it.observaciones || ''
-      });
-    }
-
-    try {
-      setSaving(true);
-      setErrorMsg(null);
-
-      if (navigator.onLine) {
-        const res = await saveCajonesHojaRuta(hojaRuta.Transaccionid, payloadItems);
-        await cacheCajones(hojaRuta.Transaccionid, {
-          hoja_ruta: headerInfo,
-          items: payloadItems
-        });
-        clearSectionDirty(user?.email, hojaRuta.Transaccionid, 'cajones');
-        setIsDirty(false);
-        setSuccessMsg(res?.message || 'Movimientos de cajones guardados con éxito.');
-      } else {
-        await queuePendingControl({
-          op_type: 'cajones',
-          transaccionId: hojaRuta.Transaccionid,
-          items: payloadItems
-        });
-        await cacheCajones(hojaRuta.Transaccionid, {
-          hoja_ruta: headerInfo,
-          items: payloadItems
-        });
-        clearSectionDirty(user?.email, hojaRuta.Transaccionid, 'cajones');
-        setIsDirty(false);
-        await refreshPendingCount();
-        setSuccessMsg('Sin conexión: movimientos de cajones guardados en cola local.');
-      }
-    } catch (err) {
-      setErrorMsg(err.response?.data?.error || err.message || 'No se pudieron guardar los movimientos de cajones.');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div className="module-page page-transition">
@@ -424,15 +352,6 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
         </div>
       )}
 
-      {!loading && isDirty && items.length > 0 && (
-        <SaveFab
-          variant="cajones"
-          onClick={handleGuardar}
-          saving={saving}
-          title="Confirmar y guardar cajones"
-        />
-      )}
-
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div
@@ -497,15 +416,6 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
         title="Validación de Cajones"
         message={errorMsg}
         confirmText="Corregir"
-      />
-
-      <AlertModal
-        isOpen={Boolean(successMsg)}
-        onClose={() => setSuccessMsg(null)}
-        type="success"
-        title="Cajones Registrados"
-        message={successMsg}
-        confirmText="Aceptar"
       />
     </div>
   );

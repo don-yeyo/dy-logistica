@@ -1,7 +1,9 @@
 import {
   saveEntregasHojaRuta,
   saveDevolucionesHojaRuta,
-  saveCajonesHojaRuta
+  saveCajonesHojaRuta,
+  submitControlRemito,
+  uploadFotoRemito
 } from './api';
 import {
   cacheEntregas,
@@ -13,6 +15,31 @@ import { getHojaRutaDraft, clearSectionDirty } from './draftStorage';
 
 const NON_NEGATIVE_INT_REGEX = /^\d+$/;
 const POSITIVE_INT_NONZERO = /^[1-9]\d*$/;
+const EJEMPLAR_ORDER = [
+  'ORIGINAL',
+  'DUPLICADO',
+  'TRIPLICADO',
+  'CUATRIPLICADO',
+  'RECEPCION_VALORIZADA',
+  'OTRO'
+];
+
+export function dataUrlToFile(dataUrl, fileName = 'foto_remito.jpg') {
+  const parts = String(dataUrl || '').split(',');
+  if (parts.length < 2) return null;
+  const mimeMatch = parts[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  const binary = atob(parts[1]);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  try {
+    return new File([bytes], fileName, { type: mime });
+  } catch {
+    return new Blob([bytes], { type: mime });
+  }
+}
 
 export function dispatchDraftSaved(transaccionId, sections = []) {
   if (typeof window === 'undefined') return;
@@ -51,7 +78,10 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
     }
 
     if (payloadItems.length === 0) {
-      clearSectionDirty(email, txId, 'entregas', { openLugares: draft.openLugares || {} });
+      clearSectionDirty(email, txId, 'entregas', {
+        openLugares: draft.openLugares || {},
+        unconfirmedDb: false
+      });
       return { ok: true };
     }
 
@@ -80,7 +110,10 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
       if (refreshPendingCount) await refreshPendingCount();
     }
 
-    clearSectionDirty(email, txId, 'entregas', { openLugares: draft.openLugares || {} });
+    clearSectionDirty(email, txId, 'entregas', {
+      openLugares: draft.openLugares || {},
+      unconfirmedDb: false
+    });
     dispatchDraftSaved(txId, ['entregas']);
     return { ok: true };
   }
@@ -211,6 +244,117 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
 
     clearSectionDirty(email, txId, 'cajones');
     dispatchDraftSaved(txId, ['cajones']);
+    return { ok: true };
+  }
+
+  if (section === 'remitos') {
+    const entries = Object.values(draft.byRemitoId || {});
+
+    for (const entry of entries) {
+      const ejMap = entry?.ejemplaresMap || {};
+      const orderedEjemplares = EJEMPLAR_ORDER.filter((k) => Boolean(ejMap[k])).map((k) => ejMap[k]);
+      const extraKeys = Object.keys(ejMap).filter((k) => !EJEMPLAR_ORDER.includes(k));
+      for (const k of extraKeys) {
+        if (ejMap[k]) orderedEjemplares.push(ejMap[k]);
+      }
+
+      const labelRemito = entry.comprobante || entry.remitoId;
+      if (orderedEjemplares.length === 0) {
+        throw new Error(
+          `En Remitos (${labelRemito}), debés seleccionar al menos un ejemplar recibido.`
+        );
+      }
+
+      for (const ej of orderedEjemplares) {
+        if (!ej.no_firmado && !ej.firmado_cliente && !ej.firmado_intermediario) {
+          throw new Error(
+            `En Remitos (${labelRemito}), el ejemplar "${ej.ejemplar}" debe tener al menos un firmante o "No Firmado".`
+          );
+        }
+      }
+
+      const serializedEjemplares = [];
+      for (const ej of orderedEjemplares) {
+        let fotoUrl = ej.foto_url || null;
+        let fotoSharepointUrl = ej.foto_sharepoint_url || null;
+        let fotoNombreArchivo = ej.foto_nombre_archivo || null;
+
+        if (navigator.onLine && ej.capturedPhotoDataUrl && !fotoUrl) {
+          try {
+            const fileObj = dataUrlToFile(
+              ej.capturedPhotoDataUrl,
+              `remito_${entry.remitoId}_${ej.ejemplar}.jpg`
+            );
+            if (fileObj) {
+              const formData = new FormData();
+              formData.append('foto', fileObj);
+              formData.append('remito_id', entry.remitoId);
+              formData.append('comprobante', entry.comprobante || '');
+              formData.append('ejemplar', ej.ejemplar);
+
+              const uploadRes = await uploadFotoRemito(formData);
+              if (uploadRes && uploadRes.ok && uploadRes.foto) {
+                fotoUrl = uploadRes.foto.url;
+                fotoNombreArchivo = uploadRes.foto.fileName;
+                fotoSharepointUrl = uploadRes.foto.sharepointUrl;
+              }
+            }
+          } catch (uploadErr) {
+            console.warn(`[DraftSaver] Error subiendo foto de ${ej.ejemplar}:`, uploadErr);
+          }
+        }
+
+        serializedEjemplares.push({
+          ejemplar: ej.ejemplar,
+          firmado_cliente: Boolean(ej.firmado_cliente),
+          firmado_intermediario: Boolean(ej.firmado_intermediario),
+          no_firmado: Boolean(ej.no_firmado),
+          observaciones: ej.observaciones || '',
+          foto_url: fotoUrl,
+          foto_sharepoint_url: fotoSharepointUrl,
+          foto_nombre_archivo: fotoNombreArchivo
+        });
+      }
+
+      const anyCliente = serializedEjemplares.some((e) => e.firmado_cliente);
+      const anyInterm = serializedEjemplares.some((e) => e.firmado_intermediario);
+      const estadoFirmaConsolidado =
+        anyCliente && anyInterm
+          ? 'FIRMADO_AMBOS'
+          : anyCliente
+          ? 'FIRMADO_CLIENTE'
+          : anyInterm
+          ? 'FIRMADO_INTERMEDIARIO'
+          : 'NO_FIRMADO';
+
+      const sig = entry.signatureInfo || {};
+      const payload = {
+        ejemplares: serializedEjemplares,
+        ejemplar: serializedEjemplares[0].ejemplar,
+        estado_firma: estadoFirmaConsolidado,
+        firma_digital_base64: sig.firma_digital_base64 || null,
+        firma_receptor_aclaracion: sig.firma_receptor_aclaracion || null,
+        firma_receptor_dni: sig.firma_receptor_dni || null,
+        id_etapa: entry.id_etapa || null,
+        comprobante: entry.comprobante || null,
+        sincronizado_offline: !navigator.onLine ? 1 : 0
+      };
+
+      if (navigator.onLine) {
+        await submitControlRemito(entry.remitoId, payload);
+      } else {
+        await queuePendingControl({
+          op_type: 'remito',
+          remito_id: entry.remitoId,
+          comprobante: entry.comprobante,
+          ...payload
+        });
+        if (refreshPendingCount) await refreshPendingCount();
+      }
+    }
+
+    clearSectionDirty(email, txId, 'remitos', { byRemitoId: {} });
+    dispatchDraftSaved(txId, ['remitos']);
     return { ok: true };
   }
 

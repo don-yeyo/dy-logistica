@@ -3,17 +3,14 @@ import HojaRutaHeader from '../components/HojaRutaHeader';
 import AlertModal from '../components/AlertModal';
 import ProductCombobox from '../components/ProductCombobox';
 import BarcodeScanner from '../components/BarcodeScanner';
-import SaveFab from '../components/SaveFab';
-import { fetchDevolucionesHojaRuta, saveDevolucionesHojaRuta } from '../services/api';
+import { fetchDevolucionesHojaRuta } from '../services/api';
 import {
   cacheDevoluciones,
-  getCachedDevoluciones,
-  queuePendingControl
+  getCachedDevoluciones
 } from '../services/offlineStorage';
 import {
   getHojaRutaDraft,
-  patchSectionDraft,
-  clearSectionDirty
+  patchSectionDraft
 } from '../services/draftStorage';
 import { useAuth } from '../config/AuthContext';
 import {
@@ -105,20 +102,17 @@ function normalizeBarcode(val) {
  * Persiste estado de acordeones y borradores en localStorage hasta confirmar en DB.
  */
 export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
-  const { user, refreshPendingCount } = useAuth();
+  const { user } = useAuth();
   const [headerInfo, setHeaderInfo] = useState(hojaRuta);
   const [grupos, setGrupos] = useState([]);
   const [catalogos, setCatalogos] = useState({ productos: [], clientes: [], motivos: [] });
   const [expandedLugares, setExpandedLugares] = useState({});
   const [expandedClientes, setExpandedClientes] = useState({});
-  const [isDirty, setIsDirty] = useState(false);
   const [clientModalLugar, setClientModalLugar] = useState(null);
   const [clientSearch, setClientSearch] = useState('');
   const [scannerTarget, setScannerTarget] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
-  const [successMsg, setSuccessMsg] = useState(null);
 
   const sortedMotivos = useMemo(() => {
     return [...(catalogos.motivos || [])].sort((a, b) =>
@@ -137,10 +131,8 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
 
     if (draft?.dirty && Array.isArray(draft.grupos)) {
       setGrupos(draft.grupos);
-      setIsDirty(true);
     } else {
       setGrupos(tree);
-      setIsDirty(false);
     }
 
     if (draft?.expandedLugares !== undefined) {
@@ -249,7 +241,6 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
   };
 
   const persistGruposDraft = (nextGrupos, nextExpLugares = expandedLugares, nextExpClientes = expandedClientes) => {
-    setIsDirty(true);
     patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'devoluciones', {
       grupos: nextGrupos,
       expandedLugares: nextExpLugares,
@@ -451,96 +442,6 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
 
     setClientModalLugar(null);
     setClientSearch('');
-  };
-
-  const handleGuardar = async () => {
-    const clientesConProductos = [];
-
-    for (const grupo of grupos) {
-      for (const cli of grupo.clientes) {
-        if (!cli.productos || cli.productos.length === 0) continue;
-
-        for (const prod of cli.productos) {
-          if (!prod.id_producto) {
-            setErrorMsg(`Debe seleccionar un producto válido de la lista para la devolución en ${cli.Cliente}.`);
-            return;
-          }
-          const cantStr = String(prod.Cantidad ?? '').trim();
-          if (!POSITIVE_INT_NONZERO.test(cantStr)) {
-            setErrorMsg(`La cantidad devuelta para "${prod.Producto || 'Producto'}" en ${cli.Cliente} debe ser un entero mayor a 0.`);
-            return;
-          }
-          if (!prod.codigo_motivo_dif || !prod.Motivo || !String(prod.Motivo).trim()) {
-            setErrorMsg(`El motivo es obligatorio: seleccione un motivo para "${prod.Producto || 'Producto'}" en ${cli.Cliente}.`);
-            return;
-          }
-        }
-
-        clientesConProductos.push({
-          Lugar_de_Entrega: cli.Lugar_de_Entrega,
-          id_cliente: cli.id_cliente,
-          Cliente: cli.Cliente,
-          id_etapa: cli.id_etapa || `${hojaRuta.Transaccionid}-${cli.id_cliente}`,
-          fecha: cli.fecha || (headerInfo?.Fecha ? String(headerInfo.Fecha).slice(0, 10) : new Date().toISOString().slice(0, 10)),
-          id_remito_devoluciones: cli.id_remito_devoluciones || null,
-          productos: cli.productos.map((p) => ({
-            id_remito_devoluciones_item: p.id_remito_devoluciones_item || null,
-            id_producto: p.id_producto,
-            Producto: p.Producto,
-            Cantidad: parseInt(String(p.Cantidad).trim(), 10),
-            Vencimiento: p.Vencimiento || null,
-            codigo_motivo_dif: p.codigo_motivo_dif || null,
-            Motivo: p.Motivo.trim(),
-            Tipo: p.Tipo === 'Virtual' ? 'Virtual' : 'Físico'
-          }))
-        });
-      }
-    }
-
-    if (clientesConProductos.length === 0) {
-      setErrorMsg('Agregue al menos un producto devuelto con cantidad y motivo antes de guardar.');
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setErrorMsg(null);
-
-      if (navigator.onLine) {
-        const res = await saveDevolucionesHojaRuta(hojaRuta.Transaccionid, clientesConProductos);
-        if (res && res.ok) {
-          await cacheDevoluciones(hojaRuta.Transaccionid, {
-            hoja_ruta: headerInfo,
-            rows: res.rows,
-            catalogos
-          });
-          clearSectionDirty(user?.email, hojaRuta.Transaccionid, 'devoluciones', {
-            expandedLugares,
-            expandedClientes
-          });
-          setIsDirty(false);
-          applyLoadedData(headerInfo, res.rows, catalogos);
-          setSuccessMsg(res.message || 'Devoluciones registradas correctamente.');
-        }
-      } else {
-        await queuePendingControl({
-          op_type: 'devoluciones',
-          transaccionId: hojaRuta.Transaccionid,
-          clientes: clientesConProductos
-        });
-        clearSectionDirty(user?.email, hojaRuta.Transaccionid, 'devoluciones', {
-          expandedLugares,
-          expandedClientes
-        });
-        setIsDirty(false);
-        await refreshPendingCount();
-        setSuccessMsg('Sin conexión: devoluciones guardadas localmente para sincronizar automáticamente.');
-      }
-    } catch (err) {
-      setErrorMsg(err.response?.data?.error || err.message || 'Error al guardar las devoluciones.');
-    } finally {
-      setSaving(false);
-    }
   };
 
   const filteredCatalogClients = (catalogos.clientes || []).filter((c) => {
@@ -871,15 +772,6 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
         </div>
       )}
 
-      {!loading && isDirty && (
-        <SaveFab
-          variant="devoluciones"
-          onClick={handleGuardar}
-          saving={saving}
-          title="Confirmar y guardar devoluciones"
-        />
-      )}
-
       {/* Modal Escáner MTX de Producto */}
       {scannerTarget && (
         <div className="modal-overlay" onClick={() => setScannerTarget(null)}>
@@ -984,15 +876,6 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
         title="Validación de Devoluciones"
         message={errorMsg}
         confirmText="Revisar"
-      />
-
-      <AlertModal
-        isOpen={Boolean(successMsg)}
-        onClose={() => setSuccessMsg(null)}
-        type="success"
-        title="Devoluciones Guardadas"
-        message={successMsg}
-        confirmText="Aceptar"
       />
     </div>
   );

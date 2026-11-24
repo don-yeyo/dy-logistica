@@ -1,17 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import HojaRutaHeader from '../components/HojaRutaHeader';
 import AlertModal from '../components/AlertModal';
-import SaveFab from '../components/SaveFab';
-import { fetchEntregasHojaRuta, saveEntregasHojaRuta } from '../services/api';
+import { fetchEntregasHojaRuta } from '../services/api';
 import {
   cacheEntregas,
-  getCachedEntregas,
-  queuePendingControl
+  getCachedEntregas
 } from '../services/offlineStorage';
 import {
   getHojaRutaDraft,
-  patchSectionDraft,
-  clearSectionDirty
+  patchSectionDraft
 } from '../services/draftStorage';
 import { useAuth } from '../config/AuthContext';
 import {
@@ -42,7 +39,7 @@ function computeHasEntregasChanges(currentMap, baseMap) {
  * Mantiene estado de acordeones y borradores editados en localStorage entre pantallas.
  */
 export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
-  const { user, refreshPendingCount } = useAuth();
+  const { user } = useAuth();
   const [headerInfo, setHeaderInfo] = useState(hojaRuta);
   const [items, setItems] = useState([]);
   const [entregadoMap, setEntregadoMap] = useState({});
@@ -51,11 +48,8 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
     const draft = getHojaRutaDraft(user?.email, hojaRuta?.Transaccionid);
     return draft.entregas?.openLugares || {};
   });
-  const [isDirty, setIsDirty] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
-  const [successMsg, setSuccessMsg] = useState(null);
 
   const baseEntregadoMapRef = useRef({});
 
@@ -108,11 +102,18 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
       }
       baseEntregadoMapRef.current = baseMap;
 
+      const hasUnconfirmed = loadedItems.some(
+        (it) => it.Entregado === null || it.Entregado === undefined
+      );
       const draft = getHojaRutaDraft(user?.email, hojaRuta.Transaccionid).entregas;
+      const resolvedOpenLugares =
+        draft?.openLugares !== undefined ? draft.openLugares : openLugares;
       if (draft?.openLugares !== undefined) {
         setOpenLugares(draft.openLugares);
       }
 
+      let finalMap = baseMap;
+      let nextDirty = false;
       if (draft?.dirty && draft?.entregadoMap) {
         const restoredMap = { ...baseMap };
         for (const it of loadedItems) {
@@ -120,13 +121,21 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
             restoredMap[it.Hojarutaitemid] = String(draft.entregadoMap[it.Hojarutaitemid]);
           }
         }
-        setEntregadoMap(restoredMap);
-        setIsDirty(computeHasEntregasChanges(restoredMap, baseMap) || true);
-      } else {
-        setEntregadoMap(baseMap);
-        setIsDirty(false);
+        finalMap = restoredMap;
+        nextDirty = computeHasEntregasChanges(restoredMap, baseMap) || true;
       }
+
+      setEntregadoMap(finalMap);
       setInvalidIds({});
+
+      patchSectionDraft(user?.email, hojaRuta.Transaccionid, 'entregas', {
+        openLugares: resolvedOpenLugares,
+        entregadoMap: finalMap,
+        items: loadedItems,
+        headerInfo: loadedHeader,
+        unconfirmedDb: hasUnconfirmed,
+        dirty: nextDirty
+      });
     } catch (err) {
       setErrorMsg(err.response?.data?.error || err.message || 'Error al cargar los ítems a entregar.');
     } finally {
@@ -187,11 +196,6 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
     return lugares;
   }, [items]);
 
-  const hasUnconfirmedDbItems = useMemo(
-    () => items.some((it) => it.Entregado === null || it.Entregado === undefined),
-    [items]
-  );
-
   const toggleLugar = (lugarKey) => {
     setOpenLugares((prev) => {
       const next = {
@@ -207,7 +211,6 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
 
   const syncEntregadoDraft = (nextMap) => {
     const hasChanges = computeHasEntregasChanges(nextMap, baseEntregadoMapRef.current);
-    setIsDirty(hasChanges);
     patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'entregas', {
       openLugares,
       entregadoMap: nextMap,
@@ -271,95 +274,6 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
     input.select();
     requestAnimationFrame(() => input.select());
   };
-
-  const handleGuardar = async () => {
-    if (items.length === 0) return;
-
-    const newInvalids = {};
-    const invalidLugares = {};
-    const payloadItems = [];
-
-    for (const item of items) {
-      const valStr = String(entregadoMap[item.Hojarutaitemid] ?? '').trim();
-      if (!POSITIVE_INT_REGEX.test(valStr)) {
-        newInvalids[item.Hojarutaitemid] = true;
-        invalidLugares[item.Lugar_de_Entrega || 'Sin Lugar de Entrega'] = true;
-      } else {
-        payloadItems.push({
-          Hojarutaitemid: item.Hojarutaitemid,
-          Entregado: parseInt(valStr, 10)
-        });
-      }
-    }
-
-    if (Object.keys(newInvalids).length > 0) {
-      setInvalidIds(newInvalids);
-      setOpenLugares((prev) => {
-        const next = { ...prev, ...invalidLugares };
-        patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'entregas', { openLugares: next });
-        return next;
-      });
-      setErrorMsg(
-        'Todos los productos deben tener una cantidad entregada válida (únicamente números enteros positivos, sin decimales, negativos ni campos vacíos).'
-      );
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setErrorMsg(null);
-
-      const updatedItemsList = items.map((it) => ({
-        ...it,
-        Entregado: parseInt(String(entregadoMap[it.Hojarutaitemid]).trim(), 10)
-      }));
-
-      if (navigator.onLine) {
-        const res = await saveEntregasHojaRuta(hojaRuta.Transaccionid, payloadItems);
-        const finalItems = res?.items || updatedItemsList;
-        setItems(finalItems);
-        const nextBase = {};
-        for (const it of finalItems) {
-          nextBase[it.Hojarutaitemid] = String(it.Entregado ?? it.Remitido ?? 0);
-        }
-        baseEntregadoMapRef.current = nextBase;
-        setEntregadoMap(nextBase);
-        await cacheEntregas(hojaRuta.Transaccionid, {
-          hoja_ruta: headerInfo,
-          items: finalItems
-        });
-        clearSectionDirty(user?.email, hojaRuta.Transaccionid, 'entregas', { openLugares });
-        setIsDirty(false);
-        setSuccessMsg(res?.message || 'Descarga confirmada correctamente.');
-      } else {
-        await queuePendingControl({
-          op_type: 'entregas',
-          transaccionId: hojaRuta.Transaccionid,
-          items: payloadItems
-        });
-        setItems(updatedItemsList);
-        const nextBase = {};
-        for (const it of updatedItemsList) {
-          nextBase[it.Hojarutaitemid] = String(it.Entregado ?? it.Remitido ?? 0);
-        }
-        baseEntregadoMapRef.current = nextBase;
-        await cacheEntregas(hojaRuta.Transaccionid, {
-          hoja_ruta: headerInfo,
-          items: updatedItemsList
-        });
-        clearSectionDirty(user?.email, hojaRuta.Transaccionid, 'entregas', { openLugares });
-        setIsDirty(false);
-        await refreshPendingCount();
-        setSuccessMsg('Sin conexión: confirmación guardada localmente y encolada para sincronizar.');
-      }
-    } catch (err) {
-      setErrorMsg(err.response?.data?.error || err.message || 'No se pudo guardar la confirmación de descarga.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const showSaveFab = !loading && items.length > 0 && (isDirty || hasUnconfirmedDbItems);
 
   return (
     <div className="module-page page-transition">
@@ -491,15 +405,6 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
         </div>
       )}
 
-      {showSaveFab && (
-        <SaveFab
-          variant="entregas"
-          onClick={handleGuardar}
-          saving={saving}
-          title="Confirmar y guardar entregas"
-        />
-      )}
-
       <AlertModal
         isOpen={Boolean(errorMsg)}
         onClose={() => setErrorMsg(null)}
@@ -507,15 +412,6 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
         title="Validación de Entregas"
         message={errorMsg}
         confirmText="Corregir"
-      />
-
-      <AlertModal
-        isOpen={Boolean(successMsg)}
-        onClose={() => setSuccessMsg(null)}
-        type="success"
-        title="Descarga Confirmada"
-        message={successMsg}
-        confirmText="Aceptar"
       />
     </div>
   );

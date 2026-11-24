@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { submitControlRemito, uploadFotoRemito } from '../services/api';
 import { queuePendingControl } from '../services/offlineStorage';
+import { getHojaRutaDraft, patchRemitoItemDraft } from '../services/draftStorage';
+import { dataUrlToFile } from '../services/draftSaver';
 import { useAuth } from '../config/AuthContext';
 import CameraCapture from '../components/CameraCapture';
 import SignaturePad from '../components/SignaturePad';
@@ -98,8 +100,53 @@ function formatSignersShort(ej) {
   return 'Falta firmar';
 }
 
-export default function RemitoDetail({ remito, onBack, onSaved }) {
-  const { refreshPendingCount } = useAuth();
+function serializeEjemplaresMap(ejemplaresMap = {}) {
+  const out = {};
+  for (const item of EJEMPLARES) {
+    const ej = ejemplaresMap[item.key];
+    if (!ej) continue;
+    out[item.key] = {
+      ejemplar: ej.ejemplar || item.key,
+      firmado_cliente: Boolean(ej.firmado_cliente),
+      firmado_intermediario: Boolean(ej.firmado_intermediario),
+      no_firmado: Boolean(ej.no_firmado),
+      observaciones: ej.observaciones || '',
+      foto_url: ej.foto_url || null,
+      foto_sharepoint_url: ej.foto_sharepoint_url || null,
+      foto_nombre_archivo: ej.foto_nombre_archivo || null,
+      capturedPhotoDataUrl: ej.capturedPhoto?.dataUrl || ej.capturedPhotoDataUrl || null
+    };
+  }
+  return out;
+}
+
+function serializeRemitoSnapshot(ejemplaresMap, signatureInfo) {
+  return {
+    ejemplaresMap: serializeEjemplaresMap(ejemplaresMap),
+    signatureInfo: {
+      firma_digital_base64: signatureInfo?.firma_digital_base64 || null,
+      firma_receptor_aclaracion: signatureInfo?.firma_receptor_aclaracion || '',
+      firma_receptor_dni: signatureInfo?.firma_receptor_dni || ''
+    }
+  };
+}
+
+function hydrateDraftEjemplares(ejemplaresMap = {}) {
+  const out = {};
+  for (const [k, ej] of Object.entries(ejemplaresMap)) {
+    if (!ej) continue;
+    out[k] = {
+      ...createEmptyEjemplar(k),
+      ...ej,
+      capturedPhoto: ej.capturedPhotoDataUrl ? { dataUrl: ej.capturedPhotoDataUrl } : null
+    };
+  }
+  return out;
+}
+
+export default function RemitoDetail({ remito, hojaRuta, onBack, onSaved }) {
+  const { user, refreshPendingCount } = useAuth();
+  const initialSnapshotRef = useRef('');
 
   const [initialState] = useState(() => buildInitialEjemplares(remito));
   const [ejemplaresMap, setEjemplaresMap] = useState(initialState.map);
@@ -114,15 +161,69 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
   const [errorMessage, setErrorMessage] = useState(null);
 
   useEffect(() => {
-    const next = buildInitialEjemplares(remito);
-    setEjemplaresMap(next.map);
-    setActiveEjemplar(next.firstKey);
-    setSignatureInfo({
+    const base = buildInitialEjemplares(remito);
+    const baseSig = {
       firma_digital_base64: remito.firma_digital_base64 || null,
       firma_receptor_aclaracion: remito.firma_receptor_aclaracion || '',
       firma_receptor_dni: remito.firma_receptor_dni || ''
-    });
-  }, [remito]);
+    };
+    initialSnapshotRef.current = JSON.stringify(serializeRemitoSnapshot(base.map, baseSig));
+
+    const savedDraft =
+      getHojaRutaDraft(user?.email, hojaRuta?.Transaccionid).remitos?.byRemitoId?.[String(remito.id)];
+
+    if (savedDraft) {
+      const hydratedMap = hydrateDraftEjemplares(savedDraft.ejemplaresMap || {});
+      const firstKey =
+        EJEMPLARES.map((e) => e.key).find((k) => Boolean(hydratedMap[k])) || null;
+      setEjemplaresMap(hydratedMap);
+      setActiveEjemplar(firstKey);
+      setSignatureInfo({
+        firma_digital_base64: savedDraft.signatureInfo?.firma_digital_base64 || null,
+        firma_receptor_aclaracion: savedDraft.signatureInfo?.firma_receptor_aclaracion || '',
+        firma_receptor_dni: savedDraft.signatureInfo?.firma_receptor_dni || ''
+      });
+    } else {
+      setEjemplaresMap(base.map);
+      setActiveEjemplar(base.firstKey);
+      setSignatureInfo(baseSig);
+    }
+  }, [remito, user?.email, hojaRuta?.Transaccionid]);
+
+  useEffect(() => {
+    const onExternalSaved = (e) => {
+      if (
+        Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid) &&
+        Array.isArray(e.detail?.sections) &&
+        e.detail.sections.includes('remitos')
+      ) {
+        if (onSaved) onSaved(remito);
+      }
+    };
+    window.addEventListener('dy-draft-saved', onExternalSaved);
+    return () => window.removeEventListener('dy-draft-saved', onExternalSaved);
+  }, [hojaRuta?.Transaccionid, onSaved, remito]);
+
+  const syncRemitoDraft = useCallback(
+    (nextMap, nextSig) => {
+      if (!user?.email || !hojaRuta?.Transaccionid || !remito?.id) return;
+      const snapshot = serializeRemitoSnapshot(nextMap, nextSig);
+      const changed = JSON.stringify(snapshot) !== initialSnapshotRef.current;
+
+      if (changed) {
+        patchRemitoItemDraft(user.email, hojaRuta.Transaccionid, remito.id, {
+          remitoId: remito.id,
+          comprobante: remito.finne_Comprobante || null,
+          id_etapa: remito.id_etapa || null,
+          ejemplaresMap: snapshot.ejemplaresMap,
+          signatureInfo: snapshot.signatureInfo
+        });
+      } else {
+        patchRemitoItemDraft(user.email, hojaRuta.Transaccionid, remito.id, null);
+      }
+    },
+    [user?.email, hojaRuta?.Transaccionid, remito?.id, remito?.finne_Comprobante, remito?.id_etapa]
+  );
 
   let formattedDate = remito.finne_Fecha || '';
   if (formattedDate.includes('T')) {
@@ -137,39 +238,39 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
   const activeMeta = EJEMPLARES.find((e) => e.key === activeEjemplar);
 
   const handleSelectOrAddEjemplar = (key) => {
-    setEjemplaresMap((prev) => {
-      if (prev[key]) return prev;
-      return {
-        ...prev,
+    if (!ejemplaresMap[key]) {
+      const nextMap = {
+        ...ejemplaresMap,
         [key]: createEmptyEjemplar(key)
       };
-    });
+      setEjemplaresMap(nextMap);
+      syncRemitoDraft(nextMap, signatureInfo);
+    }
     setActiveEjemplar(key);
   };
 
   const handleRemoveEjemplar = (key) => {
-    setEjemplaresMap((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      const remaining = EJEMPLARES.map((e) => e.key).filter((k) => Boolean(next[k]));
-      if (activeEjemplar === key) {
-        setActiveEjemplar(remaining[0] || null);
-      }
-      return next;
-    });
+    const nextMap = { ...ejemplaresMap };
+    delete nextMap[key];
+    const remaining = EJEMPLARES.map((e) => e.key).filter((k) => Boolean(nextMap[k]));
+    if (activeEjemplar === key) {
+      setActiveEjemplar(remaining[0] || null);
+    }
+    setEjemplaresMap(nextMap);
+    syncRemitoDraft(nextMap, signatureInfo);
   };
 
   const updateActiveEjemplar = (updater) => {
     if (!activeEjemplar) return;
-    setEjemplaresMap((prev) => {
-      const cur = prev[activeEjemplar];
-      if (!cur) return prev;
-      const updated = typeof updater === 'function' ? updater(cur) : { ...cur, ...updater };
-      return {
-        ...prev,
-        [activeEjemplar]: updated
-      };
-    });
+    const cur = ejemplaresMap[activeEjemplar];
+    if (!cur) return;
+    const updated = typeof updater === 'function' ? updater(cur) : { ...cur, ...updater };
+    const nextMap = {
+      ...ejemplaresMap,
+      [activeEjemplar]: updated
+    };
+    setEjemplaresMap(nextMap);
+    syncRemitoDraft(nextMap, signatureInfo);
   };
 
   const handleToggleSigner = (signer) => {
@@ -227,10 +328,16 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
         let fotoSharepointUrl = d.foto_sharepoint_url || null;
         let fotoNombreArchivo = d.foto_nombre_archivo || null;
 
-        if (d.capturedPhoto && d.capturedPhoto.file && navigator.onLine) {
+        const photoFile =
+          d.capturedPhoto?.file ||
+          (d.capturedPhoto?.dataUrl
+            ? dataUrlToFile(d.capturedPhoto.dataUrl, `remito_${remito.id}_${d.ejemplar}.jpg`)
+            : null);
+
+        if (photoFile && navigator.onLine) {
           try {
             const formData = new FormData();
-            formData.append('foto', d.capturedPhoto.file);
+            formData.append('foto', photoFile);
             formData.append('remito_id', remito.id);
             formData.append('comprobante', remito.finne_Comprobante || '');
             formData.append('ejemplar', d.ejemplar);
@@ -291,6 +398,10 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
           ...payload
         });
         await refreshPendingCount();
+      }
+
+      if (user?.email && hojaRuta?.Transaccionid) {
+        patchRemitoItemDraft(user.email, hojaRuta.Transaccionid, remito.id, null);
       }
 
       setSuccessModal(true);
@@ -485,14 +596,19 @@ export default function RemitoDetail({ remito, onBack, onSaved }) {
           signatureDataUrl={signatureInfo.firma_digital_base64}
           aclaracion={signatureInfo.firma_receptor_aclaracion}
           dni={signatureInfo.firma_receptor_dni}
-          onConfirm={(sigData) => setSignatureInfo(sigData)}
-          onClear={() =>
-            setSignatureInfo({
+          onConfirm={(sigData) => {
+            setSignatureInfo(sigData);
+            syncRemitoDraft(ejemplaresMap, sigData);
+          }}
+          onClear={() => {
+            const cleared = {
               firma_digital_base64: null,
               firma_receptor_aclaracion: '',
               firma_receptor_dni: ''
-            })
-          }
+            };
+            setSignatureInfo(cleared);
+            syncRemitoDraft(ejemplaresMap, cleared);
+          }}
         />
       </div>
 

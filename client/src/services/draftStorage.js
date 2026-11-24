@@ -61,6 +61,26 @@ export function patchSectionDraft(email, transaccionId, section, patch) {
   dispatchDraftChanged(email, transaccionId, section);
 }
 
+export function patchRemitoItemDraft(email, transaccionId, remitoId, remitoDraft) {
+  if (!email || !transaccionId || !remitoId) return;
+  const current = getHojaRutaDraft(email, transaccionId);
+  const prevByRemito = { ...(current.remitos?.byRemitoId || {}) };
+  const key = String(remitoId);
+
+  if (remitoDraft) {
+    prevByRemito[key] = remitoDraft;
+  } else {
+    delete prevByRemito[key];
+  }
+
+  const hasDirty = Object.keys(prevByRemito).length > 0;
+  patchSectionDraft(email, transaccionId, 'remitos', {
+    byRemitoId: prevByRemito,
+    dirty: hasDirty,
+    dirtySince: hasDirty ? Date.now() : null
+  });
+}
+
 export function clearSectionDirty(email, transaccionId, section, uiStateToKeep = {}) {
   if (!email || !transaccionId || !section) return;
   const current = getHojaRutaDraft(email, transaccionId);
@@ -97,6 +117,8 @@ export function getDirtySummary(email, transaccionId) {
   const entregas = Boolean(draft.entregas?.dirty);
   const devoluciones = Boolean(draft.devoluciones?.dirty);
   const cajones = Boolean(draft.cajones?.dirty);
+  const remitos = Boolean(draft.remitos?.dirty);
+  const entregasUnconfirmed = Boolean(draft.entregas?.unconfirmedDb);
   const dirtySections = [];
   const dirtyTimes = [];
 
@@ -112,11 +134,17 @@ export function getDirtySummary(email, transaccionId) {
     dirtySections.push('cajones');
     if (draft.cajones?.dirtySince) dirtyTimes.push(draft.cajones.dirtySince);
   }
+  if (remitos) {
+    dirtySections.push('remitos');
+    if (draft.remitos?.dirtySince) dirtyTimes.push(draft.remitos.dirtySince);
+  }
 
   return {
     entregas,
     devoluciones,
     cajones,
+    remitos,
+    entregasUnconfirmed,
     anyDirty: dirtySections.length > 0,
     dirtySections,
     lastDirtyAt: dirtyTimes.length > 0 ? Math.max(...dirtyTimes) : null

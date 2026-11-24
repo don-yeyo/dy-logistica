@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertCircle, CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 
 const ICONS = {
@@ -56,8 +57,8 @@ export default function AlertModal({
   const config = ICONS[type] || ICONS.error;
   const IconComponent = config.icon;
 
-  return (
-    <div className="modal-overlay page-transition" onClick={onClose}>
+  const modalContent = (
+    <div className="modal-overlay" onClick={onClose}>
       <div 
         className="modal-card glass" 
         onClick={(e) => e.stopPropagation()}
@@ -158,4 +159,8 @@ export default function AlertModal({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined'
+    ? createPortal(modalContent, document.body)
+    : modalContent;
 }
