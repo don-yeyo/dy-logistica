@@ -8,7 +8,6 @@ import {
   Package,
   Users,
   ShieldAlert,
-  Smartphone,
   LogOut,
   Sun,
   Moon,
@@ -31,7 +30,7 @@ function getInitials(nombre, email) {
   return String(email || 'DY').slice(0, 2).toUpperCase();
 }
 
-export default function AdminLayout({ user, activeTab, onSelectTab, onSwitchToMobile, children }) {
+export default function AdminLayout({ user, activeTab, onSelectTab, children }) {
   const { logout, impersonationEnabled, availableUsers, impersonateUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -260,20 +259,6 @@ export default function AdminLayout({ user, activeTab, onSelectTab, onSwitchToMo
                   )}
 
                   <div className="admin-dropdown-actions">
-                    {onSwitchToMobile && (
-                      <button
-                        type="button"
-                        className="admin-dropdown-item"
-                        onClick={() => {
-                          setUserMenuOpen(false);
-                          onSwitchToMobile();
-                        }}
-                      >
-                        <Smartphone size={16} />
-                        <span>Vista App Choferes</span>
-                      </button>
-                    )}
-
                     <button
                       type="button"
                       className="admin-dropdown-item"

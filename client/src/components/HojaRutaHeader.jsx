@@ -1,10 +1,9 @@
 import React from 'react';
-import { FileText, Calendar, User, Truck } from 'lucide-react';
+import { FileText, Calendar, Truck } from 'lucide-react';
 
 /**
- * Encabezado reutilizable de Hoja de Ruta para las pantallas operativas
- * (Sección 4.2.1 y 4.2.2): Hoja_de_ruta, Fecha, Viaje, Chofer y Transporte.
- * No muestra Transaccionid ni EMail en pantalla.
+ * Encabezado reutilizable de Hoja de Ruta para las pantallas operativas:
+ * Hoja_de_ruta, Fecha, Viaje y Transporte (omite Chofer porque el usuario autenticado es el chofer).
  */
 export default function HojaRutaHeader({ hojaRuta }) {
   if (!hojaRuta) return null;
@@ -34,10 +33,6 @@ export default function HojaRutaHeader({ hojaRuta }) {
               <span>Viaje: <strong>{hojaRuta.Viaje}</strong></span>
             </div>
           )}
-          <div className="hr-meta-row">
-            <User size={14} />
-            <span>Chofer: <strong>{hojaRuta.Chofer}</strong></span>
-          </div>
           <div className="hr-meta-row">
             <Truck size={14} />
             <span>Transporte: <strong>{hojaRuta.Transporte}</strong></span>

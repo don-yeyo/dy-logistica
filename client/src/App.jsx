@@ -21,7 +21,7 @@ import AdminDevoluciones from './pages/admin/AdminDevoluciones';
 import AdminCajones from './pages/admin/AdminCajones';
 import AdminUsuarios from './pages/admin/AdminUsuarios';
 import AdminAuditoria from './pages/admin/AdminAuditoria';
-import { RefreshCw, ArrowLeft, Monitor } from 'lucide-react';
+import { RefreshCw, ArrowLeft } from 'lucide-react';
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -40,7 +40,6 @@ export default function App() {
   const [navWarning, setNavWarning] = useState(null);
 
   // Estado del Gestor de Escritorio (sysadmin y logistica)
-  const [viewMode, setViewMode] = useState('admin'); // 'admin' | 'mobile' (mobile solo permitido a chofer o sysadmin probando)
   const [adminTab, setAdminTab] = useState('dashboard');
   const [adminDetailTxId, setAdminDetailTxId] = useState(null);
 
@@ -49,17 +48,12 @@ export default function App() {
       setSelectedHojaRuta(null);
       setSelectedRemito(null);
       setCurrentScreen('hojas_ruta');
-      setViewMode('admin');
       setAdminTab('dashboard');
       setAdminDetailTxId(null);
       return;
     }
 
-    // Choferes acceden exclusivamente a la App Mobile
-    if (user.rol === 'chofer') {
-      setViewMode('mobile');
-    } else {
-      setViewMode('admin');
+    if (user.rol !== 'chofer') {
       setAdminTab('dashboard');
     }
   }, [user]);
@@ -90,17 +84,13 @@ export default function App() {
     return <Login />;
   }
 
-  // Gestor de Escritorio para sysadmin y logistica
-  const isAdminRole = user.rol === 'sysadmin' || user.rol === 'logistica';
-  const showDesktopManager = isAdminRole && (viewMode === 'admin' || user.rol === 'logistica');
-
-  if (showDesktopManager) {
+  // Gestor de Escritorio exclusivo para sysadmin y logistica (no acceden a App Mobile)
+  if (user.rol !== 'chofer') {
     return (
       <AdminLayout
         user={user}
         activeTab={adminTab}
         onSelectTab={setAdminTab}
-        onSwitchToMobile={user.rol === 'sysadmin' ? () => setViewMode('mobile') : null}
       >
         {adminTab === 'dashboard' && (
           <AdminDashboard
@@ -126,7 +116,7 @@ export default function App() {
     );
   }
 
-  // App Mobile PWA para Choferes (y vista previa opcional para sysadmin)
+  // App Mobile PWA exclusiva para Choferes
   const handleNavigate = (screenId) => {
     const requiresHojaRuta = ['entregas', 'devoluciones', 'cajones', 'remitos', 'scan'].includes(screenId);
 
@@ -144,41 +134,6 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {user.rol === 'sysadmin' && (
-        <div
-          style={{
-            background: '#0d2c5c',
-            color: '#fff',
-            padding: '6px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: '0.8rem'
-          }}
-        >
-          <span>Vista previa App Choferes (SysAdmin)</span>
-          <button
-            type="button"
-            onClick={() => setViewMode('admin')}
-            style={{
-              background: '#fff',
-              color: '#0d2c5c',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '4px 10px',
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer'
-            }}
-          >
-            <Monitor size={14} />
-            <span>Volver al Gestor</span>
-          </button>
-        </div>
-      )}
-
       <Header
         onMenuClick={() => setIsDrawerOpen(true)}
         onOpenHelp={() => setIsHelpOpen(true)}
@@ -256,7 +211,6 @@ export default function App() {
             key="hojas_ruta"
             selectedHojaRuta={selectedHojaRuta}
             onSelectHojaRuta={handleSelectHojaRuta}
-            onNavigateModule={handleNavigate}
           />
         )}
       </main>

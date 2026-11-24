@@ -3136,11 +3136,11 @@ body {
   gap: 6px;
   font-size: 0.78rem;
   font-weight: 800;
-  color: #059669;
+  color: #1d4ed8;
 }
 
 .dark-theme .hr-selected-badge {
-  color: #34d399;
+  color: #38bdf8;
 }
 
 .hr-quick-modules {
@@ -3250,7 +3250,153 @@ body {
 }
 
 .bottom-nav-btn.needs-hr {
-  opacity: 0.72;
+  opacity: 0.58;
+}
+
+/* Estados coloreados por sección cuando hay Hoja de Ruta seleccionada (ready) y activa (active) */
+.bottom-nav-btn.mod-inicio.ready:not(.active) .nav-btn-circle {
+  border-color: #1d4ed8;
+  color: #1d4ed8;
+  background: rgba(29, 78, 216, 0.08);
+}
+.bottom-nav-btn.mod-inicio.ready:not(.active) .nav-btn-label {
+  color: #1d4ed8;
+}
+.bottom-nav-btn.mod-inicio.active .nav-btn-circle {
+  background: linear-gradient(135deg, #0d2c5c 0%, #2563eb 100%);
+  box-shadow: 0 8px 22px rgba(29, 78, 216, 0.45);
+}
+.bottom-nav-btn.mod-inicio.active .nav-btn-label {
+  color: #1d4ed8;
+}
+.dark-theme .bottom-nav-btn.mod-inicio.ready:not(.active) .nav-btn-circle {
+  border-color: #38bdf8;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.14);
+}
+.dark-theme .bottom-nav-btn.mod-inicio.ready:not(.active) .nav-btn-label,
+.dark-theme .bottom-nav-btn.mod-inicio.active .nav-btn-label {
+  color: #38bdf8;
+}
+.dark-theme .bottom-nav-btn.mod-inicio.active .nav-btn-circle {
+  background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+  box-shadow: 0 8px 22px rgba(56, 189, 248, 0.45);
+}
+
+.bottom-nav-btn.mod-entregas.ready:not(.active) .nav-btn-circle {
+  border-color: #059669;
+  color: #059669;
+  background: rgba(5, 150, 105, 0.08);
+}
+.bottom-nav-btn.mod-entregas.ready:not(.active) .nav-btn-label {
+  color: #059669;
+}
+.bottom-nav-btn.mod-entregas.active .nav-btn-circle {
+  background: linear-gradient(135deg, #047857 0%, #10b981 100%);
+  box-shadow: 0 8px 22px rgba(5, 150, 105, 0.45);
+}
+.bottom-nav-btn.mod-entregas.active .nav-btn-label {
+  color: #059669;
+}
+.dark-theme .bottom-nav-btn.mod-entregas.ready:not(.active) .nav-btn-circle {
+  border-color: #34d399;
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.14);
+}
+.dark-theme .bottom-nav-btn.mod-entregas.ready:not(.active) .nav-btn-label,
+.dark-theme .bottom-nav-btn.mod-entregas.active .nav-btn-label {
+  color: #34d399;
+}
+.dark-theme .bottom-nav-btn.mod-entregas.active .nav-btn-circle {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  box-shadow: 0 8px 22px rgba(52, 211, 153, 0.45);
+}
+
+.bottom-nav-btn.mod-devoluciones.ready:not(.active) .nav-btn-circle {
+  border-color: #ea580c;
+  color: #ea580c;
+  background: rgba(234, 88, 12, 0.08);
+}
+.bottom-nav-btn.mod-devoluciones.ready:not(.active) .nav-btn-label {
+  color: #ea580c;
+}
+.bottom-nav-btn.mod-devoluciones.active .nav-btn-circle {
+  background: linear-gradient(135deg, #c2410c 0%, #f97316 100%);
+  box-shadow: 0 8px 22px rgba(234, 88, 12, 0.45);
+}
+.bottom-nav-btn.mod-devoluciones.active .nav-btn-label {
+  color: #ea580c;
+}
+.dark-theme .bottom-nav-btn.mod-devoluciones.ready:not(.active) .nav-btn-circle {
+  border-color: #fb923c;
+  color: #fb923c;
+  background: rgba(251, 146, 60, 0.14);
+}
+.dark-theme .bottom-nav-btn.mod-devoluciones.ready:not(.active) .nav-btn-label,
+.dark-theme .bottom-nav-btn.mod-devoluciones.active .nav-btn-label {
+  color: #fb923c;
+}
+.dark-theme .bottom-nav-btn.mod-devoluciones.active .nav-btn-circle {
+  background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
+  box-shadow: 0 8px 22px rgba(251, 146, 60, 0.45);
+}
+
+.bottom-nav-btn.mod-cajones.ready:not(.active) .nav-btn-circle {
+  border-color: #7e22ce;
+  color: #7e22ce;
+  background: rgba(126, 34, 206, 0.08);
+}
+.bottom-nav-btn.mod-cajones.ready:not(.active) .nav-btn-label {
+  color: #7e22ce;
+}
+.bottom-nav-btn.mod-cajones.active .nav-btn-circle {
+  background: linear-gradient(135deg, #6b21a8 0%, #9333ea 100%);
+  box-shadow: 0 8px 22px rgba(126, 34, 206, 0.45);
+}
+.bottom-nav-btn.mod-cajones.active .nav-btn-label {
+  color: #7e22ce;
+}
+.dark-theme .bottom-nav-btn.mod-cajones.ready:not(.active) .nav-btn-circle {
+  border-color: #c084fc;
+  color: #c084fc;
+  background: rgba(192, 132, 252, 0.14);
+}
+.dark-theme .bottom-nav-btn.mod-cajones.ready:not(.active) .nav-btn-label,
+.dark-theme .bottom-nav-btn.mod-cajones.active .nav-btn-label {
+  color: #c084fc;
+}
+.dark-theme .bottom-nav-btn.mod-cajones.active .nav-btn-circle {
+  background: linear-gradient(135deg, #7e22ce 0%, #a855f7 100%);
+  box-shadow: 0 8px 22px rgba(192, 132, 252, 0.45);
+}
+
+.bottom-nav-btn.mod-remitos.ready:not(.active) .nav-btn-circle {
+  border-color: #0891b2;
+  color: #0891b2;
+  background: rgba(8, 145, 178, 0.08);
+}
+.bottom-nav-btn.mod-remitos.ready:not(.active) .nav-btn-label {
+  color: #0891b2;
+}
+.bottom-nav-btn.mod-remitos.active .nav-btn-circle {
+  background: linear-gradient(135deg, #0e7490 0%, #06b6d4 100%);
+  box-shadow: 0 8px 22px rgba(8, 145, 178, 0.45);
+}
+.bottom-nav-btn.mod-remitos.active .nav-btn-label {
+  color: #0891b2;
+}
+.dark-theme .bottom-nav-btn.mod-remitos.ready:not(.active) .nav-btn-circle {
+  border-color: #22d3ee;
+  color: #22d3ee;
+  background: rgba(34, 211, 238, 0.14);
+}
+.dark-theme .bottom-nav-btn.mod-remitos.ready:not(.active) .nav-btn-label,
+.dark-theme .bottom-nav-btn.mod-remitos.active .nav-btn-label {
+  color: #22d3ee;
+}
+.dark-theme .bottom-nav-btn.mod-remitos.active .nav-btn-circle {
+  background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+  box-shadow: 0 8px 22px rgba(34, 211, 238, 0.45);
 }
 
 

@@ -5,24 +5,18 @@ import { useAuth } from '../config/AuthContext';
 import {
   FileText,
   Calendar,
-  User,
   Truck,
   CheckCircle2,
   RefreshCw,
-  PackageCheck,
-  PackageMinus,
-  Boxes,
-  FileSignature,
   Inbox
 } from 'lucide-react';
 
 /**
  * Pantalla Principal post-login (Sección 4.2 Hoja de Ruta):
- * Lista las hojas de ruta obtenidas de HOJAS_DE_RUTA_A_ENTREGAR filtradas por EMail.
- * Muestra únicamente: Hoja_de_ruta, Fecha, Chofer, Patente_camion y Patente_acoplado.
- * Conserva Transaccionid y EMail internamente sin mostrarlos en pantalla.
+ * Exclusiva para el rol chofer. Lista hojas de ruta dentro de la ventana de días configurada.
+ * Al seleccionar una card queda marcada en azul y habilita los íconos coloreados de la barra inferior.
  */
-export default function HojasRutaPage({ selectedHojaRuta, onSelectHojaRuta, onNavigateModule }) {
+export default function HojasRutaPage({ selectedHojaRuta, onSelectHojaRuta }) {
   const { user, pendingSyncCount, triggerSyncOffline, syncing } = useAuth();
   const [hojasRuta, setHojasRuta] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +66,7 @@ export default function HojasRutaPage({ selectedHojaRuta, onSelectHojaRuta, onNa
           <h2 className="hr-page-title">Hojas de Ruta a Entregar</h2>
           <p className="hr-page-subtitle">
             {selectedHojaRuta
-              ? `Seleccionada: ${selectedHojaRuta.Hoja_de_ruta} — Elige un módulo abajo`
+              ? `Seleccionada: ${selectedHojaRuta.Hoja_de_ruta} — Elegí una sección en la barra inferior`
               : 'Selecciona una hoja de ruta para operar'}
           </p>
         </div>
@@ -108,7 +102,7 @@ export default function HojasRutaPage({ selectedHojaRuta, onSelectHojaRuta, onNa
         <div className="hr-empty-state">
           <Inbox size={44} style={{ color: 'var(--text-muted)' }} />
           <h3>Sin hojas de ruta asignadas</h3>
-          <p>No se encontraron hojas de ruta disponibles para tu usuario.</p>
+          <p>No se encontraron hojas de ruta disponibles dentro de la ventana de fechas para tu usuario.</p>
         </div>
       ) : (
         <div className="hr-cards-list">
@@ -121,6 +115,12 @@ export default function HojasRutaPage({ selectedHojaRuta, onSelectHojaRuta, onNa
                 onClick={() => onSelectHojaRuta(hr)}
                 role="button"
                 tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectHojaRuta(hr);
+                  }
+                }}
               >
                 <div className="hr-card-top">
                   <div className="hr-code-badge">
@@ -135,12 +135,6 @@ export default function HojasRutaPage({ selectedHojaRuta, onSelectHojaRuta, onNa
                 </div>
 
                 <div className="hr-card-body">
-                  <div className="hr-info-line">
-                    <User size={15} />
-                    <span className="hr-info-label">Chofer:</span>
-                    <span className="hr-info-value">{hr.Chofer}</span>
-                  </div>
-
                   <div className="hr-patentes-row">
                     <div className="hr-patente-chip">
                       <Truck size={14} />
@@ -156,53 +150,7 @@ export default function HojasRutaPage({ selectedHojaRuta, onSelectHojaRuta, onNa
                   <div className="hr-selected-actions">
                     <div className="hr-selected-badge">
                       <CheckCircle2 size={15} />
-                      <span>Hoja de ruta activa — Accesos rápidos:</span>
-                    </div>
-                    <div className="hr-quick-modules">
-                      <button
-                        type="button"
-                        className="hr-quick-btn entregas"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onNavigateModule('entregas');
-                        }}
-                      >
-                        <PackageCheck size={16} />
-                        <span>Entregas</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="hr-quick-btn devoluciones"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onNavigateModule('devoluciones');
-                        }}
-                      >
-                        <PackageMinus size={16} />
-                        <span>Devoluciones</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="hr-quick-btn cajones"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onNavigateModule('cajones');
-                        }}
-                      >
-                        <Boxes size={16} />
-                        <span>Cajones</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="hr-quick-btn remitos"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onNavigateModule('remitos');
-                        }}
-                      >
-                        <FileSignature size={16} />
-                        <span>Remitos</span>
-                      </button>
+                      <span>Hoja de ruta seleccionada — Elegí una sección en la barra inferior</span>
                     </div>
                   </div>
                 )}
