@@ -15,6 +15,7 @@ import {
 import { useAuth } from '../config/AuthContext';
 import { useTheme } from '../config/ThemeContext';
 import logo from '../assets/logo-don-yeyo-png-sin-fondo.png';
+import pkg from '../../package.json';
 
 export default function Drawer({
   isOpen,
@@ -24,7 +25,7 @@ export default function Drawer({
   currentScreen,
   selectedHojaRuta
 }) {
-  const { user, logout } = useAuth();
+  const { user, logout, impersonationEnabled, availableUsers, impersonateUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const menuItems = [
@@ -114,6 +115,40 @@ export default function Drawer({
           )}
 
           <div className="drawer-footer-actions">
+            {impersonationEnabled && availableUsers.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  Simular Usuario (Gestación)
+                </span>
+                <select
+                  value={user?.email || ''}
+                  onChange={(e) => {
+                    const targetEmail = e.target.value;
+                    if (targetEmail && targetEmail !== user?.email) {
+                      onClose();
+                      impersonateUser(targetEmail);
+                    }
+                  }}
+                  style={{
+                    height: '38px',
+                    padding: '0 10px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    color: 'var(--text)',
+                    fontSize: '0.8rem',
+                    fontWeight: 600
+                  }}
+                >
+                  {availableUsers.map((u) => (
+                    <option key={u.id} value={u.email}>
+                      {u.nombre} ({u.rol})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Toggle de Modo Claro / Oscuro */}
             <button
               onClick={toggleTheme}
@@ -137,7 +172,7 @@ export default function Drawer({
         {/* Footer */}
         <div style={{ marginTop: '16px', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
           <span style={{ fontWeight: 800 }}>DON YEYO S.A.</span>
-          <span>v1.0.0</span>
+          <span>v{pkg.version}</span>
         </div>
       </aside>
     </>

@@ -7,25 +7,27 @@ import logo from '../assets/logo-don-yeyo-png-sin-fondo.png';
 import microsoftLogo from '../assets/microsoft-logo.png';
 
 export default function Login() {
-  const { loginWithMicrosoft, loginMock, loading, error, setError } = useAuth();
+  const { loginWithMicrosoft, impersonateUser, availableUsers, impersonationEnabled, loading, error, setError } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [testUsers, setTestUsers] = useState([]);
   const [selectedMockEmail, setSelectedMockEmail] = useState(
     import.meta.env.VITE_DEFAULT_MOCK_EMAIL || 'gabrielt@donyeyo.com.ar'
   );
-  const isMockAllowed = import.meta.env.VITE_MOCK_AUTH === 'true';
 
   useEffect(() => {
-    if (isMockAllowed) {
-      fetchUsersList()
-        .then((res) => {
-          if (res && res.users) {
-            setTestUsers(res.users);
-          }
-        })
-        .catch(() => {});
+    if (!impersonationEnabled) return;
+    if (availableUsers && availableUsers.length > 0) {
+      setTestUsers(availableUsers);
+      return;
     }
-  }, [isMockAllowed]);
+    fetchUsersList()
+      .then((res) => {
+        if (res && res.users) {
+          setTestUsers(res.users);
+        }
+      })
+      .catch(() => {});
+  }, [impersonationEnabled, availableUsers]);
 
   const handleMicrosoftLogin = async () => {
     if (setError) setError(null);
@@ -96,11 +98,11 @@ export default function Login() {
           </button>
         </div>
 
-        {/* Selector de modo desarrollo para pruebas rápidas */}
-        {isMockAllowed && (
+        {/* Selector de modo gestación/desarrollo para simular ingreso por usuario */}
+        {impersonationEnabled && (
           <div style={{ marginTop: '6px', paddingTop: '14px', borderTop: '1px dashed var(--border)', display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
             <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Modo Desarrollo: Acceso Rápido
+              Modo Gestación: Simular Usuario
             </span>
 
             <select
@@ -120,7 +122,7 @@ export default function Login() {
               {testUsers.length > 0 ? (
                 testUsers.map((u) => (
                   <option key={u.id} value={u.email}>
-                    {u.nombre} ({u.rol}{u.organizacion_id ? ` • Org #${u.organizacion_id}` : ''})
+                    {u.nombre} ({u.rol} • {u.email})
                   </option>
                 ))
               ) : (
@@ -134,7 +136,7 @@ export default function Login() {
 
             <button
               type="button"
-              onClick={() => loginMock(selectedMockEmail)}
+              onClick={() => impersonateUser(selectedMockEmail)}
               disabled={loading}
               style={{
                 height: '44px',
@@ -152,7 +154,7 @@ export default function Login() {
               }}
             >
               <LogIn size={18} />
-              <span>Ingresar como Usuario Seleccionado</span>
+              <span>Simular Ingreso</span>
             </button>
           </div>
         )}

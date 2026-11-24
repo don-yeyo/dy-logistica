@@ -3,6 +3,7 @@ import { PublicClientApplication } from '@azure/msal-browser';
 import { msalConfig, loginRequest } from './msalConfig';
 import {
   fetchCurrentUser,
+  fetchUsersList,
   syncOfflineBatch,
   saveEntregasHojaRuta,
   saveDevolucionesHojaRuta,
@@ -11,6 +12,9 @@ import {
 import { getPendingControls, clearPendingControls } from '../services/offlineStorage';
 
 const AuthContext = createContext(null);
+const IMPERSONATION_ENABLED =
+  import.meta.env.VITE_ENABLE_USER_IMPERSONATION === 'true' ||
+  import.meta.env.VITE_MOCK_AUTH === 'true';
 
 // Instancia y promesa de inicialización de MSAL
 let msalInstance = null;
@@ -42,7 +46,23 @@ export function AuthProvider({ children }) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [isImpersonating, setIsImpersonating] = useState(() =>
+    Boolean(IMPERSONATION_ENABLED && localStorage.getItem('dy_impersonated_email'))
+  );
   const syncingRef = useRef(false);
+
+  const refreshAvailableUsers = useCallback(async () => {
+    if (!IMPERSONATION_ENABLED) return;
+    try {
+      const res = await fetchUsersList();
+      if (res && Array.isArray(res.users)) {
+        setAvailableUsers(res.users);
+      }
+    } catch (err) {
+      console.warn('[AuthContext] No se pudo obtener lista de usuarios para simulación:', err.message);
+    }
+  }, []);
 
   // Actualizar contador de pendientes
   const refreshPendingCount = useCallback(async () => {
@@ -173,9 +193,17 @@ export function AuthProvider({ children }) {
 
     const restoreSession = async () => {
       const storedEmail = localStorage.getItem('dy_user_email');
-      const isMockEnabled = import.meta.env.VITE_MOCK_AUTH === 'true';
+      const impersonatedEmail = IMPERSONATION_ENABLED ? localStorage.getItem('dy_impersonated_email') : null;
 
       try {
+        if (impersonatedEmail) {
+          if (active) {
+            setIsImpersonating(true);
+            await loadUser(impersonatedEmail);
+          }
+          return;
+        }
+
         const instance = await ensureMsalInitialized();
         if (instance) {
           const redirectResult = await instance.handleRedirectPromise().catch(() => null);
@@ -201,7 +229,7 @@ export function AuthProvider({ children }) {
               }
             } catch (silentErr) {
               console.info('[MSAL] Sesión expirada o requiere nueva autenticación:', silentErr.message);
-              if (storedEmail && isMockEnabled && active) {
+              if (storedEmail && IMPERSONATION_ENABLED && active) {
                 await loadUser(storedEmail);
                 return;
               }
@@ -213,8 +241,8 @@ export function AuthProvider({ children }) {
           }
         }
 
-        // Modo desarrollo Mock o contingencia offline con sesión previa
-        if (storedEmail && (isMockEnabled || !navigator.onLine)) {
+        // Modo gestación/desarrollo o contingencia offline con sesión previa
+        if (storedEmail && (IMPERSONATION_ENABLED || !navigator.onLine)) {
           if (active) await loadUser(storedEmail);
           return;
         }
@@ -229,6 +257,7 @@ export function AuthProvider({ children }) {
     };
 
     restoreSession();
+    refreshAvailableUsers();
     refreshPendingCount();
 
     return () => {
@@ -236,7 +265,7 @@ export function AuthProvider({ children }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [loadUser, refreshPendingCount, triggerSyncOffline]);
+  }, [loadUser, refreshAvailableUsers, refreshPendingCount, triggerSyncOffline]);
 
   // Login con Microsoft Entra ID (Popup SSO)
   const loginWithMicrosoft = async () => {
@@ -268,16 +297,27 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Simular ingreso con otro usuario (solo cuando el bypass de gestación está habilitado)
+  const impersonateUser = useCallback(async (email) => {
+    if (!IMPERSONATION_ENABLED || !email) return;
+    localStorage.removeItem('dy_selected_hoja_ruta');
+    localStorage.setItem('dy_impersonated_email', email);
+    setIsImpersonating(true);
+    await loadUser(email);
+  }, [loadUser]);
+
   // Login Mock / Switcher para desarrollo
   const loginMock = async (email) => {
-    await loadUser(email);
+    await impersonateUser(email);
   };
 
   // Cerrar Sesión
   const logout = async () => {
     localStorage.removeItem('dy_user_email');
     localStorage.removeItem('dy_user_rol');
+    localStorage.removeItem('dy_impersonated_email');
     localStorage.removeItem('dy_selected_hoja_ruta');
+    setIsImpersonating(false);
     setUser(null);
     setError(null);
     const instance = await ensureMsalInitialized();
@@ -298,6 +338,11 @@ export function AuthProvider({ children }) {
     isOnline,
     pendingSyncCount,
     syncing,
+    impersonationEnabled: IMPERSONATION_ENABLED,
+    isImpersonating,
+    availableUsers,
+    impersonateUser,
+    refreshAvailableUsers,
     loginWithMicrosoft,
     loginMock,
     logout,
