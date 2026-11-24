@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { submitControlRemito, uploadFotoRemito } from '../services/api';
 import { queuePendingControl } from '../services/offlineStorage';
 import { getHojaRutaDraft, patchRemitoItemDraft } from '../services/draftStorage';
-import { dataUrlToFile } from '../services/draftSaver';
+import { dataUrlToFile, isConnectivityError } from '../services/draftSaver';
 import { useAuth } from '../config/AuthContext';
 import CameraCapture from '../components/CameraCapture';
 import SignaturePad from '../components/SignaturePad';
@@ -18,7 +19,8 @@ import {
   CheckCircle2,
   Check,
   Trash2,
-  Camera
+  Camera,
+  RefreshCw
 } from 'lucide-react';
 
 const EJEMPLARES = [
@@ -389,7 +391,19 @@ export default function RemitoDetail({ remito, hojaRuta, onBack, onSaved }) {
       };
 
       if (navigator.onLine) {
-        await submitControlRemito(remito.id, payload);
+        try {
+          await submitControlRemito(remito.id, payload);
+        } catch (netErr) {
+          if (!isConnectivityError(netErr)) throw netErr;
+          await queuePendingControl({
+            op_type: 'remito',
+            remito_id: remito.id,
+            comprobante: remito.finne_Comprobante,
+            ...payload,
+            sincronizado_offline: 1
+          });
+          await refreshPendingCount();
+        }
       } else {
         await queuePendingControl({
           op_type: 'remito',
@@ -645,6 +659,26 @@ export default function RemitoDetail({ remito, hojaRuta, onBack, onSaved }) {
         detail={errorMessage}
         confirmText="Entendido"
       />
+
+      {saving && typeof document !== 'undefined' && createPortal(
+        <div
+          className="modal-overlay saving-blocking-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Guardando control de remito"
+        >
+          <div className="modal-card glass saving-blocking-card">
+            <div className="saving-spinner-badge">
+              <RefreshCw size={32} className="spin" />
+            </div>
+            <h3 className="saving-blocking-title">Guardando cambios...</h3>
+            <p className="saving-blocking-subtitle">
+              Registrando el control del remito {remito.finne_Comprobante || ''}. Por favor, aguardá un instante.
+            </p>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

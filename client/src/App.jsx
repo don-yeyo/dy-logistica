@@ -69,9 +69,11 @@ export default function App() {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [reminderResetTick, setReminderResetTick] = useState(0);
   const [confirmingAll, setConfirmingAll] = useState(false);
+  const [confirmingSections, setConfirmingSections] = useState([]);
   const [reminderErrorMsg, setReminderErrorMsg] = useState(null);
   const [reminderSuccessMsg, setReminderSuccessMsg] = useState(null);
   const reminderOverlayRef = useRef(null);
+  const savingOverlayRef = useRef(null);
 
   // Estado del Gestor de Escritorio (sysadmin y logistica)
   const [adminTab, setAdminTab] = useState('dashboard');
@@ -145,9 +147,9 @@ export default function App() {
     reminderResetTick
   ]);
 
-  // Bloquear scroll del documento y evitar propagación en el fondo difuminado mientras el modal recordatorio esté abierto
+  // Bloquear scroll del documento y evitar propagación en el fondo difuminado mientras el modal recordatorio o de guardado esté abierto
   useEffect(() => {
-    if (!reminderOpen) return undefined;
+    if (!reminderOpen && !confirmingAll) return undefined;
 
     const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevBodyOverflow = document.body.style.overflow;
@@ -157,25 +159,25 @@ export default function App() {
     document.body.style.overflow = 'hidden';
     document.body.style.overscrollBehavior = 'none';
 
-    const overlayEl = reminderOverlayRef.current;
+    const overlays = [reminderOverlayRef.current, savingOverlayRef.current].filter(Boolean);
     const preventScroll = (e) => {
       e.preventDefault();
     };
-    if (overlayEl) {
-      overlayEl.addEventListener('wheel', preventScroll, { passive: false });
-      overlayEl.addEventListener('touchmove', preventScroll, { passive: false });
-    }
+    overlays.forEach((el) => {
+      el.addEventListener('wheel', preventScroll, { passive: false });
+      el.addEventListener('touchmove', preventScroll, { passive: false });
+    });
 
     return () => {
       document.documentElement.style.overflow = prevHtmlOverflow;
       document.body.style.overflow = prevBodyOverflow;
       document.body.style.overscrollBehavior = prevOverscroll;
-      if (overlayEl) {
-        overlayEl.removeEventListener('wheel', preventScroll);
-        overlayEl.removeEventListener('touchmove', preventScroll);
-      }
+      overlays.forEach((el) => {
+        el.removeEventListener('wheel', preventScroll);
+        el.removeEventListener('touchmove', preventScroll);
+      });
     };
-  }, [reminderOpen]);
+  }, [reminderOpen, confirmingAll]);
 
   const handleSelectHojaRuta = (hr) => {
     setSelectedHojaRuta(hr);
@@ -208,17 +210,23 @@ export default function App() {
     }
 
     try {
+      setReminderOpen(false);
+      setConfirmingSections(sectionsToSave);
       setConfirmingAll(true);
       setReminderErrorMsg(null);
+      let anyOfflineQueued = false;
+
       for (const sec of sectionsToSave) {
         try {
-          await saveDraftSection(sec, {
+          const res = await saveDraftSection(sec, {
             email: user.email,
             hojaRuta: selectedHojaRuta,
             refreshPendingCount
           });
+          if (res?.offlineQueued) {
+            anyOfflineQueued = true;
+          }
         } catch (secErr) {
-          setReminderOpen(false);
           if (sec !== 'remitos') {
             setSelectedRemito(null);
           }
@@ -227,17 +235,19 @@ export default function App() {
           return;
         }
       }
-      setReminderOpen(false);
+
       if (sectionsToSave.includes('remitos')) {
         setSelectedRemito(null);
       }
+      const sectionListText = sectionsToSave.map((s) => SECTION_LABELS[s] || s).join(', ');
       setReminderSuccessMsg(
-        navigator.onLine
-          ? `Se confirmaron correctamente los cambios pendientes (${sectionsToSave.map((s) => SECTION_LABELS[s] || s).join(', ')}).`
-          : 'Sin conexión: los cambios pendientes quedaron encolados para sincronizar.'
+        anyOfflineQueued
+          ? `Sin conexión al servidor: los cambios (${sectionListText}) se guardaron localmente en la base temporal y se sincronizarán automáticamente.`
+          : `Se confirmaron correctamente los cambios pendientes (${sectionListText}).`
       );
     } finally {
       setConfirmingAll(false);
+      setConfirmingSections([]);
     }
   };
 
@@ -496,6 +506,28 @@ export default function App() {
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
       />
+
+      {confirmingAll && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={savingOverlayRef}
+          className="modal-overlay saving-blocking-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Guardando cambios"
+        >
+          <div className="modal-card glass saving-blocking-card">
+            <div className="saving-spinner-badge">
+              <RefreshCw size={32} className="spin" />
+            </div>
+            <h3 className="saving-blocking-title">Guardando cambios...</h3>
+            <p className="saving-blocking-subtitle">
+              Confirmando {confirmingSections.map((s) => SECTION_LABELS[s] || s).join(', ') || 'la hoja de ruta'}.
+              Por favor, aguardá un instante.
+            </p>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

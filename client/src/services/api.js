@@ -1,8 +1,13 @@
 import axios from 'axios';
 
+const API_TIMEOUT_MS = Math.max(
+  parseInt(import.meta.env.VITE_API_TIMEOUT_MS || '30000', 10) || 30000,
+  5000
+);
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
-  timeout: 30000
+  timeout: API_TIMEOUT_MS
 });
 
 // Interceptor de Peticiones: inyecta email de usuario identificado

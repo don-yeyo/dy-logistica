@@ -41,6 +41,64 @@ export function dataUrlToFile(dataUrl, fileName = 'foto_remito.jpg') {
   }
 }
 
+export function isConnectivityError(err) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
+  if (!err?.response) return true;
+  const code = String(err.code || '').toUpperCase();
+  if (code === 'ECONNABORTED' || code === 'ERR_NETWORK' || code === 'ETIMEDOUT') {
+    return true;
+  }
+  const status = err.response.status;
+  if ([502, 503, 504].includes(status)) return true;
+  if (status === 500 && !err.response.data?.error) return true;
+  return false;
+}
+
+function flattenGruposToRows(grupos = [], txId, headerInfo = {}) {
+  const rows = [];
+  const defaultFecha = headerInfo?.Fecha
+    ? String(headerInfo.Fecha).slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+
+  for (const grupo of grupos) {
+    for (const cli of grupo.clientes || []) {
+      const prods = Array.isArray(cli.productos) ? cli.productos : [];
+      if (prods.length === 0) {
+        rows.push({
+          Transaccionid: txId,
+          id_etapa: cli.id_etapa || `${txId}-${cli.id_cliente}`,
+          fecha: cli.fecha || defaultFecha,
+          Lugar_de_Entrega: cli.Lugar_de_Entrega || grupo.lugar,
+          id_cliente: cli.id_cliente || null,
+          Cliente: cli.Cliente || '',
+          id_remito_devoluciones: cli.id_remito_devoluciones || null
+        });
+      } else {
+        for (const p of prods) {
+          rows.push({
+            Transaccionid: txId,
+            id_etapa: cli.id_etapa || `${txId}-${cli.id_cliente}`,
+            fecha: cli.fecha || defaultFecha,
+            Lugar_de_Entrega: cli.Lugar_de_Entrega || grupo.lugar,
+            id_cliente: cli.id_cliente || null,
+            Cliente: cli.Cliente || '',
+            id_remito_devoluciones: cli.id_remito_devoluciones || null,
+            id_remito_devoluciones_item: p.id_remito_devoluciones_item || null,
+            id_producto: p.id_producto || null,
+            Producto: p.Producto || '',
+            Cantidad: parseInt(String(p.Cantidad || '1').trim(), 10) || 1,
+            Vencimiento: p.Vencimiento || null,
+            codigo_motivo_dif: p.codigo_motivo_dif || null,
+            Motivo: p.Motivo || '',
+            Tipo: p.Tipo === 'Virtual' ? 'Virtual' : 'Físico'
+          });
+        }
+      }
+    }
+  }
+  return rows;
+}
+
 export function dispatchDraftSaved(transaccionId, sections = []) {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(
@@ -71,10 +129,14 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
           `En Entregas, "${item.Producto || 'Producto'}" debe tener una cantidad entera válida (>= 0).`
         );
       }
-      payloadItems.push({
-        Hojarutaitemid: item.Hojarutaitemid,
-        Entregado: parseInt(valStr, 10)
-      });
+      const nextVal = parseInt(valStr, 10);
+      const isUnconfirmed = item.Entregado === null || item.Entregado === undefined;
+      if (isUnconfirmed || Number(item.Entregado) !== nextVal) {
+        payloadItems.push({
+          Hojarutaitemid: item.Hojarutaitemid,
+          Entregado: nextVal
+        });
+      }
     }
 
     if (payloadItems.length === 0) {
@@ -82,7 +144,7 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
         openLugares: draft.openLugares || {},
         unconfirmedDb: false
       });
-      return { ok: true };
+      return { ok: true, offlineQueued: false };
     }
 
     const updatedItemsList = items.map((it) => ({
@@ -90,32 +152,44 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
       Entregado: parseInt(String(entregadoMap[it.Hojarutaitemid]).trim(), 10)
     }));
 
+    let offlineQueued = false;
+    let cachedItems = updatedItemsList;
+
     if (navigator.onLine) {
-      const res = await saveEntregasHojaRuta(txId, payloadItems);
-      const finalItems = res?.items || updatedItemsList;
-      await cacheEntregas(txId, {
-        hoja_ruta: draft.headerInfo || hojaRuta,
-        items: finalItems
-      });
+      try {
+        const res = await saveEntregasHojaRuta(txId, payloadItems);
+        cachedItems = res?.items || updatedItemsList;
+      } catch (err) {
+        if (!isConnectivityError(err)) throw err;
+        await queuePendingControl({
+          op_type: 'entregas',
+          transaccionId: txId,
+          items: payloadItems
+        });
+        offlineQueued = true;
+        if (refreshPendingCount) await refreshPendingCount();
+      }
     } else {
       await queuePendingControl({
         op_type: 'entregas',
         transaccionId: txId,
         items: payloadItems
       });
-      await cacheEntregas(txId, {
-        hoja_ruta: draft.headerInfo || hojaRuta,
-        items: updatedItemsList
-      });
+      offlineQueued = true;
       if (refreshPendingCount) await refreshPendingCount();
     }
+
+    await cacheEntregas(txId, {
+      hoja_ruta: draft.headerInfo || hojaRuta,
+      items: cachedItems
+    });
 
     clearSectionDirty(email, txId, 'entregas', {
       openLugares: draft.openLugares || {},
       unconfirmedDb: false
     });
     dispatchDraftSaved(txId, ['entregas']);
-    return { ok: true };
+    return { ok: true, offlineQueued };
   }
 
   if (section === 'devoluciones') {
@@ -167,23 +241,39 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
       }
     }
 
+    let offlineQueued = false;
     if (clientesConProductos.length > 0) {
-      if (navigator.onLine) {
-        const res = await saveDevolucionesHojaRuta(txId, clientesConProductos);
-        if (res && res.ok) {
-          await cacheDevoluciones(txId, {
-            hoja_ruta: headerInfo,
-            rows: res.rows,
-            catalogos: draft.catalogos || { productos: [], clientes: [], motivos: [] }
-          });
-        }
-      } else {
+      const saveOfflineDev = async () => {
         await queuePendingControl({
           op_type: 'devoluciones',
           transaccionId: txId,
           clientes: clientesConProductos
         });
+        await cacheDevoluciones(txId, {
+          hoja_ruta: headerInfo,
+          rows: flattenGruposToRows(grupos, txId, headerInfo),
+          catalogos: draft.catalogos || { productos: [], clientes: [], motivos: [] }
+        });
+        offlineQueued = true;
         if (refreshPendingCount) await refreshPendingCount();
+      };
+
+      if (navigator.onLine) {
+        try {
+          const res = await saveDevolucionesHojaRuta(txId, clientesConProductos);
+          if (res && res.ok) {
+            await cacheDevoluciones(txId, {
+              hoja_ruta: headerInfo,
+              rows: res.rows,
+              catalogos: draft.catalogos || { productos: [], clientes: [], motivos: [] }
+            });
+          }
+        } catch (err) {
+          if (!isConnectivityError(err)) throw err;
+          await saveOfflineDev();
+        }
+      } else {
+        await saveOfflineDev();
       }
     }
 
@@ -192,7 +282,7 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
       expandedClientes: draft.expandedClientes || {}
     });
     dispatchDraftSaved(txId, ['devoluciones']);
-    return { ok: true };
+    return { ok: true, offlineQueued };
   }
 
   if (section === 'cajones') {
@@ -221,34 +311,43 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
       });
     }
 
+    let offlineQueued = false;
     if (payloadItems.length > 0) {
-      if (navigator.onLine) {
-        await saveCajonesHojaRuta(txId, payloadItems);
-        await cacheCajones(txId, {
-          hoja_ruta: headerInfo,
-          items: payloadItems
-        });
-      } else {
+      const saveOfflineCajones = async () => {
         await queuePendingControl({
           op_type: 'cajones',
           transaccionId: txId,
           items: payloadItems
         });
-        await cacheCajones(txId, {
-          hoja_ruta: headerInfo,
-          items: payloadItems
-        });
+        offlineQueued = true;
         if (refreshPendingCount) await refreshPendingCount();
+      };
+
+      if (navigator.onLine) {
+        try {
+          await saveCajonesHojaRuta(txId, payloadItems);
+        } catch (err) {
+          if (!isConnectivityError(err)) throw err;
+          await saveOfflineCajones();
+        }
+      } else {
+        await saveOfflineCajones();
       }
+
+      await cacheCajones(txId, {
+        hoja_ruta: headerInfo,
+        items: payloadItems
+      });
     }
 
     clearSectionDirty(email, txId, 'cajones');
     dispatchDraftSaved(txId, ['cajones']);
-    return { ok: true };
+    return { ok: true, offlineQueued };
   }
 
   if (section === 'remitos') {
     const entries = Object.values(draft.byRemitoId || {});
+    let offlineQueued = false;
 
     for (const entry of entries) {
       const ejMap = entry?.ejemplaresMap || {};
@@ -341,7 +440,20 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
       };
 
       if (navigator.onLine) {
-        await submitControlRemito(entry.remitoId, payload);
+        try {
+          await submitControlRemito(entry.remitoId, payload);
+        } catch (err) {
+          if (!isConnectivityError(err)) throw err;
+          await queuePendingControl({
+            op_type: 'remito',
+            remito_id: entry.remitoId,
+            comprobante: entry.comprobante,
+            ...payload,
+            sincronizado_offline: 1
+          });
+          offlineQueued = true;
+          if (refreshPendingCount) await refreshPendingCount();
+        }
       } else {
         await queuePendingControl({
           op_type: 'remito',
@@ -349,13 +461,14 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
           comprobante: entry.comprobante,
           ...payload
         });
+        offlineQueued = true;
         if (refreshPendingCount) await refreshPendingCount();
       }
     }
 
     clearSectionDirty(email, txId, 'remitos', { byRemitoId: {} });
     dispatchDraftSaved(txId, ['remitos']);
-    return { ok: true };
+    return { ok: true, offlineQueued };
   }
 
   return { ok: false };

@@ -4,6 +4,10 @@ const NON_NEGATIVE_INT_REGEX = /^\d+$/;
 const POSITIVE_INT_REGEX = /^[1-9]\d*$/;
 const CAJONES_TIPO_ENTREGA = parseInt(process.env.CAJONES_TIPO_ENTREGA || '1', 10);
 const CAJONES_TIPO_DEVOLUCION = parseInt(process.env.CAJONES_TIPO_DEVOLUCION || '2', 10);
+const DB_BULK_UPDATE_CHUNK_SIZE = Math.max(
+  parseInt(process.env.DB_BULK_UPDATE_CHUNK_SIZE || '200', 10) || 200,
+  1
+);
 
 function parseNonNegativeIntEnv(value, fallback) {
   const parsed = parseInt(value, 10);
@@ -268,14 +272,32 @@ async function guardarEntregas(req, res) {
       await connection.beginTransaction();
       try {
         let count = 0;
-        for (const item of normalizedItems) {
+        for (let i = 0; i < normalizedItems.length; i += DB_BULK_UPDATE_CHUNK_SIZE) {
+          const chunk = normalizedItems.slice(i, i + DB_BULK_UPDATE_CHUNK_SIZE);
+          const entregadoCases = chunk.map(() => 'WHEN ? THEN ?').join(' ');
+          const motivoCases = chunk.map(() => 'WHEN ? THEN COALESCE(?, ir.codigo_motivo_dif)').join(' ');
+          const idPlaceholders = chunk.map(() => '?').join(',');
+          const params = [];
+
+          for (const item of chunk) {
+            params.push(item.Hojarutaitemid, item.Entregado);
+          }
+          for (const item of chunk) {
+            params.push(item.Hojarutaitemid, item.codigo_motivo_dif);
+          }
+          params.push(hojaRuta.Transaccionid);
+          for (const item of chunk) {
+            params.push(item.Hojarutaitemid);
+          }
+
           const [result] = await connection.query(
             `UPDATE HOJA_RUTA_ITEM_REMITO ir
              INNER JOIN HOJA_RUTA_ETAPA e ON e.Id_etapa = ir.Id_etapa
-             SET ir.cantidad_descargada_Chofer = ?,
-                 ir.codigo_motivo_dif = COALESCE(?, ir.codigo_motivo_dif)
-             WHERE ir.Hojarutaitemid = ? AND e.Transaccionid_hoja_de_ruta = ?`,
-            [item.Entregado, item.codigo_motivo_dif, item.Hojarutaitemid, hojaRuta.Transaccionid]
+             SET ir.cantidad_descargada_Chofer = CASE ir.Hojarutaitemid ${entregadoCases} ELSE ir.cantidad_descargada_Chofer END,
+                 ir.codigo_motivo_dif = CASE ir.Hojarutaitemid ${motivoCases} ELSE ir.codigo_motivo_dif END
+             WHERE e.Transaccionid_hoja_de_ruta = ?
+               AND ir.Hojarutaitemid IN (${idPlaceholders})`,
+            params
           );
           count += result.affectedRows;
         }
@@ -802,34 +824,49 @@ async function guardarCajones(req, res) {
     }
 
     const fecha = (hojaRuta.Fecha || new Date().toISOString().slice(0, 10)).slice(0, 10);
+    const existingGrouped = await queryCajonesGrouped(hojaRuta.Transaccionid);
+    const existingByEtapa = new Map(
+      existingGrouped
+        .filter((ex) => ex.Id_etapa)
+        .map((ex) => [String(ex.Id_etapa).trim(), ex])
+    );
 
     await withAuditConnection(req.user, async (connection) => {
       await connection.beginTransaction();
       try {
         for (const row of normalized) {
           if (!row.Id_etapa) continue;
+          const existing = existingByEtapa.get(row.Id_etapa);
 
-          if (row.cajones_entregados > 0 || row.id_remito_cajones_entrega || row.id_remito_cajones_item_entrega) {
+          const existingEntItemId = row.id_remito_cajones_item_entrega || existing?.id_remito_cajones_item_entrega || null;
+          const existingEntCabId = row.id_remito_cajones_entrega || existing?.id_remito_cajones_entrega || null;
+          const entUnchanged = Boolean(existingEntItemId) && existing && Number(existing.cajones_entregados) === row.cajones_entregados;
+
+          if (!entUnchanged && (row.cajones_entregados > 0 || existingEntCabId || existingEntItemId)) {
             await upsertCajonTipo(connection, {
               idEtapa: row.Id_etapa,
               fecha,
               idCliente: row.id_cliente,
               tipo: CAJONES_TIPO_ENTREGA,
               cantidad: row.cajones_entregados,
-              existingCabId: row.id_remito_cajones_entrega,
-              existingItemId: row.id_remito_cajones_item_entrega
+              existingCabId: existingEntCabId,
+              existingItemId: existingEntItemId
             });
           }
 
-          if (row.cajones_devueltos > 0 || row.id_remito_cajones_devolucion || row.id_remito_cajones_item_devolucion) {
+          const existingDevItemId = row.id_remito_cajones_item_devolucion || existing?.id_remito_cajones_item_devolucion || null;
+          const existingDevCabId = row.id_remito_cajones_devolucion || existing?.id_remito_cajones_devolucion || null;
+          const devUnchanged = Boolean(existingDevItemId) && existing && Number(existing.cajones_devueltos) === row.cajones_devueltos;
+
+          if (!devUnchanged && (row.cajones_devueltos > 0 || existingDevCabId || existingDevItemId)) {
             await upsertCajonTipo(connection, {
               idEtapa: row.Id_etapa,
               fecha,
               idCliente: row.id_cliente,
               tipo: CAJONES_TIPO_DEVOLUCION,
               cantidad: row.cajones_devueltos,
-              existingCabId: row.id_remito_cajones_devolucion,
-              existingItemId: row.id_remito_cajones_item_devolucion
+              existingCabId: existingDevCabId,
+              existingItemId: existingDevItemId
             });
           }
         }

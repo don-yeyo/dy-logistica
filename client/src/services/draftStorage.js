@@ -28,11 +28,19 @@ function saveHojaRutaDraft(email, transaccionId, nextDraft) {
 
 export function dispatchDraftChanged(email, transaccionId, section) {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(
-    new CustomEvent('dy-draft-changed', {
-      detail: { email, transaccionId, section }
-    })
-  );
+  const emit = () => {
+    window.dispatchEvent(
+      new CustomEvent('dy-draft-changed', {
+        detail: { email, transaccionId, section }
+      })
+    );
+  };
+
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(emit);
+  } else {
+    setTimeout(emit, 0);
+  }
 }
 
 export function patchSectionDraft(email, transaccionId, section, patch) {
