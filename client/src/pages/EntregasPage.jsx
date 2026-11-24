@@ -11,19 +11,21 @@ import { useAuth } from '../config/AuthContext';
 import {
   Save,
   RefreshCw,
-  Check,
-  CheckCheck,
   Inbox,
   MapPin,
-  FileText
+  FileText,
+  ChevronDown,
+  ChevronRight,
+  Minus,
+  Plus
 } from 'lucide-react';
 
 const POSITIVE_INT_REGEX = /^\d+$/;
 
 /**
  * Módulo 4.2.1: Confirmación de Descarga (Logística DY - Entregas).
- * Agrupa ítems de ITEMS_A_ENTREGAR por Lugar_de_Entrega -> Remito.
- * Conserva internamente Transaccionid y Hojarutaitemid sin mostrarlos.
+ * Agrupa ítems de ITEMS_A_ENTREGAR por Lugar_de_Entrega (acordeón) -> Remito.
+ * Prellena Entregado con Remitido por defecto e incluye stepper integrado.
  */
 export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
   const { refreshPendingCount } = useAuth();
@@ -31,6 +33,7 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
   const [items, setItems] = useState([]);
   const [entregadoMap, setEntregadoMap] = useState({});
   const [invalidIds, setInvalidIds] = useState({});
+  const [openLugares, setOpenLugares] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -41,6 +44,7 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
     try {
       setLoading(true);
       setErrorMsg(null);
+      setOpenLugares({});
       let loadedHeader = hojaRuta;
       let loadedItems = [];
 
@@ -79,7 +83,9 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
       const initialMap = {};
       for (const it of loadedItems) {
         initialMap[it.Hojarutaitemid] =
-          it.Entregado !== null && it.Entregado !== undefined ? String(it.Entregado) : '';
+          it.Entregado !== null && it.Entregado !== undefined
+            ? String(it.Entregado)
+            : String(it.Remitido ?? 0);
       }
       setEntregadoMap(initialMap);
       setInvalidIds({});
@@ -129,8 +135,14 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
     return lugares;
   }, [items]);
 
+  const toggleLugar = (lugarKey) => {
+    setOpenLugares((prev) => ({
+      ...prev,
+      [lugarKey]: !prev[lugarKey]
+    }));
+  };
+
   const handleEntregadoChange = (hojaRutaItemId, rawValue) => {
-    // Bloquear caracteres no numéricos (negativos, decimales, texto, símbolos)
     if (rawValue !== '' && !POSITIVE_INT_REGEX.test(rawValue)) {
       return;
     }
@@ -149,33 +161,49 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
     }
   };
 
+  const handleStepEntregado = (hojaRutaItemId, delta) => {
+    const rawCurrent = String(entregadoMap[hojaRutaItemId] ?? '').trim();
+    const parsedCurrent = POSITIVE_INT_REGEX.test(rawCurrent) ? parseInt(rawCurrent, 10) : 0;
+    const nextVal = Math.max(0, parsedCurrent + delta);
+
+    setEntregadoMap((prev) => ({
+      ...prev,
+      [hojaRutaItemId]: String(nextVal)
+    }));
+
+    if (invalidIds[hojaRutaItemId]) {
+      setInvalidIds((prev) => {
+        const next = { ...prev };
+        delete next[hojaRutaItemId];
+        return next;
+      });
+    }
+  };
+
   const handleKeyDownNumeric = (e) => {
     if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) {
       e.preventDefault();
     }
   };
 
-  const handlePrefillAllWithRemitido = () => {
-    const nextMap = { ...entregadoMap };
-    for (const it of items) {
-      if (nextMap[it.Hojarutaitemid] === '' || nextMap[it.Hojarutaitemid] === undefined) {
-        nextMap[it.Hojarutaitemid] = String(it.Remitido ?? 0);
-      }
-    }
-    setEntregadoMap(nextMap);
-    setInvalidIds({});
+  const handleFocusSelectAll = (e) => {
+    const input = e.target;
+    input.select();
+    requestAnimationFrame(() => input.select());
   };
 
   const handleGuardar = async () => {
     if (items.length === 0) return;
 
     const newInvalids = {};
+    const invalidLugares = {};
     const payloadItems = [];
 
     for (const item of items) {
       const valStr = String(entregadoMap[item.Hojarutaitemid] ?? '').trim();
       if (!POSITIVE_INT_REGEX.test(valStr)) {
         newInvalids[item.Hojarutaitemid] = true;
+        invalidLugares[item.Lugar_de_Entrega || 'Sin Lugar de Entrega'] = true;
       } else {
         payloadItems.push({
           Hojarutaitemid: item.Hojarutaitemid,
@@ -186,6 +214,7 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
 
     if (Object.keys(newInvalids).length > 0) {
       setInvalidIds(newInvalids);
+      setOpenLugares((prev) => ({ ...prev, ...invalidLugares }));
       setErrorMsg(
         'Todos los productos deben tener una cantidad entregada válida (únicamente números enteros positivos, sin decimales, negativos ni campos vacíos).'
       );
@@ -239,23 +268,6 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
         onChangeHojaRuta={onChangeHojaRuta}
       />
 
-      {/* Barra de acción rápida para agilizar la carga en móvil */}
-      {!loading && items.length > 0 && (
-        <div className="module-toolbar">
-          <span className="module-count-text">
-            {items.length} ítems en {groupedData.length} lugar(es) de entrega
-          </span>
-          <button
-            type="button"
-            className="module-helper-btn"
-            onClick={handlePrefillAllWithRemitido}
-          >
-            <CheckCheck size={15} />
-            <span>Completar vacíos con Remitido</span>
-          </button>
-        </div>
-      )}
-
       {loading ? (
         <div className="hr-empty-state">
           <RefreshCw size={30} className="spin" style={{ color: 'var(--dy-blue)' }} />
@@ -269,66 +281,114 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
         </div>
       ) : (
         <div className="entregas-groups">
-          {groupedData.map((lugarGroup) => (
-            <section key={lugarGroup.lugar} className="lugar-section">
-              {/* Primer Corte: Lugar de Entrega */}
-              <div className="lugar-header-banner">
-                <MapPin size={16} />
-                <span>Lugar de entrega: <strong>{lugarGroup.lugar}</strong></span>
-              </div>
-
-              {/* Segundo Corte: Remitos dentro de este Lugar de Entrega */}
-              <div className="lugar-remitos-stack">
-                {lugarGroup.remitos.map((remitoGroup) => (
-                  <div key={`${lugarGroup.lugar}-${remitoGroup.remito}`} className="remito-grid-card">
-                    <div className="remito-cut-header">
-                      <FileText size={15} />
-                      <span>
-                        Remito: <strong>{remitoGroup.remito}</strong>
-                        {remitoGroup.cliente ? ` / Cliente: ${remitoGroup.cliente}` : ''}
-                      </span>
-                    </div>
-
-                    <div className="entregas-table-wrap">
-                      <table className="entregas-table">
-                        <thead>
-                          <tr>
-                            <th style={{ textAlign: 'left' }}>Producto</th>
-                            <th style={{ width: '74px', textAlign: 'center' }}>Remitido</th>
-                            <th style={{ width: '88px', textAlign: 'center' }}>Entregado</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {remitoGroup.productos.map((prod) => {
-                            const isInvalid = Boolean(invalidIds[prod.Hojarutaitemid]);
-                            return (
-                              <tr key={prod.Hojarutaitemid}>
-                                <td className="prod-name-cell">{prod.Producto}</td>
-                                <td className="remitido-cell">{prod.Remitido}</td>
-                                <td className="entregado-cell">
-                                  <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    pattern="[0-9]*"
-                                    aria-label={`Cantidad entregada de ${prod.Producto}`}
-                                    className={`entregado-input ${isInvalid ? 'invalid' : ''}`}
-                                    value={entregadoMap[prod.Hojarutaitemid] ?? ''}
-                                    onKeyDown={handleKeyDownNumeric}
-                                    onChange={(e) => handleEntregadoChange(prod.Hojarutaitemid, e.target.value)}
-                                    placeholder="0"
-                                  />
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+          {groupedData.map((lugarGroup) => {
+            const isOpen = Boolean(openLugares[lugarGroup.lugar]);
+            return (
+              <section key={lugarGroup.lugar} className="lugar-section">
+                {/* Primer Corte: Lugar de Entrega (Acordeón persistente por sección) */}
+                <button
+                  type="button"
+                  className={`lugar-header-banner lugar-accordion-btn ${isOpen ? 'open' : ''}`}
+                  onClick={() => toggleLugar(lugarGroup.lugar)}
+                  aria-expanded={isOpen}
+                >
+                  <div className="lugar-accordion-title">
+                    <MapPin size={16} style={{ flexShrink: 0 }} />
+                    <span>Lugar de entrega: <strong>{lugarGroup.lugar}</strong></span>
                   </div>
-                ))}
-              </div>
-            </section>
-          ))}
+                  <div className="lugar-accordion-meta">
+                    <span className="lugar-remitos-count">
+                      {lugarGroup.remitos.length} rem.
+                    </span>
+                    {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                  </div>
+                </button>
+
+                {/* Segundo Corte: Remitos dentro de este Lugar de Entrega */}
+                {isOpen && (
+                  <div className="lugar-remitos-stack">
+                    {lugarGroup.remitos.map((remitoGroup) => (
+                      <div key={`${lugarGroup.lugar}-${remitoGroup.remito}`} className="remito-grid-card">
+                        <div className="remito-cut-header">
+                          <FileText size={15} />
+                          <span>
+                            Remito: <strong>{remitoGroup.remito}</strong>
+                            {remitoGroup.cliente ? ` / Cliente: ${remitoGroup.cliente}` : ''}
+                          </span>
+                        </div>
+
+                        <div className="entregas-table-wrap">
+                          <table className="entregas-table">
+                            <thead>
+                              <tr>
+                                <th style={{ textAlign: 'left' }}>Producto</th>
+                                <th style={{ width: '64px', textAlign: 'center' }}>Remitido</th>
+                                <th style={{ width: '124px', textAlign: 'center' }}>Entregado</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {remitoGroup.productos.map((prod) => {
+                                const rawVal = String(entregadoMap[prod.Hojarutaitemid] ?? '');
+                                const currentNum = POSITIVE_INT_REGEX.test(rawVal) ? parseInt(rawVal, 10) : 0;
+                                const isInvalid = Boolean(invalidIds[prod.Hojarutaitemid]);
+                                const isModified =
+                                  POSITIVE_INT_REGEX.test(rawVal) &&
+                                  currentNum !== Number(prod.Remitido ?? 0);
+
+                                return (
+                                  <tr key={prod.Hojarutaitemid}>
+                                    <td className="prod-name-cell">{prod.Producto}</td>
+                                    <td className="remitido-cell">{prod.Remitido}</td>
+                                    <td className="entregado-cell">
+                                      <div
+                                        className={`entregado-stepper ${isModified ? 'modified' : ''} ${isInvalid ? 'invalid' : ''}`}
+                                      >
+                                        <button
+                                          type="button"
+                                          className="entregado-step-btn"
+                                          aria-label={`Disminuir entregado de ${prod.Producto}`}
+                                          disabled={currentNum <= 0 && rawVal !== ''}
+                                          onClick={() => handleStepEntregado(prod.Hojarutaitemid, -1)}
+                                        >
+                                          <Minus size={14} />
+                                        </button>
+
+                                        <input
+                                          type="text"
+                                          inputMode="numeric"
+                                          pattern="[0-9]*"
+                                          aria-label={`Cantidad entregada de ${prod.Producto}`}
+                                          className={`entregado-input ${isModified ? 'modified' : ''} ${isInvalid ? 'invalid' : ''}`}
+                                          value={rawVal}
+                                          onFocus={handleFocusSelectAll}
+                                          onKeyDown={handleKeyDownNumeric}
+                                          onChange={(e) => handleEntregadoChange(prod.Hojarutaitemid, e.target.value)}
+                                          placeholder="0"
+                                        />
+
+                                        <button
+                                          type="button"
+                                          className="entregado-step-btn"
+                                          aria-label={`Incrementar entregado de ${prod.Producto}`}
+                                          onClick={() => handleStepEntregado(prod.Hojarutaitemid, 1)}
+                                        >
+                                          <Plus size={14} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })}
 
           {/* Botón Guardar al final del detalle */}
           <div className="module-save-footer">

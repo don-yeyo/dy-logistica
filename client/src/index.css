@@ -3452,18 +3452,63 @@ body {
   color: #0d2c5c;
   border: 1.5px solid #93c5fd;
   border-radius: 12px;
-  padding: 9px 12px;
+  padding: 10px 12px;
   font-size: 0.88rem;
   display: flex;
   align-items: center;
-  gap: 7px;
+  justify-content: space-between;
+  gap: 8px;
   box-shadow: var(--shadow-sm);
+}
+
+.lugar-accordion-btn {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lugar-accordion-btn.open {
+  border-color: var(--dy-blue);
+}
+
+.lugar-accordion-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.lugar-accordion-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.lugar-remitos-count {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(13, 44, 92, 0.1);
+  color: #0d2c5c;
 }
 
 .dark-theme .lugar-header-banner {
   background: rgba(56, 189, 248, 0.18);
   color: #e0f2fe;
   border-color: rgba(56, 189, 248, 0.45);
+}
+
+.dark-theme .lugar-accordion-btn.open {
+  border-color: #38bdf8;
+}
+
+.dark-theme .lugar-remitos-count {
+  background: rgba(56, 189, 248, 0.22);
+  color: #bae6fd;
 }
 
 .lugar-remitos-stack {
@@ -3543,34 +3588,129 @@ body {
 .entregado-cell {
   background: #dcfce7;
   padding: 4px 6px !important;
+  text-align: center;
 }
 
 .dark-theme .entregado-cell {
   background: rgba(16, 185, 129, 0.18);
 }
 
-.entregado-input {
+.entregado-stepper {
   width: 100%;
-  height: 36px;
-  border-radius: 8px;
+  max-width: 118px;
+  margin: 0 auto;
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 9px;
   border: 1.5px solid #86efac;
   background: #ffffff;
-  color: #064e3b;
-  text-align: center;
-  font-size: 0.95rem;
-  font-weight: 800;
-  outline: none;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
-.dark-theme .entregado-input {
+.dark-theme .entregado-stepper {
   background: #0f172a;
-  color: #34d399;
   border-color: rgba(52, 211, 153, 0.5);
 }
 
-.entregado-input:focus {
+.entregado-stepper:focus-within {
   border-color: #059669;
   box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+}
+
+.entregado-step-btn {
+  width: 30px;
+  height: 34px;
+  flex-shrink: 0;
+  border: none;
+  background: rgba(16, 185, 129, 0.1);
+  color: #065f46;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.entregado-step-btn:active:not(:disabled) {
+  background: rgba(16, 185, 129, 0.22);
+}
+
+.entregado-step-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.dark-theme .entregado-step-btn {
+  background: rgba(52, 211, 153, 0.14);
+  color: #34d399;
+}
+
+.entregado-input {
+  width: 100%;
+  min-width: 36px;
+  height: 34px;
+  border: none;
+  border-left: 1px solid rgba(134, 239, 172, 0.6);
+  border-right: 1px solid rgba(134, 239, 172, 0.6);
+  border-radius: 0;
+  background: transparent;
+  color: #064e3b;
+  text-align: center;
+  font-size: 0.94rem;
+  font-weight: 800;
+  outline: none;
+  padding: 0 2px;
+}
+
+.dark-theme .entregado-input {
+  background: transparent;
+  color: #34d399;
+  border-left-color: rgba(52, 211, 153, 0.25);
+  border-right-color: rgba(52, 211, 153, 0.25);
+}
+
+/* Estado cuando Entregado difiere de Remitido */
+.entregado-stepper.modified {
+  border-color: #f97316;
+  background: #fff7ed;
+}
+
+.dark-theme .entregado-stepper.modified {
+  border-color: #fb923c;
+  background: rgba(249, 115, 22, 0.16);
+}
+
+.entregado-stepper.modified:focus-within {
+  border-color: #ea580c;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.28);
+}
+
+.entregado-stepper.modified .entregado-step-btn {
+  background: rgba(249, 115, 22, 0.14);
+  color: #c2410c;
+}
+
+.dark-theme .entregado-stepper.modified .entregado-step-btn {
+  background: rgba(251, 146, 60, 0.18);
+  color: #fb923c;
+}
+
+.entregado-input.modified {
+  color: #c2410c;
+  border-left-color: rgba(249, 115, 22, 0.35);
+  border-right-color: rgba(249, 115, 22, 0.35);
+}
+
+.dark-theme .entregado-input.modified {
+  color: #fb923c;
+}
+
+.entregado-stepper.invalid {
+  border-color: #ef4444 !important;
+  background: #fee2e2 !important;
 }
 
 .entregado-input.invalid {
