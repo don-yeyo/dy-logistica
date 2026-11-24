@@ -3,13 +3,10 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 
-// Validar usuario y contraseña contra Microsoft Entra ID
-router.post('/login', authController.loginWithCredentials);
-
-// Obtener datos del chofer/usuario logueado
+// Obtener datos del usuario autenticado (Microsoft SSO)
 router.get('/me', authMiddleware, authController.getMe);
 
-// Listar todos los usuarios habilitados (para selector dev / admin)
+// Listar usuarios activos (solo para selector en modo desarrollo VITE_MOCK_AUTH)
 router.get('/users', authController.listUsers);
 
 module.exports = router;

@@ -1,11 +1,76 @@
 const { pool } = require('../config/db');
 
 /**
- * Middleware para autenticación y resolución de chofer/usuario por correo electrónico.
+ * Resuelve el usuario autenticado exclusivamente en Gestion_Logistica.APP_USUARIOS
+ * (y opcionalmente en ORGANIZACION si existe un registro con ese EMail).
+ */
+async function resolveUserByEmail(cleanEmail) {
+  let user = null;
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT
+         u.id,
+         u.email,
+         u.nombre,
+         u.rol,
+         u.organizacion_id,
+         u.codigo_chofer,
+         u.activo,
+         org.Nombre AS organizacion_nombre,
+         org.Codigo AS organizacion_codigo
+       FROM APP_USUARIOS u
+       LEFT JOIN ORGANIZACION org ON org.Organizacionid = u.organizacion_id
+       WHERE LOWER(u.email) = ?
+       LIMIT 1`,
+      [cleanEmail]
+    );
+
+    if (rows && rows.length > 0) {
+      user = rows[0];
+    }
+  } catch (dbErr) {
+    console.warn(`[AuthMiddleware] Error al consultar APP_USUARIOS: ${dbErr.message}`);
+  }
+
+  // Respaldo: si el email existe en ORGANIZACION.EMail pero aún no fue dado de alta en APP_USUARIOS
+  if (!user) {
+    try {
+      const [orgRows] = await pool.query(
+        `SELECT Organizacionid, Codigo, Nombre, EMail, Activo
+         FROM ORGANIZACION
+         WHERE LOWER(EMail) = ?
+         LIMIT 1`,
+        [cleanEmail]
+      );
+      if (orgRows && orgRows.length > 0) {
+        const org = orgRows[0];
+        const isActive = org.Activo === null || org.Activo === undefined || org.Activo === 1 || String(org.Activo) === '1';
+        user = {
+          id: org.Organizacionid,
+          email: org.EMail || cleanEmail,
+          nombre: org.Nombre || cleanEmail.split('@')[0],
+          rol: 'chofer',
+          organizacion_id: org.Organizacionid,
+          codigo_chofer: org.Codigo || String(org.Organizacionid),
+          organizacion_nombre: org.Nombre,
+          organizacion_codigo: org.Codigo,
+          activo: isActive ? 1 : 0
+        };
+      }
+    } catch (orgErr) {
+      console.warn(`[AuthMiddleware] Error al consultar ORGANIZACION: ${orgErr.message}`);
+    }
+  }
+
+  return user;
+}
+
+/**
+ * Middleware de autenticación por correo corporativo (SSO Entra ID).
  */
 async function authMiddleware(req, res, next) {
   try {
-    // 1. Obtener email del usuario desde headers (inyectado por cliente MSAL / JWT o Mock Dev)
     const userEmail = req.headers['x-user-email'] || req.headers['x-ms-client-principal-name'] || req.query.mock_email;
 
     if (!userEmail) {
@@ -16,35 +81,12 @@ async function authMiddleware(req, res, next) {
     }
 
     const cleanEmail = userEmail.toLowerCase().trim();
-
-    // 2. Buscar en la tabla 'usuarios' por email
-    let user = null;
-    try {
-      const [rows] = await pool.query(
-        'SELECT id, email, nombre, codigo_chofer, rol, activo FROM usuarios WHERE LOWER(email) = ? LIMIT 1',
-        [cleanEmail]
-      );
-      if (rows && rows.length > 0) {
-        user = rows[0];
-      }
-    } catch (dbErr) {
-      console.warn(`[AuthMiddleware] Fallo al consultar tabla usuarios en BD: ${dbErr.message}`);
-      // Fallback si la BD no está disponible en desarrollo
-      user = {
-        id: 1,
-        email: cleanEmail,
-        nombre: cleanEmail.split('@')[0],
-        codigo_chofer: '32355',
-        rol: cleanEmail.includes('admin') ? 'admin' : 'chofer',
-        activo: 1
-      };
-    }
+    const user = await resolveUserByEmail(cleanEmail);
 
     if (!user) {
-      // Si el email no está en la tabla de usuarios habilitados
       return res.status(403).json({
         ok: false,
-        error: `El correo corporativo [${cleanEmail}] no se encuentra registrado ni habilitado como chofer/usuario en el sistema.`
+        error: `El correo corporativo [${cleanEmail}] no se encuentra habilitado en el sistema. Solicite el alta a SysAdmin o Logística.`
       });
     }
 
@@ -55,7 +97,6 @@ async function authMiddleware(req, res, next) {
       });
     }
 
-    // Inyectar en req.user
     req.user = user;
     next();
   } catch (error) {
@@ -68,12 +109,24 @@ async function authMiddleware(req, res, next) {
 }
 
 /**
- * Middleware opcional para validar X-API-Key en endpoints protegidos.
+ * Guard RBAC por rol: verifica que req.user.rol esté incluido en allowedRoles.
  */
+function requireRole(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user || !allowedRoles.includes(req.user.rol)) {
+      return res.status(403).json({
+        ok: false,
+        error: `Acceso denegado. Se requiere alguno de los siguientes roles: ${allowedRoles.join(', ')}.`
+      });
+    }
+    next();
+  };
+}
+
 function apiKeyGuard(req, res, next) {
   const configuredSecret = process.env.API_SECRET_KEY;
   if (!configuredSecret) {
-    return next(); // Sin secret configurado
+    return next();
   }
 
   const clientKey = req.headers['x-api-key'] || req.query.api_key;
@@ -89,5 +142,7 @@ function apiKeyGuard(req, res, next) {
 
 module.exports = {
   authMiddleware,
-  apiKeyGuard
+  requireRole,
+  apiKeyGuard,
+  resolveUserByEmail
 };

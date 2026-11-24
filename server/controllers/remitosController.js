@@ -1,11 +1,59 @@
 const path = require('path');
 const fs = require('fs');
-const { pool } = require('../config/db');
+const { pool, withAuditConnection } = require('../config/db');
 const SharePointService = require('../services/sharepointService');
 const { uploadsDir } = require('../middlewares/uploadMiddleware');
 
+function isStageIdTypeMismatch(err) {
+  const msg = String(err?.message || '');
+  return (
+    err?.errno === 1366 ||
+    err?.errno === 1265 ||
+    err?.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' ||
+    msg.toLowerCase().includes('id_etapa')
+  );
+}
+
 /**
- * Buscar un remito específico por código de barras 1D (finne_transaccionID o finne_Comprobante).
+ * Mapea una fila combinada de Gestion_Logistica (REMITO + ETAPA + HOJA_DE_RUTA + REMITOS_FIRMADOS)
+ * al contrato de remito utilizado por el frontend mobile.
+ */
+function mapRemitoRow(row) {
+  let estadoFirma = 'PENDIENTE';
+  if (row.Firmado_cliente === 1 || row.firma_cliente_url) {
+    estadoFirma = 'FIRMADO_CLIENTE';
+  } else if (row.Firmado_distribuidor === 1 || row.firma_distribuidor_url) {
+    estadoFirma = 'FIRMADO_INTERMEDIARIO';
+  }
+
+  const fotoUrl = row.Url_imagen || row.firma_cliente_url || row.firma_distribuidor_url || null;
+
+  return {
+    id: row.Id_transaccion_remito,
+    finne_transaccionID: row.Id_transaccion_remito,
+    finne_Fecha: row.Fecha,
+    finne_CodigoCliente: row.ClienteCodigo
+      ? Number(row.ClienteCodigo) || row.Organizacioniddestinatarioremito
+      : row.Organizacioniddestinatarioremito,
+    finne_Cliente: row.ClienteNombre || 'Cliente no especificado',
+    finne_domicilio: row.Direccionentrega || null,
+    finne_Comprobante: row.Numeroremito,
+    nro_hoja_ruta: row.Hoja_de_ruta || null,
+    hoja_ruta_transaccion_id: row.HojaRutaTransaccionId || null,
+    id_etapa: row.Id_etapa || null,
+    ejemplar: 'ORIGINAL',
+    estado_firma: estadoFirma,
+    tipo_documento: 'REMITO',
+    observaciones: null,
+    foto_url: fotoUrl,
+    foto_sharepoint_url: fotoUrl && fotoUrl.startsWith('http') ? fotoUrl : null,
+    fecha_control: row.Fecha_hora || null,
+    source_db: 'Gestion_Logistica'
+  };
+}
+
+/**
+ * Buscar un remito específico por código de barras 1D (Id_transaccion_remito o Numeroremito) en Gestion_Logistica.
  */
 async function buscarRemito(req, res) {
   try {
@@ -18,42 +66,39 @@ async function buscarRemito(req, res) {
       });
     }
 
-    const sql = `
-      SELECT 
-        id,
-        finne_transaccionID,
-        finne_Copias,
-        finne_Fecha,
-        finne_CodigoCliente,
-        finne_Cliente,
-        finne_domicilio,
-        finne_importe_total,
-        finne_Comprobante,
-        nro_hoja_ruta,
-        transportistas,
-        ejemplar,
-        estado_firma,
-        tipo_documento,
-        observaciones,
-        foto_url,
-        foto_sharepoint_url,
-        foto_nombre_archivo,
-        firma_digital_base64,
-        firma_receptor_aclaracion,
-        firma_receptor_dni,
-        fecha_control,
-        controlado_por_chofer_id,
-        controlado_por_chofer_email,
-        sincronizado_offline
-      FROM remitos
-      WHERE finne_transaccionID = ? 
-         OR CAST(finne_transaccionID AS CHAR) = ?
-         OR finne_Comprobante = ? 
-         OR id = ?
-      LIMIT 1
-    `;
-
-    const [rows] = await pool.query(sql, [rawCode, rawCode, rawCode, isNaN(rawCode) ? -1 : Number(rawCode)]);
+    const numericCode = isNaN(rawCode) ? -1 : Number(rawCode);
+    const [rows] = await pool.query(
+      `SELECT
+         r.Id_transaccion_remito,
+         r.Fecha,
+         r.Organizacioniddestinatarioremito,
+         r.Numeroremito,
+         r.firma_cliente_url,
+         r.firma_distribuidor_url,
+         cl.Codigo AS ClienteCodigo,
+         cl.Nombre AS ClienteNombre,
+         MAX(etapa.Id_etapa) AS Id_etapa,
+         MAX(etapa.Direccionentrega) AS Direccionentrega,
+         MAX(hr.Transaccionid) AS HojaRutaTransaccionId,
+         MAX(hr.Numerocomprobante) AS Hoja_de_ruta,
+         MAX(rf.Firmado_cliente) AS Firmado_cliente,
+         MAX(rf.Firmado_distribuidor) AS Firmado_distribuidor,
+         MAX(rf.Url_imagen) AS Url_imagen,
+         MAX(rf.Fecha_hora) AS Fecha_hora
+       FROM REMITO r
+       LEFT JOIN ORGANIZACION cl ON cl.Organizacionid = r.Organizacioniddestinatarioremito
+       LEFT JOIN HOJA_RUTA_ITEM_REMITO ir ON ir.Id_transaccion_remito = r.Id_transaccion_remito
+       LEFT JOIN HOJA_RUTA_ETAPA etapa ON etapa.Id_etapa = ir.Id_etapa
+       LEFT JOIN HOJA_DE_RUTA hr ON hr.Transaccionid = etapa.Transaccionid_hoja_de_ruta
+       LEFT JOIN REMITOS_FIRMADOS rf ON rf.Id_transaccion_remito = r.Id_transaccion_remito
+       WHERE r.Id_transaccion_remito = ?
+          OR CAST(r.Id_transaccion_remito AS CHAR) = ?
+          OR r.Numeroremito = ?
+       GROUP BY r.Id_transaccion_remito, r.Fecha, r.Organizacioniddestinatarioremito, r.Numeroremito,
+                r.firma_cliente_url, r.firma_distribuidor_url, cl.Codigo, cl.Nombre
+       LIMIT 1`,
+      [numericCode, rawCode, rawCode]
+    );
 
     if (!rows || rows.length === 0) {
       return res.status(404).json({
@@ -64,7 +109,7 @@ async function buscarRemito(req, res) {
 
     return res.json({
       ok: true,
-      remito: rows[0]
+      remito: mapRemitoRow(rows[0])
     });
   } catch (error) {
     console.error(`[RemitosController.buscarRemito] Error: ${error.message}`);
@@ -77,215 +122,178 @@ async function buscarRemito(req, res) {
 }
 
 /**
- * Helper para obtener la lista de las últimas N hojas de ruta para el chofer autenticado.
- */
-async function getRecentRouteNumbers(codigoChofer, email, limitN = 4, rol = 'chofer') {
-  try {
-    let query;
-    let params;
-
-    if (rol === 'admin') {
-      query = `
-        SELECT nro_hoja_ruta, MAX(finne_Fecha) AS ultima_fecha
-        FROM remitos
-        WHERE nro_hoja_ruta IS NOT NULL AND nro_hoja_ruta != ''
-        GROUP BY nro_hoja_ruta
-        ORDER BY ultima_fecha DESC, nro_hoja_ruta DESC
-        LIMIT ?
-      `;
-      params = [limitN];
-    } else {
-      query = `
-        SELECT nro_hoja_ruta, MAX(finne_Fecha) AS ultima_fecha
-        FROM remitos
-        WHERE nro_hoja_ruta IS NOT NULL AND nro_hoja_ruta != '' AND (
-          JSON_CONTAINS(transportistas, JSON_OBJECT('chofer', ?)) 
-          OR JSON_SEARCH(transportistas, 'one', ?) IS NOT NULL
-          OR controlado_por_chofer_email = ?
-        )
-        GROUP BY nro_hoja_ruta
-        ORDER BY ultima_fecha DESC, nro_hoja_ruta DESC
-        LIMIT ?
-      `;
-      params = [codigoChofer || '', codigoChofer || '', email || '', limitN];
-    }
-
-    const [rows] = await pool.query(query, params);
-    if (rows && rows.length > 0) {
-      return rows.map(r => r.nro_hoja_ruta);
-    }
-
-    // Fallback: Si el chofer aún no tiene viajes específicamente asignados, devolver las hojas más recientes globales
-    const [fallbackRows] = await pool.query(`
-      SELECT nro_hoja_ruta, MAX(finne_Fecha) AS ultima_fecha
-      FROM remitos
-      WHERE nro_hoja_ruta IS NOT NULL AND nro_hoja_ruta != ''
-      GROUP BY nro_hoja_ruta
-      ORDER BY ultima_fecha DESC, nro_hoja_ruta DESC
-      LIMIT ?
-    `, [limitN]);
-
-    return fallbackRows.map(r => r.nro_hoja_ruta);
-  } catch (error) {
-    console.warn(`[RemitosController] Error al obtener hojas de ruta recientes: ${error.message}`);
-    return ['HR-23812', 'HR-23810', 'HR-23806', 'HR-23805'];
-  }
-}
-
-/**
- * Obtener los remitos de los últimos N viajes del chofer autenticado.
+ * Obtener los remitos de la hoja de ruta seleccionada o de las últimas hojas del chofer.
  */
 async function getMisRemitos(req, res) {
   try {
     const user = req.user;
     const defaultN = parseInt(process.env.MAX_VIAJES_HISTORICOS_DEFAULT || '4', 10);
     const limitN = parseInt(req.query.n_viajes || defaultN, 10);
+    const limit = Number.isInteger(limitN) && limitN > 0 ? limitN : 4;
     const selectedRoute = req.query.hoja_ruta;
-    const selectedTxId = req.query.transaccion_id;
+    const selectedTxId = req.query.transaccion_id ? Number(req.query.transaccion_id) : null;
     const searchQuery = (req.query.q || '').trim();
 
-    // 1. Obtener las N hojas de ruta recientes
-    const recentRoutes = await getRecentRouteNumbers(user.codigo_chofer, user.email, limitN, user.rol);
+    const whereClauses = ['hr.Usr_estadohojaruta = 1'];
+    const params = [];
 
-    // 2. Construir condiciones SQL
-    let whereClauses = [];
-    let params = [];
-
-    // Filtro por chofer asignado
-    whereClauses.push(`(
-      JSON_CONTAINS(transportistas, JSON_OBJECT('chofer', ?)) 
-      OR JSON_SEARCH(transportistas, 'one', ?) IS NOT NULL
-      OR controlado_por_chofer_email = ?
-      OR ? = 'admin'
-    )`);
-    params.push(user.codigo_chofer || '', user.codigo_chofer || '', user.email || '', user.rol);
-
-    // Filtro por hoja de ruta (soporta tanto "HR-25430" como "25430")
-    if (selectedRoute && selectedRoute !== 'TODAS') {
+    if (selectedTxId && Number.isInteger(selectedTxId)) {
+      whereClauses.push('hr.Transaccionid = ?');
+      params.push(selectedTxId);
+    } else if (selectedRoute && selectedRoute !== 'TODAS') {
       const cleanRoute = String(selectedRoute).trim();
       const withoutPrefix = cleanRoute.replace(/^HR-/i, '');
-      const withPrefix = cleanRoute.toUpperCase().startsWith('HR-') ? cleanRoute : `HR-${cleanRoute}`;
-      whereClauses.push('(nro_hoja_ruta = ? OR nro_hoja_ruta = ? OR nro_hoja_ruta = ?)');
-      params.push(cleanRoute, withPrefix, withoutPrefix);
-    } else if (selectedTxId) {
-      const txClean = String(selectedTxId).trim();
-      whereClauses.push('(nro_hoja_ruta = ? OR nro_hoja_ruta = ?)');
-      params.push(`HR-${txClean}`, txClean);
-    } else if (recentRoutes.length > 0) {
-      const placeholders = recentRoutes.map(() => '?').join(',');
-      whereClauses.push(`nro_hoja_ruta IN (${placeholders})`);
-      params.push(...recentRoutes);
+      whereClauses.push('(hr.Numerocomprobante = ? OR hr.Numerocomprobante = ?)');
+      params.push(cleanRoute, withoutPrefix);
+    } else if (user.rol === 'chofer' && user.organizacion_id) {
+      const [driverHrs] = await pool.query(
+        `SELECT hr.Transaccionid
+         FROM HOJA_DE_RUTA hr
+         LEFT JOIN ORGANIZACION tr ON tr.Organizacionid = hr.Organizacionid_transportista
+         WHERE hr.Usr_estadohojaruta = 1
+           AND (LOWER(tr.EMail) = LOWER(?) OR hr.Organizacionid_chofer = ? OR hr.Organizacionid_transportista = ?)
+         ORDER BY hr.Fecha DESC, hr.Transaccionid DESC
+         LIMIT ?`,
+        [user.email, user.organizacion_id, user.organizacion_id, limit]
+      );
+      const txIds = (driverHrs || []).map((h) => h.Transaccionid);
+      if (txIds.length === 0) {
+        return res.json({ ok: true, total: 0, hojas_ruta_disponibles: [], remitos: [] });
+      }
+      whereClauses.push(`hr.Transaccionid IN (${txIds.map(() => '?').join(',')})`);
+      params.push(...txIds);
+    } else {
+      const [recentHrs] = await pool.query(
+        `SELECT Transaccionid FROM HOJAS_DE_RUTA_A_ENTREGAR ORDER BY Fecha DESC, Transaccionid DESC LIMIT ?`,
+        [limit]
+      );
+      const txIds = (recentHrs || []).map((h) => h.Transaccionid);
+      if (txIds.length > 0) {
+        whereClauses.push(`hr.Transaccionid IN (${txIds.map(() => '?').join(',')})`);
+        params.push(...txIds);
+      }
     }
 
-    // Búsqueda predictiva adicional si viene parámetro 'q'
     if (searchQuery) {
       whereClauses.push(`(
-        finne_Comprobante LIKE ? 
-        OR finne_Cliente LIKE ? 
-        OR finne_domicilio LIKE ? 
-        OR CAST(finne_CodigoCliente AS CHAR) LIKE ?
-        OR nro_hoja_ruta LIKE ?
-        OR CAST(finne_transaccionID AS CHAR) LIKE ?
+        r.Numeroremito LIKE ?
+        OR cl.Nombre LIKE ?
+        OR etapa.Direccionentrega LIKE ?
+        OR CAST(cl.Codigo AS CHAR) LIKE ?
+        OR hr.Numerocomprobante LIKE ?
+        OR CAST(r.Id_transaccion_remito AS CHAR) LIKE ?
       )`);
-      const searchPattern = `%${searchQuery}%`;
-      params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+      const pattern = `%${searchQuery}%`;
+      params.push(pattern, pattern, pattern, pattern, pattern, pattern);
     }
 
     const sql = `
-      SELECT 
-        id,
-        finne_transaccionID,
-        finne_Copias,
-        finne_Fecha,
-        finne_CodigoCliente,
-        finne_Cliente,
-        finne_domicilio,
-        finne_importe_total,
-        finne_Comprobante,
-        nro_hoja_ruta,
-        transportistas,
-        ejemplar,
-        estado_firma,
-        tipo_documento,
-        observaciones,
-        foto_url,
-        foto_sharepoint_url,
-        foto_nombre_archivo,
-        firma_digital_base64,
-        firma_receptor_aclaracion,
-        firma_receptor_dni,
-        fecha_control,
-        controlado_por_chofer_id,
-        controlado_por_chofer_email,
-        sincronizado_offline
-      FROM remitos
+      SELECT
+        r.Id_transaccion_remito,
+        r.Fecha,
+        r.Organizacioniddestinatarioremito,
+        r.Numeroremito,
+        r.firma_cliente_url,
+        r.firma_distribuidor_url,
+        cl.Codigo AS ClienteCodigo,
+        cl.Nombre AS ClienteNombre,
+        MAX(etapa.Id_etapa) AS Id_etapa,
+        MAX(etapa.Direccionentrega) AS Direccionentrega,
+        MAX(hr.Transaccionid) AS HojaRutaTransaccionId,
+        MAX(hr.Numerocomprobante) AS Hoja_de_ruta,
+        MAX(rf.Firmado_cliente) AS Firmado_cliente,
+        MAX(rf.Firmado_distribuidor) AS Firmado_distribuidor,
+        MAX(rf.Url_imagen) AS Url_imagen,
+        MAX(rf.Fecha_hora) AS Fecha_hora
+      FROM HOJA_RUTA_ITEM_REMITO ir
+      INNER JOIN HOJA_RUTA_ETAPA etapa ON etapa.Id_etapa = ir.Id_etapa
+      INNER JOIN HOJA_DE_RUTA hr ON hr.Transaccionid = etapa.Transaccionid_hoja_de_ruta
+      INNER JOIN REMITO r ON r.Id_transaccion_remito = ir.Id_transaccion_remito
+      LEFT JOIN ORGANIZACION cl ON cl.Organizacionid = r.Organizacioniddestinatarioremito
+      LEFT JOIN REMITOS_FIRMADOS rf ON rf.Id_transaccion_remito = r.Id_transaccion_remito
       WHERE ${whereClauses.join(' AND ')}
-      ORDER BY 
-        CASE WHEN estado_firma = 'PENDIENTE' THEN 0 ELSE 1 END ASC,
-        finne_Fecha DESC,
-        id DESC
+      GROUP BY r.Id_transaccion_remito, r.Fecha, r.Organizacioniddestinatarioremito, r.Numeroremito,
+               r.firma_cliente_url, r.firma_distribuidor_url, cl.Codigo, cl.Nombre
+      ORDER BY r.Fecha DESC, r.Id_transaccion_remito DESC
     `;
 
-    const [remitos] = await pool.query(sql, params);
+    const [rows] = await pool.query(sql, params);
+    const mappedRemitos = (rows || []).map(mapRemitoRow);
+
+    mappedRemitos.sort((a, b) => {
+      const aPend = a.estado_firma === 'PENDIENTE' ? 0 : 1;
+      const bPend = b.estado_firma === 'PENDIENTE' ? 0 : 1;
+      if (aPend !== bPend) return aPend - bPend;
+      return b.id - a.id;
+    });
+
+    const rutasDisponibles = Array.from(new Set(mappedRemitos.map((r) => r.nro_hoja_ruta).filter(Boolean)));
 
     return res.json({
       ok: true,
-      total: remitos.length,
-      hojas_ruta_disponibles: recentRoutes,
-      remitos: remitos
+      total: mappedRemitos.length,
+      hojas_ruta_disponibles: rutasDisponibles,
+      remitos: mappedRemitos
     });
-
   } catch (error) {
     console.error(`[RemitosController.getMisRemitos] Error: ${error.message}`);
     return res.status(500).json({
       ok: false,
-      error: 'Error al obtener remitos del chofer.',
+      error: 'Error al obtener remitos en Gestion_Logistica.',
       details: error.message
     });
   }
 }
 
 /**
- * Obtener listado de viajes/hojas de ruta con métricas para el chofer.
+ * Listar viajes con métricas de remitos desde Gestion_Logistica.
  */
 async function getViajes(req, res) {
   try {
     const user = req.user;
     const defaultN = parseInt(process.env.MAX_VIAJES_HISTORICOS_DEFAULT || '4', 10);
     const limitN = parseInt(req.query.n_viajes || defaultN, 10);
+    const limit = Number.isInteger(limitN) && limitN > 0 ? limitN : 4;
 
-    const sql = `
-      SELECT 
-        nro_hoja_ruta,
-        MAX(finne_Fecha) AS fecha,
-        COUNT(id) AS total_remitos,
-        COUNT(CASE WHEN estado_firma = 'PENDIENTE' THEN 1 END) AS pendientes,
-        COUNT(CASE WHEN estado_firma = 'FIRMADO_CLIENTE' THEN 1 END) AS firmados_cliente,
-        COUNT(CASE WHEN estado_firma = 'FIRMADO_INTERMEDIARIO' THEN 1 END) AS firmados_intermediario,
-        COUNT(CASE WHEN estado_firma = 'NO_FIRMADO' THEN 1 END) AS no_firmados
-      FROM remitos
-      WHERE nro_hoja_ruta IS NOT NULL AND (
-        JSON_CONTAINS(transportistas, JSON_OBJECT('chofer', ?)) 
-        OR JSON_SEARCH(transportistas, 'one', ?) IS NOT NULL
-        OR controlado_por_chofer_email = ?
-        OR ? = 'admin'
-      )
-      GROUP BY nro_hoja_ruta
-      ORDER BY fecha DESC, nro_hoja_ruta DESC
-      LIMIT ?
-    `;
+    const filterClause =
+      user.rol === 'sysadmin' || user.rol === 'logistica'
+        ? '1=1'
+        : user.organizacion_id
+        ? '(LOWER(tr.EMail) = LOWER(?) OR hr.Organizacionid_chofer = ? OR hr.Organizacionid_transportista = ?)'
+        : '(LOWER(tr.EMail) = LOWER(?) OR ? = \'true\')';
 
-    const [viajes] = await pool.query(sql, [
-      user.codigo_chofer || '', 
-      user.codigo_chofer || '', 
-      user.email || '', 
-      user.rol, 
-      limitN
-    ]);
+    const filterParams =
+      user.rol === 'sysadmin' || user.rol === 'logistica'
+        ? []
+        : user.organizacion_id
+        ? [user.email, user.organizacion_id, user.organizacion_id]
+        : [user.email, process.env.ALLOW_UNASSIGNED_HR_FALLBACK || 'false'];
+
+    const [viajes] = await pool.query(
+      `SELECT
+         hr.Transaccionid,
+         hr.Numerocomprobante AS nro_hoja_ruta,
+         hr.Fecha AS fecha,
+         COUNT(DISTINCT ir.Id_transaccion_remito) AS total_remitos,
+         COUNT(DISTINCT CASE WHEN r.firma_cliente_url IS NULL AND r.firma_distribuidor_url IS NULL AND rf.Id_remito_firmado IS NULL THEN r.Id_transaccion_remito END) AS pendientes,
+         COUNT(DISTINCT CASE WHEN rf.Firmado_cliente = 1 OR r.firma_cliente_url IS NOT NULL THEN r.Id_transaccion_remito END) AS firmados_cliente,
+         COUNT(DISTINCT CASE WHEN rf.Firmado_distribuidor = 1 OR r.firma_distribuidor_url IS NOT NULL THEN r.Id_transaccion_remito END) AS firmados_intermediario
+       FROM HOJA_DE_RUTA hr
+       LEFT JOIN ORGANIZACION tr ON tr.Organizacionid = hr.Organizacionid_transportista
+       LEFT JOIN HOJA_RUTA_ETAPA etapa ON etapa.Transaccionid_hoja_de_ruta = hr.Transaccionid
+       LEFT JOIN HOJA_RUTA_ITEM_REMITO ir ON ir.Id_etapa = etapa.Id_etapa
+       LEFT JOIN REMITO r ON r.Id_transaccion_remito = ir.Id_transaccion_remito
+       LEFT JOIN REMITOS_FIRMADOS rf ON rf.Id_transaccion_remito = r.Id_transaccion_remito
+       WHERE hr.Usr_estadohojaruta = 1 AND ${filterClause}
+       GROUP BY hr.Transaccionid, hr.Numerocomprobante, hr.Fecha
+       ORDER BY hr.Fecha DESC, hr.Transaccionid DESC
+       LIMIT ?`,
+      [...filterParams, limit]
+    );
 
     return res.json({
       ok: true,
-      viajes: viajes
+      viajes: viajes || []
     });
   } catch (error) {
     console.error(`[RemitosController.getViajes] Error: ${error.message}`);
@@ -297,25 +305,124 @@ async function getViajes(req, res) {
 }
 
 /**
+ * Persiste control de firma en Gestion_Logistica.REMITO y REMITOS_FIRMADOS con auditoría.
+ */
+async function persistControlInDatabase(remitoId, user, payload) {
+  const {
+    estado_firma,
+    foto_url,
+    foto_sharepoint_url,
+    id_etapa,
+    comprobante
+  } = payload;
+
+  const botCliente = estado_firma === 'FIRMADO_CLIENTE' ? 1 : 0;
+  const botDistribuidor = estado_firma === 'FIRMADO_INTERMEDIARIO' ? 1 : 0;
+  const effectivePhotoUrl = foto_sharepoint_url || foto_url || null;
+  const truncatedPhoto250 = effectivePhotoUrl ? String(effectivePhotoUrl).slice(0, 250) : null;
+  const truncatedPhoto150 = effectivePhotoUrl ? String(effectivePhotoUrl).slice(0, 150) : null;
+  const signedMarker = truncatedPhoto250 || `FIRMADO_APP_${new Date().toISOString().slice(0, 19)}`;
+
+  return withAuditConnection(user, async (connection) => {
+    const [glogRows] = await connection.query(
+      'SELECT Id_transaccion_remito, Numeroremito FROM REMITO WHERE Id_transaccion_remito = ? LIMIT 1',
+      [remitoId]
+    );
+
+    if (!glogRows || glogRows.length === 0) {
+      return { found: false, dbWarning: null };
+    }
+
+    const nroRemito = comprobante || glogRows[0].Numeroremito;
+
+    if (estado_firma === 'FIRMADO_CLIENTE') {
+      await connection.query(
+        'UPDATE REMITO SET firma_cliente_url = ? WHERE Id_transaccion_remito = ?',
+        [signedMarker, remitoId]
+      );
+    } else if (estado_firma === 'FIRMADO_INTERMEDIARIO') {
+      await connection.query(
+        'UPDATE REMITO SET firma_distribuidor_url = ? WHERE Id_transaccion_remito = ?',
+        [signedMarker, remitoId]
+      );
+    } else if (estado_firma === 'NO_FIRMADO') {
+      await connection.query(
+        'UPDATE REMITO SET firma_cliente_url = NULL, firma_distribuidor_url = NULL WHERE Id_transaccion_remito = ?',
+        [remitoId]
+      );
+    }
+
+    let resolvedStageId = id_etapa || null;
+    if (!resolvedStageId) {
+      const [irRows] = await connection.query(
+        'SELECT Id_etapa FROM HOJA_RUTA_ITEM_REMITO WHERE Id_transaccion_remito = ? LIMIT 1',
+        [remitoId]
+      );
+      if (irRows && irRows.length > 0) {
+        resolvedStageId = irRows[0].Id_etapa;
+      }
+    }
+
+    let dbWarning = null;
+    if (resolvedStageId) {
+      try {
+        const [existingRf] = await connection.query(
+          'SELECT Id_remito_firmado FROM REMITOS_FIRMADOS WHERE Id_transaccion_remito = ? LIMIT 1',
+          [remitoId]
+        );
+        if (existingRf && existingRf.length > 0) {
+          await connection.query(
+            `UPDATE REMITOS_FIRMADOS
+             SET Organizacionid_chofer = ?, Fecha_hora = NOW(), Url_imagen = COALESCE(?, Url_imagen),
+                 Firmado_cliente = ?, Firmado_distribuidor = ?, Nro_remito = ?
+             WHERE Id_remito_firmado = ?`,
+            [
+              user.organizacion_id || null,
+              truncatedPhoto150,
+              botCliente,
+              botDistribuidor,
+              nroRemito,
+              existingRf[0].Id_remito_firmado
+            ]
+          );
+        } else {
+          await connection.query(
+            `INSERT INTO REMITOS_FIRMADOS
+               (Id_etapa, Organizacionid_chofer, Fecha_hora, Url_imagen, Firmado_cliente, Firmado_distribuidor, Id_transaccion_remito, Nro_remito)
+             VALUES (?, ?, NOW(), ?, ?, ?, ?, ?)`,
+            [
+              resolvedStageId,
+              user.organizacion_id || null,
+              truncatedPhoto150,
+              botCliente,
+              botDistribuidor,
+              remitoId,
+              nroRemito
+            ]
+          );
+        }
+      } catch (rfErr) {
+        if (isStageIdTypeMismatch(rfErr)) {
+          dbWarning = 'El remito se actualizó en REMITO, pero REMITOS_FIRMADOS.Id_etapa es INT en Gestion_Logistica; solicite al DBA ejecutar docs/dba_gestion_logistica_ajustes.sql.';
+          console.warn(`[RemitosController] ${dbWarning}`);
+        } else {
+          console.warn(`[RemitosController] Aviso al escribir REMITOS_FIRMADOS: ${rfErr.message}`);
+        }
+      }
+    }
+
+    return { found: true, dbWarning };
+  });
+}
+
+/**
  * Guardar o actualizar la marcación de firma de un remito.
  */
 async function saveControl(req, res) {
   try {
     const { id } = req.params;
     const user = req.user;
-    const {
-      ejemplar,
-      estado_firma,
-      tipo_documento,
-      observaciones,
-      foto_url,
-      foto_sharepoint_url,
-      foto_nombre_archivo,
-      firma_digital_base64,
-      firma_receptor_aclaracion,
-      firma_receptor_dni,
-      sincronizado_offline
-    } = req.body;
+    const { estado_firma } = req.body;
 
     if (!estado_firma || !['PENDIENTE', 'FIRMADO_CLIENTE', 'FIRMADO_INTERMEDIARIO', 'NO_FIRMADO'].includes(estado_firma)) {
       return res.status(400).json({
@@ -324,110 +431,25 @@ async function saveControl(req, res) {
       });
     }
 
-    const validEjemplares = ['ORIGINAL', 'DUPLICADO', 'TRIPLICADO', 'CUATRIPLICADO', 'RECEPCION_VALORIZADA', 'OTRO'];
-    const chosenEjemplar = validEjemplares.includes(ejemplar) ? ejemplar : 'ORIGINAL';
+    const result = await persistControlInDatabase(Number(id) || id, user, req.body);
 
-    const botConfirmadoCliente = estado_firma === 'FIRMADO_CLIENTE' ? 1 : 0;
-    const botConfirmadoDistribuidor = estado_firma === 'FIRMADO_INTERMEDIARIO' ? 1 : 0;
-    const docType = tipo_documento || (chosenEjemplar === 'RECEPCION_VALORIZADA' ? 'RECEPCION_VALORIZADA' : 'REMITO');
-    const isOffline = sincronizado_offline ? 1 : 0;
-
-    // Mapeo de columna OCR según ejemplar
-    const ocrColumnMap = {
-      'ORIGINAL': 'ocr_original',
-      'DUPLICADO': 'ocr_duplicado',
-      'TRIPLICADO': 'ocr_triplicado',
-      'CUATRIPLICADO': 'ocr_cuatriplcado'
-    };
-
-    const targetOcrCol = ocrColumnMap[chosenEjemplar] || null;
-    const effectivePhotoUrl = foto_sharepoint_url || foto_url;
-    let ocrSqlClause = '';
-    let ocrSqlParams = [];
-
-    if (targetOcrCol && effectivePhotoUrl) {
-      const finalName = foto_nombre_archivo || path.basename(effectivePhotoUrl);
-      const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
-      const ocrObj = {
-        archivo: effectivePhotoUrl,
-        original_filename: finalName,
-        timestamp: nowStr,
-        hojas: [
-          {
-            hoja_numero: 1,
-            archivo: effectivePhotoUrl,
-            original_filename: finalName,
-            firmas: [],
-            sellos: []
-          }
-        ],
-        origen: 'PWA_CHOFER'
-      };
-      ocrSqlClause = `, ${targetOcrCol} = ?`;
-      ocrSqlParams.push(JSON.stringify(ocrObj));
-    }
-
-    const sql = `
-      UPDATE remitos
-      SET 
-        ejemplar = ?,
-        estado_firma = ?,
-        tipo_documento = ?,
-        observaciones = ?,
-        foto_url = COALESCE(?, foto_url),
-        foto_sharepoint_url = COALESCE(?, foto_sharepoint_url),
-        foto_nombre_archivo = COALESCE(?, foto_nombre_archivo),
-        firma_digital_base64 = COALESCE(?, firma_digital_base64),
-        firma_receptor_aclaracion = COALESCE(?, firma_receptor_aclaracion),
-        firma_receptor_dni = COALESCE(?, firma_receptor_dni),
-        fecha_control = NOW(),
-        controlado_por_chofer_id = ?,
-        controlado_por_chofer_email = ?,
-        sincronizado_offline = ?,
-        bot_confirmado_cliente = ?,
-        bot_confirmado_distribuidor = ?
-        ${ocrSqlClause}
-      WHERE id = ?
-    `;
-
-    const queryParams = [
-      chosenEjemplar,
-      estado_firma,
-      docType,
-      observaciones || null,
-      foto_url || null,
-      foto_sharepoint_url || null,
-      foto_nombre_archivo || null,
-      firma_digital_base64 || null,
-      firma_receptor_aclaracion || null,
-      firma_receptor_dni || null,
-      user.id || null,
-      user.email,
-      isOffline,
-      botConfirmadoCliente,
-      botConfirmadoDistribuidor,
-      ...ocrSqlParams,
-      id
-    ];
-
-    const [result] = await pool.query(sql, queryParams);
-
-    if (result.affectedRows === 0) {
+    if (!result.found) {
       return res.status(404).json({
         ok: false,
-        error: `No se encontró el remito con ID ${id}.`
+        error: `No se encontró el remito con ID ${id} en Gestion_Logistica.`
       });
     }
-
-    // Devolver registro actualizado
-    const [updated] = await pool.query('SELECT * FROM remitos WHERE id = ? LIMIT 1', [id]);
 
     return res.json({
       ok: true,
       message: 'Control de remito guardado exitosamente.',
-      remito: updated[0]
+      db_warning: result.dbWarning,
+      remito: {
+        id: Number(id) || id,
+        estado_firma,
+        ...req.body
+      }
     });
-
   } catch (error) {
     console.error(`[RemitosController.saveControl] Error: ${error.message}`);
     return res.status(500).json({
@@ -456,26 +478,22 @@ async function uploadFoto(req, res) {
       });
     }
 
-    // 1. Generar nombre estandarizado: FOTO_CAM_CHOFER_<codigoChofer>_<comprobante>_<timestamp>.jpg
     const finalFileName = SharePointService.generateFileName(
-      user.codigo_chofer || user.id,
+      user.codigo_chofer || user.organizacion_id || user.id,
       comprobante || (remitoId ? `ID_${remitoId}` : 'SIN_CBTE'),
       path.extname(file.originalname) || '.jpg'
     );
 
     const oldPath = file.path;
     const newPath = path.join(uploadsDir, finalFileName);
-
-    // Renombrar archivo local
     fs.renameSync(oldPath, newPath);
 
     console.log(`[Upload] Foto guardada localmente como: ${finalFileName} (Tamaño: ${(file.size / 1024).toFixed(1)} KB)`);
 
-    // 2. Subir a SharePoint / Power Automate
     const spResult = await SharePointService.uploadToSharePoint(newPath, finalFileName, {
-      remitoId: remitoId,
-      comprobante: comprobante,
-      ejemplar: ejemplar,
+      remitoId,
+      comprobante,
+      ejemplar,
       choferEmail: user.email,
       codigoChofer: user.codigo_chofer
     });
@@ -484,62 +502,17 @@ async function uploadFoto(req, res) {
     const sharepointUrl = spResult.isRemote ? spResult.url : null;
     const effectivePhotoUrl = sharepointUrl || localUrl;
 
-    // 3. Si se envió remitoId, actualizar en la base de datos automáticamente
-    if (remitoId) {
-      const ocrColumnMap = {
-        'ORIGINAL': 'ocr_original',
-        'DUPLICADO': 'ocr_duplicado',
-        'TRIPLICADO': 'ocr_triplicado',
-        'CUATRIPLICADO': 'ocr_cuatriplcado'
-      };
-
-      const targetOcrCol = ejemplar ? ocrColumnMap[ejemplar] : null;
-      let ocrClause = '';
-      let ocrParams = [];
-
-      if (targetOcrCol) {
-        const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
-        const ocrObj = {
-          archivo: effectivePhotoUrl,
-          original_filename: finalFileName,
-          timestamp: nowStr,
-          hojas: [
-            {
-              hoja_numero: 1,
-              archivo: effectivePhotoUrl,
-              original_filename: finalFileName,
-              firmas: [],
-              sellos: []
-            }
-          ],
-          origen: 'PWA_CHOFER'
-        };
-        ocrClause = `, ${targetOcrCol} = ?`;
-        ocrParams.push(JSON.stringify(ocrObj));
-      }
-
-      await pool.query(`
-        UPDATE remitos
-        SET 
-          foto_url = ?,
-          foto_sharepoint_url = ?,
-          foto_nombre_archivo = ?
-          ${ocrClause}
-        WHERE id = ?
-      `, [localUrl, sharepointUrl, finalFileName, ...ocrParams, remitoId]);
-    }
-
     return res.json({
       ok: true,
       message: 'Fotografía procesada y asociada correctamente.',
       foto: {
         fileName: finalFileName,
         url: localUrl,
-        sharepointUrl: sharepointUrl,
+        sharepointUrl,
+        effectiveUrl: effectivePhotoUrl,
         sizeKb: Math.round(file.size / 1024)
       }
     });
-
   } catch (error) {
     console.error(`[RemitosController.uploadFoto] Error: ${error.message}`);
     return res.status(500).json({
@@ -566,67 +539,12 @@ async function syncOffline(req, res) {
     }
 
     let processedCount = 0;
-    let errors = [];
-
-    const validEjemplares = ['ORIGINAL', 'DUPLICADO', 'TRIPLICADO', 'CUATRIPLICADO', 'RECEPCION_VALORIZADA', 'OTRO'];
+    const errors = [];
 
     for (const item of items) {
       try {
-        const {
-          remito_id,
-          ejemplar,
-          estado_firma,
-          tipo_documento,
-          observaciones,
-          foto_url,
-          foto_nombre_archivo,
-          firma_digital_base64,
-          firma_receptor_aclaracion,
-          firma_receptor_dni
-        } = item;
-        
-        if (!remito_id || !estado_firma) continue;
-
-        const chosenEjemplar = validEjemplares.includes(ejemplar) ? ejemplar : 'ORIGINAL';
-        const botCliente = estado_firma === 'FIRMADO_CLIENTE' ? 1 : 0;
-        const botDistribuidor = estado_firma === 'FIRMADO_INTERMEDIARIO' ? 1 : 0;
-
-        await pool.query(`
-          UPDATE remitos
-          SET 
-            ejemplar = ?,
-            estado_firma = ?,
-            tipo_documento = ?,
-            observaciones = ?,
-            foto_url = COALESCE(?, foto_url),
-            foto_nombre_archivo = COALESCE(?, foto_nombre_archivo),
-            firma_digital_base64 = COALESCE(?, firma_digital_base64),
-            firma_receptor_aclaracion = COALESCE(?, firma_receptor_aclaracion),
-            firma_receptor_dni = COALESCE(?, firma_receptor_dni),
-            fecha_control = NOW(),
-            controlado_por_chofer_id = ?,
-            controlado_por_chofer_email = ?,
-            sincronizado_offline = 1,
-            bot_confirmado_cliente = ?,
-            bot_confirmado_distribuidor = ?
-          WHERE id = ?
-        `, [
-          chosenEjemplar,
-          estado_firma,
-          tipo_documento || 'REMITO',
-          observaciones || null,
-          foto_url || null,
-          foto_nombre_archivo || null,
-          firma_digital_base64 || null,
-          firma_receptor_aclaracion || null,
-          firma_receptor_dni || null,
-          user.id,
-          user.email,
-          botCliente,
-          botDistribuidor,
-          remito_id
-        ]);
-
+        if (!item.remito_id || !item.estado_firma) continue;
+        await persistControlInDatabase(item.remito_id, user, item);
         processedCount++;
       } catch (itemErr) {
         errors.push({ remito_id: item.remito_id, error: itemErr.message });
@@ -639,7 +557,6 @@ async function syncOffline(req, res) {
       procesados: processedCount,
       errores: errors
     });
-
   } catch (error) {
     console.error(`[RemitosController.syncOffline] Error: ${error.message}`);
     return res.status(500).json({
