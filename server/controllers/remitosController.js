@@ -4,6 +4,15 @@ const { pool, withAuditConnection } = require('../config/db');
 const SharePointService = require('../services/sharepointService');
 const { uploadsDir } = require('../middlewares/uploadMiddleware');
 
+const VALID_EJEMPLARES = [
+  'ORIGINAL',
+  'DUPLICADO',
+  'TRIPLICADO',
+  'CUATRIPLICADO',
+  'RECEPCION_VALORIZADA',
+  'OTRO'
+];
+
 function isStageIdTypeMismatch(err) {
   const msg = String(err?.message || '');
   return (
@@ -15,18 +24,100 @@ function isStageIdTypeMismatch(err) {
 }
 
 /**
- * Mapea una fila combinada de Gestion_Logistica (REMITO + ETAPA + HOJA_DE_RUTA + REMITOS_FIRMADOS)
- * al contrato de remito utilizado por el frontend mobile.
+ * Consulta los ejemplares registrados en APP_REMITO_EJEMPLARES para un conjunto de remitos.
  */
-function mapRemitoRow(row) {
-  let estadoFirma = 'PENDIENTE';
-  if (row.Firmado_cliente === 1 || row.firma_cliente_url) {
-    estadoFirma = 'FIRMADO_CLIENTE';
-  } else if (row.Firmado_distribuidor === 1 || row.firma_distribuidor_url) {
-    estadoFirma = 'FIRMADO_INTERMEDIARIO';
+async function fetchEjemplaresMap(remitoIds = []) {
+  const map = new Map();
+  const cleanIds = Array.from(new Set(remitoIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)));
+  if (cleanIds.length === 0) return map;
+
+  const [rows] = await pool.query(
+    `SELECT
+       id,
+       id_transaccion_remito,
+       id_etapa,
+       nro_remito,
+       ejemplar,
+       firmado_cliente,
+       firmado_intermediario,
+       no_firmado,
+       observaciones,
+       foto_url,
+       foto_sharepoint_url,
+       foto_nombre_archivo,
+       firma_digital_base64,
+       firma_receptor_aclaracion,
+       firma_receptor_dni,
+       fecha_hora
+     FROM APP_REMITO_EJEMPLARES
+     WHERE id_transaccion_remito IN (${cleanIds.map(() => '?').join(',')})
+     ORDER BY FIELD(ejemplar, 'ORIGINAL','DUPLICADO','TRIPLICADO','CUATRIPLICADO','RECEPCION_VALORIZADA','OTRO'), id ASC`,
+    cleanIds
+  );
+
+  for (const r of rows || []) {
+    if (!map.has(r.id_transaccion_remito)) {
+      map.set(r.id_transaccion_remito, []);
+    }
+    map.get(r.id_transaccion_remito).push(r);
+  }
+  return map;
+}
+
+/**
+ * Calcula el estado consolidado del remito considerando todos sus ejemplares y/o columnas ERP.
+ */
+function computeConsolidatedStatus(ejemplares = [], row = {}) {
+  if (ejemplares.length > 0) {
+    const hasCliente = ejemplares.some((e) => Boolean(e.firmado_cliente));
+    const hasInterm = ejemplares.some((e) => Boolean(e.firmado_intermediario));
+    if (hasCliente && hasInterm) return 'FIRMADO_AMBOS';
+    if (hasCliente) return 'FIRMADO_CLIENTE';
+    if (hasInterm) return 'FIRMADO_INTERMEDIARIO';
+    return 'NO_FIRMADO';
   }
 
-  const fotoUrl = row.Url_imagen || row.firma_cliente_url || row.firma_distribuidor_url || null;
+  const hasCliente = row.Firmado_cliente === 1 || Boolean(row.firma_cliente_url);
+  const hasInterm = row.Firmado_distribuidor === 1 || Boolean(row.firma_distribuidor_url);
+  if (hasCliente && hasInterm) return 'FIRMADO_AMBOS';
+  if (hasCliente) return 'FIRMADO_CLIENTE';
+  if (hasInterm) return 'FIRMADO_INTERMEDIARIO';
+  return 'PENDIENTE';
+}
+
+/**
+ * Mapea una fila combinada de Gestion_Logistica (REMITO + ETAPA + HOJA_DE_RUTA + REMITOS_FIRMADOS + APP_REMITO_EJEMPLARES)
+ * al contrato de remito utilizado por el frontend mobile.
+ */
+function mapRemitoRow(row, rawEjemplares = []) {
+  const ejemplares = (rawEjemplares || []).map((e) => ({
+    id: e.id || null,
+    ejemplar: e.ejemplar,
+    firmado_cliente: Boolean(e.firmado_cliente),
+    firmado_intermediario: Boolean(e.firmado_intermediario),
+    no_firmado: Boolean(e.no_firmado),
+    observaciones: e.observaciones || '',
+    foto_url: e.foto_url || null,
+    foto_sharepoint_url: e.foto_sharepoint_url || null,
+    foto_nombre_archivo: e.foto_nombre_archivo || null,
+    fecha_hora: e.fecha_hora || null
+  }));
+
+  const estadoFirma = computeConsolidatedStatus(ejemplares, row);
+  const hasCliente = estadoFirma === 'FIRMADO_CLIENTE' || estadoFirma === 'FIRMADO_AMBOS';
+  const hasInterm = estadoFirma === 'FIRMADO_INTERMEDIARIO' || estadoFirma === 'FIRMADO_AMBOS';
+
+  const firstFotoEjemplar = ejemplares.find((e) => e.foto_sharepoint_url || e.foto_url);
+  const firstObsEjemplar = ejemplares.find((e) => e.observaciones && e.observaciones.trim());
+  const firstSigRaw = (rawEjemplares || []).find((e) => e.firma_digital_base64 || e.firma_receptor_aclaracion || e.firma_receptor_dni);
+
+  const fotoUrl =
+    firstFotoEjemplar?.foto_sharepoint_url ||
+    firstFotoEjemplar?.foto_url ||
+    row.Url_imagen ||
+    row.firma_cliente_url ||
+    row.firma_distribuidor_url ||
+    null;
 
   return {
     id: row.Id_transaccion_remito,
@@ -41,15 +132,81 @@ function mapRemitoRow(row) {
     nro_hoja_ruta: row.Hoja_de_ruta || null,
     hoja_ruta_transaccion_id: row.HojaRutaTransaccionId || null,
     id_etapa: row.Id_etapa || null,
-    ejemplar: 'ORIGINAL',
+    ejemplar: ejemplares[0]?.ejemplar || 'ORIGINAL',
+    ejemplares,
     estado_firma: estadoFirma,
-    tipo_documento: 'REMITO',
-    observaciones: null,
+    tiene_firma_cliente: hasCliente,
+    tiene_firma_intermediario: hasInterm,
+    tipo_documento: ejemplares.some((e) => e.ejemplar === 'RECEPCION_VALORIZADA') ? 'RECEPCION_VALORIZADA' : 'REMITO',
+    observaciones: firstObsEjemplar?.observaciones || null,
     foto_url: fotoUrl,
-    foto_sharepoint_url: fotoUrl && fotoUrl.startsWith('http') ? fotoUrl : null,
-    fecha_control: row.Fecha_hora || null,
+    foto_sharepoint_url: fotoUrl && String(fotoUrl).startsWith('http') ? fotoUrl : null,
+    firma_digital_base64: firstSigRaw?.firma_digital_base64 || null,
+    firma_receptor_aclaracion: firstSigRaw?.firma_receptor_aclaracion || '',
+    firma_receptor_dni: firstSigRaw?.firma_receptor_dni || '',
+    fecha_control: ejemplares[0]?.fecha_hora || row.Fecha_hora || null,
     source_db: 'Gestion_Logistica'
   };
+}
+
+/**
+ * Normaliza y valida el arreglo de ejemplares recibido en saveControl / syncOffline
+ * (manteniendo retrocompatibilidad con payloads legacy de ejemplar único).
+ */
+function normalizeIncomingEjemplares(body = {}) {
+  let list = [];
+
+  if (Array.isArray(body.ejemplares)) {
+    list = body.ejemplares.map((item) => {
+      const noFirmado = Boolean(item.no_firmado);
+      return {
+        ejemplar: String(item.ejemplar || '').trim().toUpperCase(),
+        firmado_cliente: noFirmado ? false : Boolean(item.firmado_cliente),
+        firmado_intermediario: noFirmado ? false : Boolean(item.firmado_intermediario),
+        no_firmado: noFirmado,
+        observaciones: item.observaciones ? String(item.observaciones) : null,
+        foto_url: item.foto_url ? String(item.foto_url) : null,
+        foto_sharepoint_url: item.foto_sharepoint_url ? String(item.foto_sharepoint_url) : null,
+        foto_nombre_archivo: item.foto_nombre_archivo ? String(item.foto_nombre_archivo) : null
+      };
+    });
+  } else if (body.estado_firma) {
+    const est = String(body.estado_firma).trim().toUpperCase();
+    const noFirmado = est === 'NO_FIRMADO';
+    list = [
+      {
+        ejemplar: String(body.ejemplar || 'ORIGINAL').trim().toUpperCase(),
+        firmado_cliente: !noFirmado && (est === 'FIRMADO_CLIENTE' || est === 'FIRMADO_AMBOS'),
+        firmado_intermediario: !noFirmado && (est === 'FIRMADO_INTERMEDIARIO' || est === 'FIRMADO_AMBOS'),
+        no_firmado: noFirmado,
+        observaciones: body.observaciones ? String(body.observaciones) : null,
+        foto_url: body.foto_url ? String(body.foto_url) : null,
+        foto_sharepoint_url: body.foto_sharepoint_url ? String(body.foto_sharepoint_url) : null,
+        foto_nombre_archivo: body.foto_nombre_archivo ? String(body.foto_nombre_archivo) : null
+      }
+    ];
+  }
+
+  if (list.length === 0) {
+    return { error: 'Debe informar al menos un ejemplar recibido para el remito.' };
+  }
+
+  const seen = new Set();
+  for (const ej of list) {
+    if (!VALID_EJEMPLARES.includes(ej.ejemplar)) {
+      return { error: `Tipo de ejemplar inválido: "${ej.ejemplar}".` };
+    }
+    if (seen.has(ej.ejemplar)) {
+      return { error: `El ejemplar "${ej.ejemplar}" está duplicado en la petición.` };
+    }
+    seen.add(ej.ejemplar);
+
+    if (!ej.no_firmado && !ej.firmado_cliente && !ej.firmado_intermediario) {
+      return { error: `Debe indicar quién firmó el ejemplar ${ej.ejemplar} (Cliente, Intermediario o No Firmado).` };
+    }
+  }
+
+  return { ejemplares: list };
 }
 
 /**
@@ -107,9 +264,12 @@ async function buscarRemito(req, res) {
       });
     }
 
+    const ejMap = await fetchEjemplaresMap([rows[0].Id_transaccion_remito]);
+    const remito = mapRemitoRow(rows[0], ejMap.get(rows[0].Id_transaccion_remito) || []);
+
     return res.json({
       ok: true,
-      remito: mapRemitoRow(rows[0])
+      remito
     });
   } catch (error) {
     console.error(`[RemitosController.buscarRemito] Error: ${error.message}`);
@@ -218,7 +378,8 @@ async function getMisRemitos(req, res) {
     `;
 
     const [rows] = await pool.query(sql, params);
-    const mappedRemitos = (rows || []).map(mapRemitoRow);
+    const ejMap = await fetchEjemplaresMap((rows || []).map((r) => r.Id_transaccion_remito));
+    const mappedRemitos = (rows || []).map((r) => mapRemitoRow(r, ejMap.get(r.Id_transaccion_remito) || []));
 
     mappedRemitos.sort((a, b) => {
       const aPend = a.estado_firma === 'PENDIENTE' ? 0 : 1;
@@ -255,19 +416,13 @@ async function getViajes(req, res) {
     const limitN = parseInt(req.query.n_viajes || defaultN, 10);
     const limit = Number.isInteger(limitN) && limitN > 0 ? limitN : 4;
 
-    const filterClause =
-      user.rol === 'sysadmin' || user.rol === 'logistica'
-        ? '1=1'
-        : user.organizacion_id
-        ? '(LOWER(tr.EMail) = LOWER(?) OR hr.Organizacionid_chofer = ? OR hr.Organizacionid_transportista = ?)'
-        : '(LOWER(tr.EMail) = LOWER(?) OR ? = \'true\')';
+    const filterClause = user.organizacion_id
+      ? '(LOWER(tr.EMail) = LOWER(?) OR hr.Organizacionid_chofer = ? OR hr.Organizacionid_transportista = ?)'
+      : '(LOWER(tr.EMail) = LOWER(?) OR ? = \'true\')';
 
-    const filterParams =
-      user.rol === 'sysadmin' || user.rol === 'logistica'
-        ? []
-        : user.organizacion_id
-        ? [user.email, user.organizacion_id, user.organizacion_id]
-        : [user.email, process.env.ALLOW_UNASSIGNED_HR_FALLBACK || 'false'];
+    const filterParams = user.organizacion_id
+      ? [user.email, user.organizacion_id, user.organizacion_id]
+      : [user.email, process.env.ALLOW_UNASSIGNED_HR_FALLBACK || 'false'];
 
     const [viajes] = await pool.query(
       `SELECT
@@ -275,15 +430,16 @@ async function getViajes(req, res) {
          hr.Numerocomprobante AS nro_hoja_ruta,
          hr.Fecha AS fecha,
          COUNT(DISTINCT ir.Id_transaccion_remito) AS total_remitos,
-         COUNT(DISTINCT CASE WHEN r.firma_cliente_url IS NULL AND r.firma_distribuidor_url IS NULL AND rf.Id_remito_firmado IS NULL THEN r.Id_transaccion_remito END) AS pendientes,
-         COUNT(DISTINCT CASE WHEN rf.Firmado_cliente = 1 OR r.firma_cliente_url IS NOT NULL THEN r.Id_transaccion_remito END) AS firmados_cliente,
-         COUNT(DISTINCT CASE WHEN rf.Firmado_distribuidor = 1 OR r.firma_distribuidor_url IS NOT NULL THEN r.Id_transaccion_remito END) AS firmados_intermediario
+         COUNT(DISTINCT CASE WHEN r.firma_cliente_url IS NULL AND r.firma_distribuidor_url IS NULL AND rf.Id_remito_firmado IS NULL AND are.id IS NULL THEN r.Id_transaccion_remito END) AS pendientes,
+         COUNT(DISTINCT CASE WHEN rf.Firmado_cliente = 1 OR r.firma_cliente_url IS NOT NULL OR are.firmado_cliente = 1 THEN r.Id_transaccion_remito END) AS firmados_cliente,
+         COUNT(DISTINCT CASE WHEN rf.Firmado_distribuidor = 1 OR r.firma_distribuidor_url IS NOT NULL OR are.firmado_intermediario = 1 THEN r.Id_transaccion_remito END) AS firmados_intermediario
        FROM HOJA_DE_RUTA hr
        LEFT JOIN ORGANIZACION tr ON tr.Organizacionid = hr.Organizacionid_transportista
        LEFT JOIN HOJA_RUTA_ETAPA etapa ON etapa.Transaccionid_hoja_de_ruta = hr.Transaccionid
        LEFT JOIN HOJA_RUTA_ITEM_REMITO ir ON ir.Id_etapa = etapa.Id_etapa
        LEFT JOIN REMITO r ON r.Id_transaccion_remito = ir.Id_transaccion_remito
        LEFT JOIN REMITOS_FIRMADOS rf ON rf.Id_transaccion_remito = r.Id_transaccion_remito
+       LEFT JOIN APP_REMITO_EJEMPLARES are ON are.id_transaccion_remito = r.Id_transaccion_remito
        WHERE hr.Usr_estadohojaruta = 1 AND ${filterClause}
        GROUP BY hr.Transaccionid, hr.Numerocomprobante, hr.Fecha
        ORDER BY hr.Fecha DESC, hr.Transaccionid DESC
@@ -305,133 +461,198 @@ async function getViajes(req, res) {
 }
 
 /**
- * Persiste control de firma en Gestion_Logistica.REMITO y REMITOS_FIRMADOS con auditoría.
+ * Persiste control multi-ejemplar en APP_REMITO_EJEMPLARES y sincroniza estado consolidado en REMITO / REMITOS_FIRMADOS.
  */
-async function persistControlInDatabase(remitoId, user, payload) {
+async function persistControlInDatabase(remitoId, user, payload, normalizedEjemplares) {
   const {
-    estado_firma,
-    foto_url,
-    foto_sharepoint_url,
     id_etapa,
-    comprobante
+    comprobante,
+    firma_digital_base64,
+    firma_receptor_aclaracion,
+    firma_receptor_dni
   } = payload;
 
-  const botCliente = estado_firma === 'FIRMADO_CLIENTE' ? 1 : 0;
-  const botDistribuidor = estado_firma === 'FIRMADO_INTERMEDIARIO' ? 1 : 0;
-  const effectivePhotoUrl = foto_sharepoint_url || foto_url || null;
-  const truncatedPhoto250 = effectivePhotoUrl ? String(effectivePhotoUrl).slice(0, 250) : null;
-  const truncatedPhoto150 = effectivePhotoUrl ? String(effectivePhotoUrl).slice(0, 150) : null;
-  const signedMarker = truncatedPhoto250 || `FIRMADO_APP_${new Date().toISOString().slice(0, 19)}`;
-
   return withAuditConnection(user, async (connection) => {
-    const [glogRows] = await connection.query(
-      'SELECT Id_transaccion_remito, Numeroremito FROM REMITO WHERE Id_transaccion_remito = ? LIMIT 1',
-      [remitoId]
-    );
-
-    if (!glogRows || glogRows.length === 0) {
-      return { found: false, dbWarning: null };
-    }
-
-    const nroRemito = comprobante || glogRows[0].Numeroremito;
-
-    if (estado_firma === 'FIRMADO_CLIENTE') {
-      await connection.query(
-        'UPDATE REMITO SET firma_cliente_url = ? WHERE Id_transaccion_remito = ?',
-        [signedMarker, remitoId]
-      );
-    } else if (estado_firma === 'FIRMADO_INTERMEDIARIO') {
-      await connection.query(
-        'UPDATE REMITO SET firma_distribuidor_url = ? WHERE Id_transaccion_remito = ?',
-        [signedMarker, remitoId]
-      );
-    } else if (estado_firma === 'NO_FIRMADO') {
-      await connection.query(
-        'UPDATE REMITO SET firma_cliente_url = NULL, firma_distribuidor_url = NULL WHERE Id_transaccion_remito = ?',
+    await connection.beginTransaction();
+    try {
+      const [glogRows] = await connection.query(
+        'SELECT Id_transaccion_remito, Numeroremito FROM REMITO WHERE Id_transaccion_remito = ? LIMIT 1',
         [remitoId]
       );
-    }
 
-    let resolvedStageId = id_etapa || null;
-    if (!resolvedStageId) {
-      const [irRows] = await connection.query(
-        'SELECT Id_etapa FROM HOJA_RUTA_ITEM_REMITO WHERE Id_transaccion_remito = ? LIMIT 1',
-        [remitoId]
-      );
-      if (irRows && irRows.length > 0) {
-        resolvedStageId = irRows[0].Id_etapa;
+      if (!glogRows || glogRows.length === 0) {
+        await connection.rollback();
+        return { found: false, dbWarning: null };
       }
-    }
 
-    let dbWarning = null;
-    if (resolvedStageId) {
-      try {
-        const [existingRf] = await connection.query(
-          'SELECT Id_remito_firmado FROM REMITOS_FIRMADOS WHERE Id_transaccion_remito = ? LIMIT 1',
+      const nroRemito = comprobante || glogRows[0].Numeroremito;
+
+      let resolvedStageId = id_etapa || null;
+      if (!resolvedStageId) {
+        const [irRows] = await connection.query(
+          'SELECT Id_etapa FROM HOJA_RUTA_ITEM_REMITO WHERE Id_transaccion_remito = ? LIMIT 1',
           [remitoId]
         );
-        if (existingRf && existingRf.length > 0) {
-          await connection.query(
-            `UPDATE REMITOS_FIRMADOS
-             SET Organizacionid_chofer = ?, Fecha_hora = NOW(), Url_imagen = COALESCE(?, Url_imagen),
-                 Firmado_cliente = ?, Firmado_distribuidor = ?, Nro_remito = ?
-             WHERE Id_remito_firmado = ?`,
-            [
-              user.organizacion_id || null,
-              truncatedPhoto150,
-              botCliente,
-              botDistribuidor,
-              nroRemito,
-              existingRf[0].Id_remito_firmado
-            ]
-          );
-        } else {
-          await connection.query(
-            `INSERT INTO REMITOS_FIRMADOS
-               (Id_etapa, Organizacionid_chofer, Fecha_hora, Url_imagen, Firmado_cliente, Firmado_distribuidor, Id_transaccion_remito, Nro_remito)
-             VALUES (?, ?, NOW(), ?, ?, ?, ?, ?)`,
-            [
-              resolvedStageId,
-              user.organizacion_id || null,
-              truncatedPhoto150,
-              botCliente,
-              botDistribuidor,
-              remitoId,
-              nroRemito
-            ]
-          );
-        }
-      } catch (rfErr) {
-        if (isStageIdTypeMismatch(rfErr)) {
-          dbWarning = 'El remito se actualizó en REMITO, pero REMITOS_FIRMADOS.Id_etapa es INT en Gestion_Logistica; solicite al DBA ejecutar docs/dba_gestion_logistica_ajustes.sql.';
-          console.warn(`[RemitosController] ${dbWarning}`);
-        } else {
-          console.warn(`[RemitosController] Aviso al escribir REMITOS_FIRMADOS: ${rfErr.message}`);
+        if (irRows && irRows.length > 0) {
+          resolvedStageId = irRows[0].Id_etapa;
         }
       }
-    }
 
-    return { found: true, dbWarning };
+      const keepKeys = normalizedEjemplares.map((e) => e.ejemplar);
+      await connection.query(
+        `DELETE FROM APP_REMITO_EJEMPLARES
+         WHERE id_transaccion_remito = ?
+           AND ejemplar NOT IN (${keepKeys.map(() => '?').join(',')})`,
+        [remitoId, ...keepKeys]
+      );
+
+      for (const ej of normalizedEjemplares) {
+        await connection.query(
+          `INSERT INTO APP_REMITO_EJEMPLARES
+             (id_transaccion_remito, id_etapa, nro_remito, ejemplar, firmado_cliente, firmado_intermediario, no_firmado,
+              observaciones, foto_url, foto_sharepoint_url, foto_nombre_archivo,
+              firma_digital_base64, firma_receptor_aclaracion, firma_receptor_dni,
+              organizacion_id_chofer, usuario_email, fecha_hora)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+           ON DUPLICATE KEY UPDATE
+             id_etapa = VALUES(id_etapa),
+             nro_remito = VALUES(nro_remito),
+             firmado_cliente = VALUES(firmado_cliente),
+             firmado_intermediario = VALUES(firmado_intermediario),
+             no_firmado = VALUES(no_firmado),
+             observaciones = VALUES(observaciones),
+             foto_url = VALUES(foto_url),
+             foto_sharepoint_url = VALUES(foto_sharepoint_url),
+             foto_nombre_archivo = VALUES(foto_nombre_archivo),
+             firma_digital_base64 = VALUES(firma_digital_base64),
+             firma_receptor_aclaracion = VALUES(firma_receptor_aclaracion),
+             firma_receptor_dni = VALUES(firma_receptor_dni),
+             organizacion_id_chofer = VALUES(organizacion_id_chofer),
+             usuario_email = VALUES(usuario_email),
+             fecha_hora = NOW()`,
+          [
+            remitoId,
+            resolvedStageId ? String(resolvedStageId) : null,
+            nroRemito,
+            ej.ejemplar,
+            ej.firmado_cliente ? 1 : 0,
+            ej.firmado_intermediario ? 1 : 0,
+            ej.no_firmado ? 1 : 0,
+            ej.observaciones || null,
+            ej.foto_url || null,
+            ej.foto_sharepoint_url || null,
+            ej.foto_nombre_archivo || null,
+            firma_digital_base64 || null,
+            firma_receptor_aclaracion || null,
+            firma_receptor_dni || null,
+            user.organizacion_id || null,
+            user.email || null
+          ]
+        );
+      }
+
+      const estadoConsolidado = computeConsolidatedStatus(normalizedEjemplares);
+      const anyCliente = normalizedEjemplares.some((e) => e.firmado_cliente);
+      const anyInterm = normalizedEjemplares.some((e) => e.firmado_intermediario);
+      const clienteFoto = normalizedEjemplares.find((e) => e.firmado_cliente && (e.foto_sharepoint_url || e.foto_url));
+      const intermFoto = normalizedEjemplares.find((e) => e.firmado_intermediario && (e.foto_sharepoint_url || e.foto_url));
+      const anyFoto = normalizedEjemplares.find((e) => e.foto_sharepoint_url || e.foto_url);
+      const markerNow = `FIRMADO_APP_${new Date().toISOString().slice(0, 19)}`;
+
+      const clienteUrl = anyCliente
+        ? String(clienteFoto?.foto_sharepoint_url || clienteFoto?.foto_url || anyFoto?.foto_sharepoint_url || anyFoto?.foto_url || markerNow).slice(0, 250)
+        : null;
+      const intermUrl = anyInterm
+        ? String(intermFoto?.foto_sharepoint_url || intermFoto?.foto_url || anyFoto?.foto_sharepoint_url || anyFoto?.foto_url || markerNow).slice(0, 250)
+        : null;
+
+      await connection.query(
+        'UPDATE REMITO SET firma_cliente_url = ?, firma_distribuidor_url = ? WHERE Id_transaccion_remito = ?',
+        [clienteUrl, intermUrl, remitoId]
+      );
+
+      let dbWarning = null;
+      if (resolvedStageId) {
+        const photo150 = anyFoto
+          ? String(anyFoto.foto_sharepoint_url || anyFoto.foto_url).slice(0, 150)
+          : null;
+        try {
+          const [existingRf] = await connection.query(
+            'SELECT Id_remito_firmado FROM REMITOS_FIRMADOS WHERE Id_transaccion_remito = ? LIMIT 1',
+            [remitoId]
+          );
+          if (existingRf && existingRf.length > 0) {
+            await connection.query(
+              `UPDATE REMITOS_FIRMADOS
+               SET Organizacionid_chofer = ?, Fecha_hora = NOW(), Url_imagen = COALESCE(?, Url_imagen),
+                   Firmado_cliente = ?, Firmado_distribuidor = ?, Nro_remito = ?
+               WHERE Id_remito_firmado = ?`,
+              [
+                user.organizacion_id || null,
+                photo150,
+                anyCliente ? 1 : 0,
+                anyInterm ? 1 : 0,
+                nroRemito,
+                existingRf[0].Id_remito_firmado
+              ]
+            );
+          } else {
+            await connection.query(
+              `INSERT INTO REMITOS_FIRMADOS
+                 (Id_etapa, Organizacionid_chofer, Fecha_hora, Url_imagen, Firmado_cliente, Firmado_distribuidor, Id_transaccion_remito, Nro_remito)
+               VALUES (?, ?, NOW(), ?, ?, ?, ?, ?)`,
+              [
+                resolvedStageId,
+                user.organizacion_id || null,
+                photo150,
+                anyCliente ? 1 : 0,
+                anyInterm ? 1 : 0,
+                remitoId,
+                nroRemito
+              ]
+            );
+          }
+        } catch (rfErr) {
+          if (isStageIdTypeMismatch(rfErr)) {
+            dbWarning = 'El control multi-ejemplar se guardó en APP_REMITO_EJEMPLARES y REMITO, pero REMITOS_FIRMADOS.Id_etapa es INT en Gestion_Logistica; solicite al DBA ejecutar docs/dba_gestion_logistica_ajustes.sql.';
+            console.warn(`[RemitosController] ${dbWarning}`);
+          } else {
+            console.warn(`[RemitosController] Aviso al escribir REMITOS_FIRMADOS: ${rfErr.message}`);
+          }
+        }
+      }
+
+      await connection.commit();
+      return {
+        found: true,
+        dbWarning,
+        estado_firma: estadoConsolidado,
+        ejemplares: normalizedEjemplares
+      };
+    } catch (txErr) {
+      await connection.rollback();
+      throw txErr;
+    }
   });
 }
 
 /**
- * Guardar o actualizar la marcación de firma de un remito.
+ * Guardar o actualizar la recepción multi-ejemplar y firmantes de un remito.
  */
 async function saveControl(req, res) {
   try {
     const { id } = req.params;
     const user = req.user;
-    const { estado_firma } = req.body;
+    const parsed = normalizeIncomingEjemplares(req.body);
 
-    if (!estado_firma || !['PENDIENTE', 'FIRMADO_CLIENTE', 'FIRMADO_INTERMEDIARIO', 'NO_FIRMADO'].includes(estado_firma)) {
+    if (parsed.error) {
       return res.status(400).json({
         ok: false,
-        error: 'Estado de firma inválido. Valores permitidos: PENDIENTE, FIRMADO_CLIENTE, FIRMADO_INTERMEDIARIO, NO_FIRMADO.'
+        error: parsed.error
       });
     }
 
-    const result = await persistControlInDatabase(Number(id) || id, user, req.body);
+    const result = await persistControlInDatabase(Number(id) || id, user, req.body, parsed.ejemplares);
 
     if (!result.found) {
       return res.status(404).json({
@@ -446,7 +667,8 @@ async function saveControl(req, res) {
       db_warning: result.dbWarning,
       remito: {
         id: Number(id) || id,
-        estado_firma,
+        estado_firma: result.estado_firma,
+        ejemplares: result.ejemplares,
         ...req.body
       }
     });
@@ -478,9 +700,10 @@ async function uploadFoto(req, res) {
       });
     }
 
+    const suffixEj = ejemplar ? `_${String(ejemplar).toLowerCase()}` : '';
     const finalFileName = SharePointService.generateFileName(
       user.codigo_chofer || user.organizacion_id || user.id,
-      comprobante || (remitoId ? `ID_${remitoId}` : 'SIN_CBTE'),
+      `${comprobante || (remitoId ? `ID_${remitoId}` : 'SIN_CBTE')}${suffixEj}`,
       path.extname(file.originalname) || '.jpg'
     );
 
@@ -543,8 +766,13 @@ async function syncOffline(req, res) {
 
     for (const item of items) {
       try {
-        if (!item.remito_id || !item.estado_firma) continue;
-        await persistControlInDatabase(item.remito_id, user, item);
+        if (!item.remito_id) continue;
+        const parsed = normalizeIncomingEjemplares(item);
+        if (parsed.error) {
+          errors.push({ remito_id: item.remito_id, error: parsed.error });
+          continue;
+        }
+        await persistControlInDatabase(item.remito_id, user, item, parsed.ejemplares);
         processedCount++;
       } catch (itemErr) {
         errors.push({ remito_id: item.remito_id, error: itemErr.message });
