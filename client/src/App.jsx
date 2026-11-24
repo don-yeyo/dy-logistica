@@ -14,13 +14,20 @@ import ScanHome from './pages/ScanHome';
 import RemitosList from './pages/RemitosList';
 import RemitoDetail from './pages/RemitoDetail';
 import Login from './pages/Login';
-import { RefreshCw, ArrowLeft } from 'lucide-react';
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminHojasRuta from './pages/admin/AdminHojasRuta';
+import AdminDevoluciones from './pages/admin/AdminDevoluciones';
+import AdminCajones from './pages/admin/AdminCajones';
+import AdminUsuarios from './pages/admin/AdminUsuarios';
+import AdminAuditoria from './pages/admin/AdminAuditoria';
+import { RefreshCw, ArrowLeft, Monitor } from 'lucide-react';
 
 export default function App() {
   const { user, loading } = useAuth();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [currentScreen, setCurrentScreen] = useState('hojas_ruta'); // 'hojas_ruta' | 'entregas' | 'devoluciones' | 'cajones' | 'remitos' | 'scan'
+  const [currentScreen, setCurrentScreen] = useState('hojas_ruta');
   const [selectedHojaRuta, setSelectedHojaRuta] = useState(() => {
     try {
       const saved = localStorage.getItem('dy_selected_hoja_ruta');
@@ -32,11 +39,28 @@ export default function App() {
   const [selectedRemito, setSelectedRemito] = useState(null);
   const [navWarning, setNavWarning] = useState(null);
 
+  // Estado del Gestor de Escritorio (sysadmin y logistica)
+  const [viewMode, setViewMode] = useState('admin'); // 'admin' | 'mobile' (mobile solo permitido a chofer o sysadmin probando)
+  const [adminTab, setAdminTab] = useState('dashboard');
+  const [adminDetailTxId, setAdminDetailTxId] = useState(null);
+
   useEffect(() => {
     if (!user) {
       setSelectedHojaRuta(null);
       setSelectedRemito(null);
       setCurrentScreen('hojas_ruta');
+      setViewMode('admin');
+      setAdminTab('dashboard');
+      setAdminDetailTxId(null);
+      return;
+    }
+
+    // Choferes acceden exclusivamente a la App Mobile
+    if (user.rol === 'chofer') {
+      setViewMode('mobile');
+    } else {
+      setViewMode('admin');
+      setAdminTab('dashboard');
     }
   }, [user]);
 
@@ -66,6 +90,43 @@ export default function App() {
     return <Login />;
   }
 
+  // Gestor de Escritorio para sysadmin y logistica
+  const isAdminRole = user.rol === 'sysadmin' || user.rol === 'logistica';
+  const showDesktopManager = isAdminRole && (viewMode === 'admin' || user.rol === 'logistica');
+
+  if (showDesktopManager) {
+    return (
+      <AdminLayout
+        user={user}
+        activeTab={adminTab}
+        onSelectTab={setAdminTab}
+        onSwitchToMobile={user.rol === 'sysadmin' ? () => setViewMode('mobile') : null}
+      >
+        {adminTab === 'dashboard' && (
+          <AdminDashboard
+            user={user}
+            onNavigateTab={setAdminTab}
+            onOpenHojaRuta={(txId) => {
+              setAdminDetailTxId(txId);
+              setAdminTab('hojas_ruta');
+            }}
+          />
+        )}
+        {adminTab === 'hojas_ruta' && (
+          <AdminHojasRuta
+            initialTransaccionId={adminDetailTxId}
+            onClearInitialTransaccion={() => setAdminDetailTxId(null)}
+          />
+        )}
+        {adminTab === 'devoluciones' && <AdminDevoluciones />}
+        {adminTab === 'cajones' && <AdminCajones />}
+        {adminTab === 'usuarios' && <AdminUsuarios currentUser={user} />}
+        {adminTab === 'auditoria' && user.rol === 'sysadmin' && <AdminAuditoria />}
+      </AdminLayout>
+    );
+  }
+
+  // App Mobile PWA para Choferes (y vista previa opcional para sysadmin)
   const handleNavigate = (screenId) => {
     const requiresHojaRuta = ['entregas', 'devoluciones', 'cajones', 'remitos', 'scan'].includes(screenId);
 
@@ -83,6 +144,41 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {user.rol === 'sysadmin' && (
+        <div
+          style={{
+            background: '#0d2c5c',
+            color: '#fff',
+            padding: '6px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '0.8rem'
+          }}
+        >
+          <span>Vista previa App Choferes (SysAdmin)</span>
+          <button
+            type="button"
+            onClick={() => setViewMode('admin')}
+            style={{
+              background: '#fff',
+              color: '#0d2c5c',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '4px 10px',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            <Monitor size={14} />
+            <span>Volver al Gestor</span>
+          </button>
+        </div>
+      )}
+
       <Header
         onMenuClick={() => setIsDrawerOpen(true)}
         onOpenHelp={() => setIsHelpOpen(true)}
@@ -165,7 +261,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Barra Inferior Persistente (Sección 4.2: Entregas, Devoluciones, Cajones, Remitos) */}
       {!selectedRemito && (
         <BottomNav
           currentScreen={currentScreen}
@@ -174,7 +269,6 @@ export default function App() {
         />
       )}
 
-      {/* Alerta cuando se intenta operar sin elegir Hoja de Ruta */}
       <AlertModal
         isOpen={Boolean(navWarning)}
         onClose={() => setNavWarning(null)}
@@ -184,7 +278,6 @@ export default function App() {
         confirmText="Ir a Hojas de Ruta"
       />
 
-      {/* Modal Interactivo de Ayuda y Chatbot Chofer */}
       <HelpChatModal
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}

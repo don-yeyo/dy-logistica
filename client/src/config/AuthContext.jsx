@@ -3,7 +3,6 @@ import { PublicClientApplication } from '@azure/msal-browser';
 import { msalConfig, loginRequest } from './msalConfig';
 import {
   fetchCurrentUser,
-  loginWithCredentials,
   syncOfflineBatch,
   saveEntregasHojaRuta,
   saveDevolucionesHojaRuta,
@@ -13,15 +12,27 @@ import { getPendingControls, clearPendingControls } from '../services/offlineSto
 
 const AuthContext = createContext(null);
 
-// Instancia de MSAL
+// Instancia y promesa de inicialización de MSAL
 let msalInstance = null;
+let msalInitPromise = null;
 try {
   if (msalConfig.auth.clientId && !msalConfig.auth.clientId.startsWith('00000000')) {
     msalInstance = new PublicClientApplication(msalConfig);
-    msalInstance.initialize();
+    msalInitPromise = msalInstance.initialize().catch((err) => {
+      console.warn('[MSAL] Error al inicializar MSAL:', err.message);
+      return null;
+    });
   }
 } catch (e) {
   console.warn('[MSAL] Inicialización de MSAL omitida o en modo Mock:', e.message);
+}
+
+async function ensureMsalInitialized() {
+  if (!msalInstance) return null;
+  if (msalInitPromise) {
+    await msalInitPromise;
+  }
+  return msalInstance;
 }
 
 export function AuthProvider({ children }) {
@@ -111,24 +122,29 @@ export function AuthProvider({ children }) {
         localStorage.setItem('dy_user_email', email);
       }
       const data = await fetchCurrentUser();
-      if (data && data.ok) {
+      if (data && data.ok && data.user) {
+        if (data.user.rol) {
+          localStorage.setItem('dy_user_rol', data.user.rol);
+        }
         setUser(data.user);
       }
     } catch (err) {
       console.warn('[AuthContext] Error al cargar usuario:', err.message);
       const storedEmail = localStorage.getItem('dy_user_email');
+      const storedRol = localStorage.getItem('dy_user_rol') || 'chofer';
       if (storedEmail && !navigator.onLine) {
         // Fallback offline cuando no hay red
         setUser({
           id: 1,
           email: storedEmail,
           nombre: storedEmail.split('@')[0],
-          codigo_chofer: '32355',
-          rol: 'chofer',
+          codigo_chofer: null,
+          rol: storedRol,
           activo: 1
         });
       } else {
         localStorage.removeItem('dy_user_email');
+        localStorage.removeItem('dy_user_rol');
         setUser(null);
         setError(err.response?.data?.error || 'No se pudo validar el acceso del usuario.');
       }
@@ -139,6 +155,8 @@ export function AuthProvider({ children }) {
   }, [refreshPendingCount]);
 
   useEffect(() => {
+    let active = true;
+
     const handleOnline = () => {
       console.log('[Network] Conexión a Internet reestablecida.');
       setIsOnline(true);
@@ -153,64 +171,88 @@ export function AuthProvider({ children }) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Cargar sesión existente si el usuario ya inició sesión (no almacena contraseña)
-    const storedEmail = localStorage.getItem('dy_user_email');
-    if (storedEmail) {
-      loadUser(storedEmail);
-    } else {
-      setLoading(false);
-    }
+    const restoreSession = async () => {
+      const storedEmail = localStorage.getItem('dy_user_email');
+      const isMockEnabled = import.meta.env.VITE_MOCK_AUTH === 'true';
 
+      try {
+        const instance = await ensureMsalInitialized();
+        if (instance) {
+          const redirectResult = await instance.handleRedirectPromise().catch(() => null);
+          const accounts = instance.getAllAccounts();
+          const account = redirectResult?.account || instance.getActiveAccount() || accounts[0];
+
+          if (account) {
+            instance.setActiveAccount(account);
+            if (!navigator.onLine && storedEmail) {
+              if (active) await loadUser(storedEmail);
+              return;
+            }
+            try {
+              // Verificar silenciosamente que el token Microsoft siga vigente (sin pedir login de nuevo)
+              await instance.acquireTokenSilent({
+                ...loginRequest,
+                account
+              });
+              const msalEmail = account.username || account.idTokenClaims?.email || storedEmail;
+              if (msalEmail && active) {
+                await loadUser(msalEmail);
+                return;
+              }
+            } catch (silentErr) {
+              console.info('[MSAL] Sesión expirada o requiere nueva autenticación:', silentErr.message);
+              if (storedEmail && isMockEnabled && active) {
+                await loadUser(storedEmail);
+                return;
+              }
+              localStorage.removeItem('dy_user_email');
+              localStorage.removeItem('dy_user_rol');
+              if (active) setLoading(false);
+              return;
+            }
+          }
+        }
+
+        // Modo desarrollo Mock o contingencia offline con sesión previa
+        if (storedEmail && (isMockEnabled || !navigator.onLine)) {
+          if (active) await loadUser(storedEmail);
+          return;
+        }
+
+        localStorage.removeItem('dy_user_email');
+        localStorage.removeItem('dy_user_rol');
+        if (active) setLoading(false);
+      } catch (err) {
+        console.warn('[AuthContext] Error restaurando sesión:', err.message);
+        if (active) setLoading(false);
+      }
+    };
+
+    restoreSession();
     refreshPendingCount();
 
     return () => {
+      active = false;
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, [loadUser, refreshPendingCount, triggerSyncOffline]);
 
-  // Login con Email y Contraseña validados contra Microsoft Entra ID (Sección 4.1)
-  const loginWithEmailPassword = async (email, password) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const cleanEmail = String(email || '').trim().toLowerCase();
-      const data = await loginWithCredentials(cleanEmail, password);
-      if (data && data.ok && data.user) {
-        localStorage.setItem('dy_user_email', data.user.email);
-        setUser(data.user);
-        await refreshPendingCount();
-        return { ok: true };
-      }
-      throw new Error('Las credenciales ingresadas no son válidas.');
-    } catch (err) {
-      const apiMsg = err.response?.data?.error || err.message || 'Las credenciales ingresadas no son válidas.';
-      setError(apiMsg);
-      return {
-        ok: false,
-        error: apiMsg,
-        require_sso_popup: Boolean(err.response?.data?.require_sso_popup)
-      };
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Login con Microsoft Entra ID (Popup SSO)
-  const loginWithMicrosoft = async (loginHint = '') => {
+  const loginWithMicrosoft = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      if (!msalInstance) {
+      const instance = await ensureMsalInitialized();
+      if (!instance) {
         throw new Error('MSAL no está configurado. Configure VITE_AZURE_AD_CLIENT_ID en el archivo .env.');
       }
 
-      const reqPayload = loginHint && loginHint.includes('@')
-        ? { ...loginRequest, loginHint: loginHint.trim() }
-        : loginRequest;
-
-      const loginResponse = await msalInstance.loginPopup(reqPayload);
+      const loginResponse = await instance.loginPopup(loginRequest);
+      if (loginResponse.account) {
+        instance.setActiveAccount(loginResponse.account);
+      }
       const email = loginResponse.account?.username || loginResponse.account?.idTokenClaims?.email;
 
       if (!email) {
@@ -220,7 +262,7 @@ export function AuthProvider({ children }) {
       await loadUser(email);
     } catch (err) {
       console.error('[MSAL] Error en login Microsoft:', err);
-      setError(err.message || 'Las credenciales ingresadas no son válidas.');
+      setError(err.message || 'No se pudo completar el inicio de sesión con Microsoft.');
     } finally {
       setLoading(false);
     }
@@ -234,12 +276,14 @@ export function AuthProvider({ children }) {
   // Cerrar Sesión
   const logout = async () => {
     localStorage.removeItem('dy_user_email');
+    localStorage.removeItem('dy_user_rol');
     localStorage.removeItem('dy_selected_hoja_ruta');
     setUser(null);
     setError(null);
-    if (msalInstance && msalInstance.getAllAccounts().length > 0) {
+    const instance = await ensureMsalInitialized();
+    if (instance && instance.getAllAccounts().length > 0) {
       try {
-        await msalInstance.logoutPopup();
+        await instance.logoutPopup();
       } catch (e) {
         console.warn('Logout MSAL popup falló:', e);
       }
@@ -254,7 +298,6 @@ export function AuthProvider({ children }) {
     isOnline,
     pendingSyncCount,
     syncing,
-    loginWithEmailPassword,
     loginWithMicrosoft,
     loginMock,
     logout,

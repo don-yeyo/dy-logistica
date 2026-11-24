@@ -28,13 +28,6 @@ api.interceptors.response.use(
   }
 );
 
-/**
- * Validar email y contraseña contra Microsoft Entra ID (Sección 4.1)
- */
-export async function loginWithCredentials(email, password) {
-  const { data } = await api.post('/auth/login', { email, password });
-  return data;
-}
 
 /**
  * Obtener datos del chofer/usuario logueado
@@ -159,6 +152,65 @@ export async function uploadFotoRemito(formData) {
  */
 export async function syncOfflineBatch(items) {
   const { data } = await api.post('/remitos/sync-offline', { items });
+  return data;
+}
+
+// ============================================================================
+// GESTOR DE ESCRITORIO (/api/admin)
+// ============================================================================
+
+export async function fetchAdminDashboard() {
+  const { data } = await api.get('/admin/dashboard');
+  return data;
+}
+
+export async function fetchAdminHojasRuta(params = {}) {
+  const { data } = await api.get('/admin/hojas-ruta', { params });
+  return data;
+}
+
+export async function fetchAdminHojaRutaDetalle(transaccionId) {
+  const { data } = await api.get(`/admin/hojas-ruta/${transaccionId}`);
+  return data;
+}
+
+export async function fetchAdminDevoluciones(params = {}) {
+  const { data } = await api.get('/admin/devoluciones', { params });
+  return data;
+}
+
+export async function fetchAdminCajones(params = {}) {
+  const { data } = await api.get('/admin/cajones', { params });
+  return data;
+}
+
+export async function fetchAdminUsuarios() {
+  const { data } = await api.get('/admin/usuarios');
+  return data;
+}
+
+export async function fetchAdminOrganizaciones(params = {}) {
+  const { data } = await api.get('/admin/organizaciones', { params });
+  return data;
+}
+
+export async function createAdminUsuario(payload) {
+  const { data } = await api.post('/admin/usuarios', payload);
+  return data;
+}
+
+export async function updateAdminUsuario(id, payload) {
+  const { data } = await api.put(`/admin/usuarios/${id}`, payload);
+  return data;
+}
+
+export async function deleteAdminUsuario(id) {
+  const { data } = await api.delete(`/admin/usuarios/${id}`);
+  return data;
+}
+
+export async function fetchAdminAuditoria(params = {}) {
+  const { data } = await api.get('/admin/auditoria', { params });
   return data;
 }
 
