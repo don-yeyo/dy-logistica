@@ -5661,3 +5661,154 @@ body {
 .dark-theme .dev-toggle-btn.off .dev-toggle-text {
   color: #fcd34d;
 }
+
+
+/* ==============================================================================
+   REMITOS MULTI-EJEMPLAR Y MÚLTIPLES FIRMANTES
+   ============================================================================== */
+.ejemplar-btn-3col {
+  position: relative;
+}
+
+.ejemplar-btn-3col.configured:not(.selected) {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25);
+}
+
+.ejemplar-configured-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #10b981;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ejemplares-summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ejemplar-summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border);
+  background: var(--surface-hover);
+  color: var(--text-main);
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ejemplar-summary-chip.active {
+  border-color: var(--dy-blue);
+  background: rgba(13, 44, 92, 0.1);
+  color: var(--dy-blue);
+}
+
+.dark-theme .ejemplar-summary-chip.active {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.18);
+  color: #e0f2fe;
+}
+
+.ejemplar-summary-chip.incomplete {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.ejemplar-editor-panel {
+  background: var(--surface);
+  border: 1.5px solid var(--dy-blue);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+.dark-theme .ejemplar-editor-panel {
+  border-color: rgba(56, 189, 248, 0.5);
+}
+
+.ejemplar-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+  color: var(--text-main);
+}
+
+.ejemplar-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc2626;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dark-theme .ejemplar-remove-btn {
+  color: #fca5a5;
+}
+
+.firma-multi-hint {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.status-badge.FIRMADO_AMBOS {
+  background: #cffafe;
+  color: #0e7490;
+  border: 1px solid #67e8f9;
+}
+
+.dark-theme .status-badge.FIRMADO_AMBOS {
+  background: rgba(6, 182, 212, 0.22);
+  color: #67e8f9;
+  border-color: rgba(34, 211, 238, 0.45);
+}
+
+.remito-card.status-FIRMADO_AMBOS {
+  border-left: 4px solid #0891b2;
+}
+
+.remito-ejemplares-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.remito-ejemplar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-main);
+}

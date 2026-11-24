@@ -14,7 +14,7 @@ Plataforma logística integral para **Don Yeyo S.A.** conectada directamente a l
    - **Entregas**: confirmación de descarga (`ITEMS_A_ENTREGAR` → `HOJA_RUTA_ITEM_REMITO`).
    - **Devoluciones**: registro maestro-detalle por cliente y producto (`REMITO_DEVOLUCIONES`, `REMITO_DEVOLUCIONES_ITEMS`).
    - **Cajones**: control de entregas, devoluciones y diferencias (`REMITOS_CAJONES_X_ETAPA` / `REMITO_CAJONES`).
-   - **Remitos**: escaneo 1D, receptor, **Firma Digital**, fotografía comprimida al 70% JPEG y subida a SharePoint / Power Automate.
+   - **Remitos**: escaneo 1D, recepción **multi-ejemplar** (`Original`, `Duplicado`, `Triplicado`, `Cuatriplicado`, `Recepción Valorizada`, `Otro`), múltiples firmantes combinables por ejemplar (`Cliente`, `Intermediario` o `No Firmado`) en `APP_REMITO_EJEMPLARES`, **Firma Digital**, fotografía individual por ejemplar comprimida al 70% JPEG y subida a SharePoint / Power Automate.
    - **Modo Offline completo** en IndexedDB (`idb`) con sincronización automática al recuperar señal.
 
 ---
@@ -107,7 +107,7 @@ npm run install-all
 ```
 
 ### 3. Inicialización de Tablas de App y Triggers de Auditoría
-Ejecutar una única vez (idempotente) el script de configuración en `Gestion_Logistica`, que crea `APP_USUARIOS`, `AUDITORIA` y los **22 triggers** (`AFTER INSERT/UPDATE/DELETE`) sobre `APP_USUARIOS`, `HOJA_RUTA_ITEM_REMITO`, `REMITO_DEVOLUCIONES`, `REMITO_DEVOLUCIONES_ITEMS`, `REMITO_CAJONES`, `REMITO_CAJONES_ITEMS`, `REMITOS_FIRMADOS` y `REMITO`:
+Ejecutar una única vez (idempotente) el script de configuración en `Gestion_Logistica`, que crea `APP_USUARIOS`, `AUDITORIA`, `APP_REMITO_EJEMPLARES` y los **25 triggers** (`AFTER INSERT/UPDATE/DELETE`) sobre `APP_USUARIOS`, `APP_REMITO_EJEMPLARES`, `HOJA_RUTA_ITEM_REMITO`, `REMITO_DEVOLUCIONES`, `REMITO_DEVOLUCIONES_ITEMS`, `REMITO_CAJONES`, `REMITO_CAJONES_ITEMS`, `REMITOS_FIRMADOS` y `REMITO`:
 ```bash
 node server/setup_glog_app.js
 ```

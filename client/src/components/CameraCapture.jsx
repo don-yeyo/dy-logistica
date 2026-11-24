@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Camera, Trash2, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { compressImage } from '../services/imageCompressor';
 import AlertModal from './AlertModal';
@@ -9,6 +9,13 @@ export default function CameraCapture({ initialPhotoUrl, onPhotoCaptured, onPhot
   const [previewUrl, setPreviewUrl] = useState(initialPhotoUrl || null);
   const [stats, setStats] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+
+  useEffect(() => {
+    setPreviewUrl(initialPhotoUrl || null);
+    if (!initialPhotoUrl) {
+      setStats(null);
+    }
+  }, [initialPhotoUrl]);
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
