@@ -372,7 +372,11 @@ async function getDevolucionesByTransaccion(req, res) {
     const rows = await queryDevolucionesRows(hojaRuta.Transaccionid);
 
     const [productos] = await pool.query(
-      `SELECT Productoid AS id_producto, Codigo AS codigo, Nombre AS nombre
+      `SELECT
+         Productoid AS id_producto,
+         Codigo AS codigo,
+         Nombre AS nombre,
+         TRIM(COALESCE(Codigomtx, '')) AS codigomtx
        FROM PRODUCTO
        WHERE Activo = '1' OR Activo = 1 OR Activo IS NULL
        ORDER BY Nombre ASC`
@@ -387,7 +391,7 @@ async function getDevolucionesByTransaccion(req, res) {
     const [motivos] = await pool.query(
       `SELECT CAST(TRIM(Codigo) AS UNSIGNED) AS id_motivo, TRIM(Codigo) AS codigo, TRIM(Descripcion) AS descripcion
        FROM MOTIVO_DIFERENCIA
-       ORDER BY CAST(TRIM(Codigo) AS UNSIGNED) ASC`
+       ORDER BY TRIM(Descripcion) ASC`
     );
 
     return res.json({
@@ -445,6 +449,14 @@ async function guardarDevoluciones(req, res) {
       }
 
       for (const prod of productos) {
+        const prodId = Number(prod.id_producto);
+        if (!Number.isInteger(prodId) || prodId <= 0) {
+          return res.status(400).json({
+            ok: false,
+            error: 'Debe seleccionar un producto válido de la lista para cada devolución.'
+          });
+        }
+
         const cantStr = prod.Cantidad === null || prod.Cantidad === undefined ? '' : String(prod.Cantidad).trim();
         if (!POSITIVE_INT_REGEX.test(cantStr)) {
           return res.status(400).json({
