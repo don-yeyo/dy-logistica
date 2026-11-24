@@ -1,0 +1,16 @@
+- ver si mantenemos el nobre del chofer en cada hoja de ruta como dato redundante o solo mostrarlo al principio en la cabecera
+- panel de gestion de usuarios y roles, hace falta?
+- permitir registrar mas de un ejemplar por remito
+- productos posibles de seleccionar de una devolucion deben ser los de entregas anteriores para el cliente o intermediario seleccionado
+- que para el ingreso de cantidades, aparezca un incrementar / decrementar y al hacer foco seleccionar el dato existente
+- registrar geoposicionamiento del camión
+- que onda la tabla gestion_logistica que me mostro Leo?
+- tabla auditoria
+- obtencion del maestro de productos(cache? finnegans?)
+
+
+virtual: cosas que el cliente devuelve al distribuidor
+
+
+# fuera de scope. Etapa 2
+- agregar mapa de recorrido

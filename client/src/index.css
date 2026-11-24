@@ -184,7 +184,8 @@ body {
     display: inline-block !important;
   }
 
-  .brand-title {
+  .brand-title,
+  .brand-badge {
     display: none !important;
   }
 
@@ -193,9 +194,24 @@ body {
   }
 
   .connection-pill {
-    padding: 4px 8px;
-    font-size: 0.72rem;
-    gap: 4px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .connection-pill span {
+    display: none !important;
+  }
+
+  .nav-btn-circle {
+    width: 42px;
+    height: 42px;
+  }
+
+  .nav-btn-label {
+    font-size: 0.66rem;
   }
 }
 

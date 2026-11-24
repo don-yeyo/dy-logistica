@@ -77,11 +77,11 @@ export default function Header({ onMenuClick, onOpenHelp }) {
             }
           >
             {syncing ? (
-              <RefreshCw size={12} className="spin" />
+              <RefreshCw size={15} className="spin" />
             ) : isOnline ? (
-              <Wifi size={12} />
+              <Wifi size={15} />
             ) : (
-              <WifiOff size={12} />
+              <WifiOff size={15} />
             )}
             <span>
               {syncing

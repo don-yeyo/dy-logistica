@@ -1,12 +1,12 @@
 import React from 'react';
-import { FileText, Calendar, User, Truck, ArrowLeft } from 'lucide-react';
+import { FileText, Calendar, User, Truck } from 'lucide-react';
 
 /**
  * Encabezado reutilizable de Hoja de Ruta para las pantallas operativas
  * (Sección 4.2.1 y 4.2.2): Hoja_de_ruta, Fecha, Viaje, Chofer y Transporte.
  * No muestra Transaccionid ni EMail en pantalla.
  */
-export default function HojaRutaHeader({ hojaRuta, title, onChangeHojaRuta }) {
+export default function HojaRutaHeader({ hojaRuta }) {
   if (!hojaRuta) return null;
 
   let formattedDate = hojaRuta.Fecha || '';
@@ -17,26 +17,13 @@ export default function HojaRutaHeader({ hojaRuta, title, onChangeHojaRuta }) {
   return (
     <div className="hr-detail-header-card">
       <div className="hr-detail-title-bar">
-        <span>{title}</span>
-        {onChangeHojaRuta && (
-          <button
-            type="button"
-            className="hr-change-btn"
-            onClick={onChangeHojaRuta}
-            title="Volver al listado de Hojas de Ruta"
-          >
-            <ArrowLeft size={14} />
-            <span>Hojas de Ruta</span>
-          </button>
-        )}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+          <FileText size={16} />
+          <span>Hoja de Ruta: <strong>{hojaRuta.Hoja_de_ruta}</strong></span>
+        </span>
       </div>
 
       <div className="hr-detail-meta">
-        <div className="hr-meta-row hr-meta-primary">
-          <FileText size={15} />
-          <span>Hoja de Ruta: <strong>{hojaRuta.Hoja_de_ruta}</strong></span>
-        </div>
-
         <div className="hr-meta-grid">
           <div className="hr-meta-row">
             <Calendar size={14} />
