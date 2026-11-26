@@ -242,4 +242,13 @@ export async function fetchAdminAuditoria(params = {}) {
   return data;
 }
 
+// ============================================================================
+// SUGERENCIAS DE MEJORA DEL SISTEMA (/api/sugerencias)
+// ============================================================================
+
+export async function enviarSugerencia(payload) {
+  const { data } = await api.post('/sugerencias', payload);
+  return data;
+}
+
 export default api;

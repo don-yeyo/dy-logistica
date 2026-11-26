@@ -9,6 +9,7 @@ import {
   FileSignature,
   ScanLine,
   HelpCircle,
+  Lightbulb,
   LogOut,
   Sun,
   Moon
@@ -23,6 +24,7 @@ export default function Drawer({
   onClose,
   onNavigate,
   onOpenHelp,
+  onOpenSugerencia,
   currentScreen,
   selectedHojaRuta,
   selectedLugar
@@ -113,6 +115,23 @@ export default function Drawer({
                   <HelpCircle size={20} />
                 </span>
                 <span>Ayuda / Manual</span>
+              </div>
+            </button>
+          )}
+
+          {onOpenSugerencia && (
+            <button
+              onClick={() => {
+                onClose();
+                onOpenSugerencia();
+              }}
+              className="drawer-nav-item"
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span className="drawer-nav-icon" style={{ color: '#d97706' }}>
+                  <Lightbulb size={20} />
+                </span>
+                <span>Sugerir una mejora</span>
               </div>
             </button>
           )}

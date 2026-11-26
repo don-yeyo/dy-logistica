@@ -17,6 +17,7 @@ Plataforma logística integral para **Don Yeyo S.A.** conectada directamente a l
    - **Cajones y Pallets**: control filtrado por clientes del lugar seleccionado con soporte para agregar clientes desde catálogo ERP o carga manual, seguimiento paralelo de **Cajones** (`ENTREGADOS` / `DEVUELTOS`) y **Pallets** (`ENTREGADOS` / `DEVUELTOS`), observaciones y persistencia en `APP_CAJONES_PALLETS` (con sincronización no bloqueante hacia `REMITO_CAJONES`).
    - **Remitos por Lugar (actuales + viajes anteriores pendientes)**: escaneo 1D, filtrado automático por lugar de entrega incluyendo todos los remitos de la hoja de ruta actual más remitos pendientes de viajes anteriores dentro de `REMITOS_LUGAR_DIAS_ATRAS` (`< REMITO_EJEMPLARES_ESPERADOS_DEFAULT` en `APP_REMITO_EJEMPLARES`), filtros rápidos (`Todos`, `Viaje actual`, `Viajes anteriores pendientes`), recepción **multi-ejemplar** (`Original`, `Duplicado`, `Triplicado`, `Cuatriplicado`, `Recepción Valorizada`, `Otro`) con formularios apilados uno debajo del otro, múltiples firmantes combinables por ejemplar (`Cliente`, `Intermediario` o `No Firmado`), **Firma Digital individual por ejemplar**, fotografía individual por ejemplar comprimida al 70% JPEG y subida a SharePoint / Power Automate.
    - **Borradores persistentes, Guardado Global y Recordatorio**: memoria local en `localStorage` (`draftStorage.js`) segmentada por chofer, hoja de ruta y lugar de entrega para mantener acordeones y ediciones entre pantallas; botón flotante azul único (`SaveFab`) visible en todas las pantallas cuando hay modificaciones pendientes; modal bloqueante con spinner durante el guardado; y modal recordatorio automático tras `VITE_UNSAVED_REMINDER_SECONDS` segundos continuos sin actividad del usuario (mouse, teclado, clics, taps o scroll) mientras existan cambios sin confirmar, sobre toda la pantalla y con bloqueo de scroll del fondo.
+   - **Sugerencias de mejoras del sistema**: accesible desde el **Drawer** y desde el **menú desplegable del avatar** (tanto en la App Móvil como en el Gestor de Escritorio) para enviar propuestas o reportes directamente por correo SMTP (`SUGERENCIAS_EMAILS_DESTINO`) con respaldo en `APP_SUGERENCIAS`.
    - **Modo Offline completo con respaldo ante fallos de red**: almacenamiento en IndexedDB (`idb`) por combinación `(hoja de ruta, lugar de entrega)` tanto cuando el teléfono está sin señal como ante cortes/timeouts contra el servidor, con sincronización automática al recuperar conectividad.
 
 > 📖 **Manual para Choferes**: Consultá la guía ilustrada paso a paso en [`manual_de_usuario_chofer.md`](manual_de_usuario_chofer.md).
@@ -82,22 +83,25 @@ dy_logistica_app/
     ├── .env.template
     ├── index.js
     ├── app.js
-    ├── setup_glog_app.js      # Crea tablas APP_* (incluso ENTREGAS_LUGAR, CAJONES_PALLETS) y 31 triggers
+    ├── setup_glog_app.js      # Crea tablas APP_* (incluso ENTREGAS_LUGAR, CAJONES_PALLETS, SUGERENCIAS) y 34 triggers
     ├── config/db.js           # Pool único a Gestion_Logistica + withAuditConnection
     ├── middlewares/
     │   ├── authMiddleware.js  # Resolución de usuario y requireRole()
     │   └── uploadMiddleware.js
     ├── services/
-    │   └── sharepointService.js
+    │   ├── sharepointService.js
+    │   └── emailService.js    # Envío de correos SMTP para sugerencias de mejoras
     ├── controllers/
     │   ├── authController.js
     │   ├── hojasRutaController.js
     │   ├── remitosController.js
+    │   ├── sugerenciasController.js
     │   └── adminController.js # Endpoints del Gestor de Escritorio (/api/admin/*)
     └── routes/
         ├── authRoutes.js
         ├── hojasRutaRoutes.js
         ├── remitosRoutes.js
+        ├── sugerenciasRoutes.js
         └── adminRoutes.js
 ```
 
@@ -115,7 +119,7 @@ npm run install-all
 ```
 
 ### 3. Inicialización de Tablas de App y Triggers de Auditoría
-Ejecutar una única vez (idempotente) el script de configuración en `Gestion_Logistica`, que crea `APP_USUARIOS`, `AUDITORIA`, `APP_REMITO_EJEMPLARES`, `APP_ENTREGAS_LUGAR`, `APP_CAJONES_PALLETS` y los **31 triggers** (`AFTER INSERT/UPDATE/DELETE`) sobre `APP_USUARIOS`, `APP_REMITO_EJEMPLARES`, `APP_ENTREGAS_LUGAR`, `APP_CAJONES_PALLETS`, `HOJA_RUTA_ITEM_REMITO`, `REMITO_DEVOLUCIONES`, `REMITO_DEVOLUCIONES_ITEMS`, `REMITO_CAJONES`, `REMITO_CAJONES_ITEMS`, `REMITOS_FIRMADOS` y `REMITO`:
+Ejecutar una única vez (idempotente) el script de configuración en `Gestion_Logistica`, que crea `APP_USUARIOS`, `AUDITORIA`, `APP_REMITO_EJEMPLARES`, `APP_ENTREGAS_LUGAR`, `APP_CAJONES_PALLETS`, `APP_SUGERENCIAS` y los **34 triggers** (`AFTER INSERT/UPDATE/DELETE`) sobre `APP_USUARIOS`, `APP_REMITO_EJEMPLARES`, `APP_ENTREGAS_LUGAR`, `APP_CAJONES_PALLETS`, `APP_SUGERENCIAS`, `HOJA_RUTA_ITEM_REMITO`, `REMITO_DEVOLUCIONES`, `REMITO_DEVOLUCIONES_ITEMS`, `REMITO_CAJONES`, `REMITO_CAJONES_ITEMS`, `REMITOS_FIRMADOS` y `REMITO`:
 ```bash
 node server/setup_glog_app.js
 ```
@@ -140,6 +144,10 @@ node server/setup_glog_app.js
 | `ADMIN_DEFAULT_PAGE_SIZE`, `ADMIN_MAX_PAGE_SIZE` | Tamaño de página por defecto (`15`) y máximo (`100`) en grillas del Gestor de Escritorio |
 | `AZURE_AD_TENANT_ID`, `AZURE_AD_CLIENT_ID`, `AZURE_AD_CLIENT_SECRET` | Credenciales de Microsoft Entra ID |
 | `ENABLE_SHAREPOINT_UPLOAD`, `POWERAUTOMATE_URL`, `SHAREPOINT_FQDN` | Envío de fotos a SharePoint |
+| `SUGERENCIAS_EMAILS_DESTINO` | Lista de emails destino separados por coma para recibir sugerencias de mejora |
+| `ALERTA_SMTP_HOST`, `ALERTA_SMTP_PORT`, `ALERTA_SMTP_USER`, `ALERTA_SMTP_PASSWORD`, `ALERTA_SMTP_NAME`, `ALERTA_SMTP_ENCRYPT` | Servidor SMTP primario para envío de sugerencias y notificaciones internas |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM_NAME`, `SMTP_FROM_EMAIL` | Servidor SMTP de respaldo ante fallos del primario |
+| `EMAIL_TEST_MODE`, `EMAIL_TEST_RECIPIENT`, `EMAIL_LOGO_URL` | Interceptación segura de correos en pruebas y logo institucional HTML |
 
 #### Frontend (`client/.env`)
 | Variable | Ejemplo / Descripción |
@@ -172,6 +180,7 @@ npm run dev
 * `GET /api/hojas-ruta/:transaccionId/devoluciones` y `POST /api/hojas-ruta/:transaccionId/devoluciones` — Soporta `?lugar=` para filtrar por lugar de entrega.
 * `GET /api/hojas-ruta/:transaccionId/cajones` y `POST /api/hojas-ruta/:transaccionId/cajones` — Soporta `?lugar=`, incluye **Cajones + Pallets** (`APP_CAJONES_PALLETS`) y catálogo de clientes.
 * `GET /api/remitos/mis-remitos` (soporta `?transaccion_id=&lugar=` incluyendo viajes anteriores pendientes), `GET /api/remitos/buscar`, `PUT /api/remitos/:id/control`, `POST /api/remitos/upload-foto`, `POST /api/remitos/sync-offline`.
+* `POST /api/sugerencias` — Registra la sugerencia en `APP_SUGERENCIAS` y envía el correo hacia `SUGERENCIAS_EMAILS_DESTINO`.
 
 ### Gestor de Escritorio (`/api/admin`, requiere `sysadmin` o `logistica`, paginado server-side con `page` y `page_size`)
 * Incluye menú lateral contraíble, versión tomada dinámicamente de `client/package.json` y menú de usuario en el header derecho mediante avatar circular (con selector de simulación de usuarios cuando `VITE_ENABLE_USER_IMPERSONATION=true`).

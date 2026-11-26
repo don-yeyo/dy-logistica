@@ -471,4 +471,51 @@ BEGIN
     JSON_OBJECT('id', OLD.id, 'transaccion_id', OLD.transaccion_id, 'lugar_entrega', OLD.lugar_entrega, 'cliente', OLD.cliente), NULL);
 END$$
 
+-- ------------------------------------------------------------------------------
+-- 11. APP_SUGERENCIAS (sugerencias y reportes de mejoras enviados por usuarios)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `APP_SUGERENCIAS` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `usuario_email` VARCHAR(150) NOT NULL,
+  `usuario_nombre` VARCHAR(120) DEFAULT NULL,
+  `usuario_rol` VARCHAR(30) DEFAULT NULL,
+  `categoria` ENUM('MEJORA','ERROR','UX_UI','OTRO') NOT NULL DEFAULT 'MEJORA',
+  `modulo` VARCHAR(80) DEFAULT NULL,
+  `asunto` VARCHAR(200) NOT NULL,
+  `mensaje` TEXT NOT NULL,
+  `emails_destino` VARCHAR(500) NOT NULL,
+  `estado_envio` ENUM('PENDIENTE','ENVIADO','SIMULADO_TEST','FALLIDO') NOT NULL DEFAULT 'PENDIENTE',
+  `error_envio` VARCHAR(500) DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_as_usuario` (`usuario_email`),
+  INDEX `idx_as_estado` (`estado_envio`),
+  INDEX `idx_as_fecha` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci$$
+
+DROP TRIGGER IF EXISTS `trg_aud_app_sugerencias_ai`$$
+CREATE TRIGGER `trg_aud_app_sugerencias_ai` AFTER INSERT ON `APP_SUGERENCIAS` FOR EACH ROW
+BEGIN
+  INSERT INTO `AUDITORIA` (`tabla_nombre`, `operacion`, `registro_pk`, `usuario_app`, `usuario_rol`, `usuario_db`, `datos_anteriores`, `datos_nuevos`)
+  VALUES ('APP_SUGERENCIAS', 'INSERT', CAST(NEW.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(), NULL,
+    JSON_OBJECT('id', NEW.id, 'usuario_email', NEW.usuario_email, 'categoria', NEW.categoria, 'modulo', NEW.modulo, 'asunto', NEW.asunto, 'emails_destino', NEW.emails_destino, 'estado_envio', NEW.estado_envio));
+END$$
+
+DROP TRIGGER IF EXISTS `trg_aud_app_sugerencias_au`$$
+CREATE TRIGGER `trg_aud_app_sugerencias_au` AFTER UPDATE ON `APP_SUGERENCIAS` FOR EACH ROW
+BEGIN
+  INSERT INTO `AUDITORIA` (`tabla_nombre`, `operacion`, `registro_pk`, `usuario_app`, `usuario_rol`, `usuario_db`, `datos_anteriores`, `datos_nuevos`)
+  VALUES ('APP_SUGERENCIAS', 'UPDATE', CAST(NEW.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
+    JSON_OBJECT('id', OLD.id, 'estado_envio', OLD.estado_envio, 'error_envio', OLD.error_envio),
+    JSON_OBJECT('id', NEW.id, 'estado_envio', NEW.estado_envio, 'error_envio', NEW.error_envio));
+END$$
+
+DROP TRIGGER IF EXISTS `trg_aud_app_sugerencias_ad`$$
+CREATE TRIGGER `trg_aud_app_sugerencias_ad` AFTER DELETE ON `APP_SUGERENCIAS` FOR EACH ROW
+BEGIN
+  INSERT INTO `AUDITORIA` (`tabla_nombre`, `operacion`, `registro_pk`, `usuario_app`, `usuario_rol`, `usuario_db`, `datos_anteriores`, `datos_nuevos`)
+  VALUES ('APP_SUGERENCIAS', 'DELETE', CAST(OLD.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
+    JSON_OBJECT('id', OLD.id, 'usuario_email', OLD.usuario_email, 'asunto', OLD.asunto), NULL);
+END$$
+
 DELIMITER ;

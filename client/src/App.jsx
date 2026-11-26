@@ -5,6 +5,7 @@ import Header from './components/Header';
 import Drawer from './components/Drawer';
 import BottomNav from './components/BottomNav';
 import HelpChatModal from './components/HelpChatModal';
+import SugerenciaModal from './components/SugerenciaModal';
 import AlertModal from './components/AlertModal';
 import OfflineBanner from './components/OfflineBanner';
 import HojasRutaPage from './pages/HojasRutaPage';
@@ -44,6 +45,7 @@ export default function App() {
   const { user, loading, refreshPendingCount } = useAuth();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isSugerenciaOpen, setIsSugerenciaOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState('hojas_ruta');
   const [selectedHojaRuta, setSelectedHojaRuta] = useState(() => {
     try {
@@ -336,33 +338,50 @@ export default function App() {
 
   // Gestor de Escritorio exclusivo para sysadmin y logistica
   if (user.rol !== 'chofer') {
+    const adminModuleLabels = {
+      dashboard: 'Gestor · Dashboard',
+      hojas_ruta: 'Gestor · Hojas de Ruta',
+      devoluciones: 'Gestor · Devoluciones',
+      cajones: 'Gestor · Control de Cajones',
+      usuarios: 'Gestor · Usuarios',
+      auditoria: 'Gestor · Auditoría DB'
+    };
     return (
-      <AdminLayout
-        user={user}
-        activeTab={adminTab}
-        onSelectTab={setAdminTab}
-      >
-        {adminTab === 'dashboard' && (
-          <AdminDashboard
-            user={user}
-            onNavigateTab={setAdminTab}
-            onOpenHojaRuta={(txId) => {
-              setAdminDetailTxId(txId);
-              setAdminTab('hojas_ruta');
-            }}
-          />
-        )}
-        {adminTab === 'hojas_ruta' && (
-          <AdminHojasRuta
-            initialTransaccionId={adminDetailTxId}
-            onClearInitialTransaccion={() => setAdminDetailTxId(null)}
-          />
-        )}
-        {adminTab === 'devoluciones' && <AdminDevoluciones />}
-        {adminTab === 'cajones' && <AdminCajones />}
-        {adminTab === 'usuarios' && <AdminUsuarios currentUser={user} />}
-        {adminTab === 'auditoria' && user.rol === 'sysadmin' && <AdminAuditoria />}
-      </AdminLayout>
+      <>
+        <AdminLayout
+          user={user}
+          activeTab={adminTab}
+          onSelectTab={setAdminTab}
+          onOpenSugerencia={() => setIsSugerenciaOpen(true)}
+        >
+          {adminTab === 'dashboard' && (
+            <AdminDashboard
+              user={user}
+              onNavigateTab={setAdminTab}
+              onOpenHojaRuta={(txId) => {
+                setAdminDetailTxId(txId);
+                setAdminTab('hojas_ruta');
+              }}
+            />
+          )}
+          {adminTab === 'hojas_ruta' && (
+            <AdminHojasRuta
+              initialTransaccionId={adminDetailTxId}
+              onClearInitialTransaccion={() => setAdminDetailTxId(null)}
+            />
+          )}
+          {adminTab === 'devoluciones' && <AdminDevoluciones />}
+          {adminTab === 'cajones' && <AdminCajones />}
+          {adminTab === 'usuarios' && <AdminUsuarios currentUser={user} />}
+          {adminTab === 'auditoria' && user.rol === 'sysadmin' && <AdminAuditoria />}
+        </AdminLayout>
+
+        <SugerenciaModal
+          isOpen={isSugerenciaOpen}
+          onClose={() => setIsSugerenciaOpen(false)}
+          currentModule={adminModuleLabels[adminTab] || 'Gestor de Escritorio'}
+        />
+      </>
     );
   }
 
@@ -398,11 +417,25 @@ export default function App() {
     Boolean(selectedLugar) &&
     (dirtySummary.anyDirty || (currentScreen === 'entregas' && !selectedRemito && dirtySummary.entregasUnconfirmed));
 
+  const mobileScreenLabels = {
+    hojas_ruta: 'App Móvil · Inicio (Hojas de Ruta)',
+    lugares: 'App Móvil · Lugares de Entrega',
+    entregas: 'App Móvil · Entregas',
+    devoluciones: 'App Móvil · Devoluciones',
+    cajones: 'App Móvil · Cajones y Pallets',
+    remitos: 'App Móvil · Remitos',
+    scan: 'App Móvil · Escáner 1D'
+  };
+  const currentSugerenciaModule = selectedRemito
+    ? `App Móvil · Detalle Remito ${selectedRemito.finne_Comprobante || ''}`
+    : (mobileScreenLabels[currentScreen] || 'App Móvil Chofer');
+
   return (
     <div className="app-container">
       <Header
         onMenuClick={() => setIsDrawerOpen(true)}
         onOpenHelp={() => setIsHelpOpen(true)}
+        onOpenSugerencia={() => setIsSugerenciaOpen(true)}
       />
 
       <Drawer
@@ -410,6 +443,7 @@ export default function App() {
         onClose={() => setIsDrawerOpen(false)}
         onNavigate={handleNavigate}
         onOpenHelp={() => setIsHelpOpen(true)}
+        onOpenSugerencia={() => setIsSugerenciaOpen(true)}
         currentScreen={currentScreen}
         selectedHojaRuta={selectedHojaRuta}
         selectedLugar={selectedLugar}
@@ -604,6 +638,12 @@ export default function App() {
       <HelpChatModal
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
+      />
+
+      <SugerenciaModal
+        isOpen={isSugerenciaOpen}
+        onClose={() => setIsSugerenciaOpen(false)}
+        currentModule={currentSugerenciaModule}
       />
 
       {confirmingAll && typeof document !== 'undefined' && createPortal(

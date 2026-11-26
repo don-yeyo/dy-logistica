@@ -53,6 +53,7 @@ const authRoutes = require('./routes/authRoutes');
 const remitosRoutes = require('./routes/remitosRoutes');
 const hojasRutaRoutes = require('./routes/hojasRutaRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const sugerenciasRoutes = require('./routes/sugerenciasRoutes');
 
 // Montar tanto en /api/* como en /* para total compatibilidad con rewrites serverless
 app.use('/api/auth', authRoutes);
@@ -66,6 +67,9 @@ app.use('/hojas-ruta', hojasRutaRoutes);
 
 app.use('/api/admin', adminRoutes);
 app.use('/admin', adminRoutes);
+
+app.use('/api/sugerencias', sugerenciasRoutes);
+app.use('/sugerencias', sugerenciasRoutes);
 
 // Healthcheck y diagnóstico
 const healthHandler = (req, res) => {

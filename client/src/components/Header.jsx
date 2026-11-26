@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../config/AuthContext';
 import { useTheme } from '../config/ThemeContext';
 import { 
@@ -9,17 +9,37 @@ import {
   Wifi, 
   WifiOff, 
   RefreshCw,
-  HelpCircle
+  HelpCircle,
+  Lightbulb
 } from 'lucide-react';
 import logo from '../assets/logo-don-yeyo-png-sin-fondo.png';
 import pkg from '../../package.json';
 
 const appVersion = pkg.version;
 
-export default function Header({ onMenuClick, onOpenHelp }) {
+export default function Header({ onMenuClick, onOpenHelp, onOpenSugerencia }) {
   const { user, logout, isOnline, pendingSyncCount, syncing, triggerSyncOffline } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    if (!showUserDropdown) return undefined;
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowUserDropdown(false);
+      }
+    };
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setShowUserDropdown(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showUserDropdown]);
 
   const name = user?.nombre || 'Chofer';
   const initials = name
@@ -119,7 +139,7 @@ export default function Header({ onMenuClick, onOpenHelp }) {
           </button>
 
           {/* Avatar con Menú Desplegable */}
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative' }} ref={dropdownRef}>
             <div
               onClick={() => setShowUserDropdown(!showUserDropdown)}
               style={{
@@ -166,6 +186,33 @@ export default function Header({ onMenuClick, onOpenHelp }) {
                     {user?.email}
                   </p>
                 </div>
+
+                {onOpenSugerencia && (
+                  <button
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      onOpenSugerencia();
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text)',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <Lightbulb size={16} style={{ color: '#f59e0b' }} />
+                    <span>Sugerir una mejora</span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => {

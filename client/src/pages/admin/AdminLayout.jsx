@@ -13,7 +13,8 @@ import {
   Moon,
   Menu,
   X,
-  UserCheck
+  UserCheck,
+  Lightbulb
 } from 'lucide-react';
 import logo from '../../assets/logo-don-yeyo-png-sin-fondo.png';
 import pkg from '../../../package.json';
@@ -30,7 +31,7 @@ function getInitials(nombre, email) {
   return String(email || 'DY').slice(0, 2).toUpperCase();
 }
 
-export default function AdminLayout({ user, activeTab, onSelectTab, children }) {
+export default function AdminLayout({ user, activeTab, onSelectTab, onOpenSugerencia, children }) {
   const { logout, impersonationEnabled, availableUsers, impersonateUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -259,6 +260,20 @@ export default function AdminLayout({ user, activeTab, onSelectTab, children }) 
                   )}
 
                   <div className="admin-dropdown-actions">
+                    {onOpenSugerencia && (
+                      <button
+                        type="button"
+                        className="admin-dropdown-item"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          onOpenSugerencia();
+                        }}
+                      >
+                        <Lightbulb size={16} style={{ color: '#f59e0b' }} />
+                        <span>Sugerir una mejora</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       className="admin-dropdown-item"

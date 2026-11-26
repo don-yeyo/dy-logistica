@@ -263,6 +263,31 @@ const TRIGGER_DEFINITIONS = [
     body: `INSERT INTO \`AUDITORIA\` (\`tabla_nombre\`, \`operacion\`, \`registro_pk\`, \`usuario_app\`, \`usuario_rol\`, \`usuario_db\`, \`datos_anteriores\`, \`datos_nuevos\`)
       VALUES ('APP_CAJONES_PALLETS', 'DELETE', CAST(OLD.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
       JSON_OBJECT('id', OLD.id, 'transaccion_id', OLD.transaccion_id, 'lugar_entrega', OLD.lugar_entrega, 'cliente', OLD.cliente), NULL)`
+  },
+  {
+    name: 'trg_aud_app_sugerencias_ai',
+    table: 'APP_SUGERENCIAS',
+    timing: 'AFTER INSERT',
+    body: `INSERT INTO \`AUDITORIA\` (\`tabla_nombre\`, \`operacion\`, \`registro_pk\`, \`usuario_app\`, \`usuario_rol\`, \`usuario_db\`, \`datos_anteriores\`, \`datos_nuevos\`)
+      VALUES ('APP_SUGERENCIAS', 'INSERT', CAST(NEW.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(), NULL,
+      JSON_OBJECT('id', NEW.id, 'usuario_email', NEW.usuario_email, 'categoria', NEW.categoria, 'modulo', NEW.modulo, 'asunto', NEW.asunto, 'emails_destino', NEW.emails_destino, 'estado_envio', NEW.estado_envio))`
+  },
+  {
+    name: 'trg_aud_app_sugerencias_au',
+    table: 'APP_SUGERENCIAS',
+    timing: 'AFTER UPDATE',
+    body: `INSERT INTO \`AUDITORIA\` (\`tabla_nombre\`, \`operacion\`, \`registro_pk\`, \`usuario_app\`, \`usuario_rol\`, \`usuario_db\`, \`datos_anteriores\`, \`datos_nuevos\`)
+      VALUES ('APP_SUGERENCIAS', 'UPDATE', CAST(NEW.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
+      JSON_OBJECT('id', OLD.id, 'estado_envio', OLD.estado_envio, 'error_envio', OLD.error_envio),
+      JSON_OBJECT('id', NEW.id, 'estado_envio', NEW.estado_envio, 'error_envio', NEW.error_envio))`
+  },
+  {
+    name: 'trg_aud_app_sugerencias_ad',
+    table: 'APP_SUGERENCIAS',
+    timing: 'AFTER DELETE',
+    body: `INSERT INTO \`AUDITORIA\` (\`tabla_nombre\`, \`operacion\`, \`registro_pk\`, \`usuario_app\`, \`usuario_rol\`, \`usuario_db\`, \`datos_anteriores\`, \`datos_nuevos\`)
+      VALUES ('APP_SUGERENCIAS', 'DELETE', CAST(OLD.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
+      JSON_OBJECT('id', OLD.id, 'usuario_email', OLD.usuario_email, 'asunto', OLD.asunto), NULL)`
   }
 ];
 
@@ -424,6 +449,29 @@ async function setup() {
     await conn.query(`ALTER TABLE \`ORGANIZACION\` ${orgAlters.join(', ')}`);
   }
   console.log('✔ Columnas cant_ejemplares_remito y permite_devolucion_libre verificadas en ORGANIZACION.');
+
+  // 2.9 Crear tabla APP_SUGERENCIAS (buzón de mejoras y reportes enviados por correo)
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS \`APP_SUGERENCIAS\` (
+      \`id\` INT NOT NULL AUTO_INCREMENT,
+      \`usuario_email\` VARCHAR(150) NOT NULL,
+      \`usuario_nombre\` VARCHAR(120) DEFAULT NULL,
+      \`usuario_rol\` VARCHAR(30) DEFAULT NULL,
+      \`categoria\` ENUM('MEJORA','ERROR','UX_UI','OTRO') NOT NULL DEFAULT 'MEJORA',
+      \`modulo\` VARCHAR(80) DEFAULT NULL,
+      \`asunto\` VARCHAR(200) NOT NULL,
+      \`mensaje\` TEXT NOT NULL,
+      \`emails_destino\` VARCHAR(500) NOT NULL,
+      \`estado_envio\` ENUM('PENDIENTE','ENVIADO','SIMULADO_TEST','FALLIDO') NOT NULL DEFAULT 'PENDIENTE',
+      \`error_envio\` VARCHAR(500) DEFAULT NULL,
+      \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`),
+      INDEX \`idx_as_usuario\` (\`usuario_email\`),
+      INDEX \`idx_as_estado\` (\`estado_envio\`),
+      INDEX \`idx_as_fecha\` (\`created_at\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  `);
+  console.log('✔ Tabla APP_SUGERENCIAS lista.');
 
   // 3. Sembrar usuarios iniciales
   const seedUsers = [
