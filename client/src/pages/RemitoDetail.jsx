@@ -379,10 +379,10 @@ export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onB
         anyCliente && anyInterm
           ? 'FIRMADO_AMBOS'
           : anyCliente
-          ? 'FIRMADO_CLIENTE'
-          : anyInterm
-          ? 'FIRMADO_INTERMEDIARIO'
-          : 'NO_FIRMADO';
+            ? 'FIRMADO_CLIENTE'
+            : anyInterm
+              ? 'FIRMADO_INTERMEDIARIO'
+              : 'NO_FIRMADO';
 
       const payload = {
         ejemplares: serializedEjemplares,
@@ -434,8 +434,8 @@ export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onB
       console.error('[RemitoDetail] Error al guardar control:', error);
       setErrorMessage(
         error?.response?.data?.error ||
-          error?.message ||
-          'Ocurrió un error inesperado al guardar el control del remito.'
+        error?.message ||
+        'Ocurrió un error inesperado al guardar el control del remito.'
       );
     } finally {
       setSaving(false);
@@ -637,7 +637,7 @@ export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onB
         onBack={onBack}
         onSave={handleSave}
         saving={saving}
-        saveLabel="Confirmar y Guardar"
+        saveLabel="Confirmar"
       />
 
       {/* Modal de Éxito Instantáneo */}

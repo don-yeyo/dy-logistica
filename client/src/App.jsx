@@ -342,17 +342,19 @@ export default function App() {
     const requiresLugar = ['entregas', 'devoluciones', 'cajones', 'remitos', 'scan'].includes(screenId);
 
     if (requiresHojaRuta && !selectedHojaRuta) {
-      setNavWarning(
-        'Debe seleccionar previamente una Hoja de Ruta del listado antes de continuar.'
-      );
+      setNavWarning({
+        title: 'Seleccione una Hoja de Ruta',
+        message: 'Debe seleccionar previamente una Hoja de Ruta del listado antes de continuar.'
+      });
       setCurrentScreen('hojas_ruta');
       return;
     }
 
     if (requiresLugar && !selectedLugar) {
-      setNavWarning(
-        'Debe seleccionar primero un Lugar de Entrega de la Hoja de Ruta para habilitar las operaciones.'
-      );
+      setNavWarning({
+        title: 'Seleccione un Lugar de Entrega',
+        message: 'Debe seleccionar primero un Lugar de Entrega de la Hoja de Ruta para habilitar las operaciones.'
+      });
       setCurrentScreen('lugares');
       return;
     }
@@ -385,7 +387,10 @@ export default function App() {
 
       <OfflineBanner />
 
-      <main className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <main
+        className={`main-content${showGlobalSaveFab ? ' has-fab-clearance' : ''}`}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+      >
         {selectedRemito ? (
           <div key="detail" className="page-transition" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             <RemitoDetail
@@ -543,8 +548,8 @@ export default function App() {
         isOpen={Boolean(navWarning)}
         onClose={() => setNavWarning(null)}
         type="warning"
-        title="Seleccione una Hoja de Ruta"
-        message={navWarning}
+        title={navWarning?.title || 'Seleccione una Hoja de Ruta'}
+        message={navWarning?.message || ''}
         confirmText="Entendido"
       />
 

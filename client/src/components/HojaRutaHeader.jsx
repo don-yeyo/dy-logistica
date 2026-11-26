@@ -64,7 +64,7 @@ export default function HojaRutaHeader({
       <div className="hr-card-top">
         <div className="hr-code-badge">
           <FileText size={16} />
-          <span>{interactive ? hojaRuta.Hoja_de_ruta : `Hoja de Ruta ${hojaRuta.Hoja_de_ruta}`}</span>
+          <span>{interactive ? hojaRuta.Hoja_de_ruta : `Hoja Ruta ${hojaRuta.Hoja_de_ruta}`}</span>
         </div>
 
         <div className="hr-date-tag">

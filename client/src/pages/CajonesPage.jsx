@@ -256,43 +256,56 @@ export default function CajonesPage({ hojaRuta, selectedLugar, onChangeLugar }) 
         onChangeLugar={onChangeLugar}
       />
 
-      <div className="cajones-pallets-summary">
-        <div className="cp-summary-block">
-          <div className="cp-summary-label">Cajones</div>
-          <div className="cajones-summary-grid">
-            <div className="cajon-sum-card">
-              <span>Entregados</span>
-              <strong>{totals.cajEnt}</strong>
-            </div>
-            <div className="cajon-sum-card">
-              <span>Devueltos</span>
-              <strong>{totals.cajDev}</strong>
-            </div>
-            <div className="cajon-sum-card accent">
-              <span>Dif. Cajones</span>
-              <strong>{totals.cajDif > 0 ? `+${totals.cajDif}` : totals.cajDif}</strong>
-            </div>
+      {!loading && items.length > 1 && (
+        <div className="cajones-pallets-summary">
+          <div className="cp-summary-header">
+            <Boxes size={15} />
+            <span>Resumen del lugar · {items.length} clientes</span>
           </div>
-        </div>
 
-        <div className="cp-summary-block">
-          <div className="cp-summary-label">Pallets</div>
-          <div className="cajones-summary-grid">
-            <div className="cajon-sum-card">
-              <span>Entregados</span>
-              <strong>{totals.palEnt}</strong>
+          <div className="cp-summary-block">
+            <div className="cp-summary-label">
+              <span className="cp-dot cajon" />
+              Cajones
             </div>
-            <div className="cajon-sum-card">
-              <span>Devueltos</span>
-              <strong>{totals.palDev}</strong>
+            <div className="cajones-summary-grid">
+              <div className="cajon-sum-card">
+                <span>Entregados</span>
+                <strong>{totals.cajEnt}</strong>
+              </div>
+              <div className="cajon-sum-card">
+                <span>Devueltos</span>
+                <strong>{totals.cajDev}</strong>
+              </div>
+              <div className={`cajon-sum-card accent ${totals.cajDif === 0 ? 'zero' : totals.cajDif > 0 ? 'pos' : 'neg'}`}>
+                <span>Diferencia</span>
+                <strong>{totals.cajDif > 0 ? `+${totals.cajDif}` : totals.cajDif}</strong>
+              </div>
             </div>
-            <div className="cajon-sum-card pallet-accent">
-              <span>Dif. Pallets</span>
-              <strong>{totals.palDif > 0 ? `+${totals.palDif}` : totals.palDif}</strong>
+          </div>
+
+          <div className="cp-summary-block">
+            <div className="cp-summary-label">
+              <span className="cp-dot pallet" />
+              Pallets
+            </div>
+            <div className="cajones-summary-grid">
+              <div className="cajon-sum-card">
+                <span>Entregados</span>
+                <strong>{totals.palEnt}</strong>
+              </div>
+              <div className="cajon-sum-card">
+                <span>Devueltos</span>
+                <strong>{totals.palDev}</strong>
+              </div>
+              <div className={`cajon-sum-card pallet-accent ${totals.palDif === 0 ? 'zero' : totals.palDif > 0 ? 'pos' : 'neg'}`}>
+                <span>Diferencia</span>
+                <strong>{totals.palDif > 0 ? `+${totals.palDif}` : totals.palDif}</strong>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {loading ? (
         <div className="hr-empty-state">
@@ -310,7 +323,7 @@ export default function CajonesPage({ hojaRuta, selectedLugar, onChangeLugar }) 
             onClick={() => setShowAddModal(true)}
           >
             <UserPlus size={16} />
-            <span>Agregar cliente en {selectedLugar}</span>
+            <span>Agregar cliente en este lugar para registrar pallets y cajones</span>
           </button>
         </div>
       ) : (
@@ -504,7 +517,7 @@ export default function CajonesPage({ hojaRuta, selectedLugar, onChangeLugar }) 
             onClick={() => setShowAddModal(true)}
           >
             <UserPlus size={16} />
-            <span>Agregar cliente en {selectedLugar}</span>
+            <span>Agregar cliente en este lugar para registrar pallets y cajones</span>
           </button>
         </div>
       )}

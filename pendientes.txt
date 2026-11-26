@@ -18,3 +18,5 @@ en cajones (cambiar nombre a cajones y pallets) que existan los dos. Y considera
 en remitos: mostrar remitos de viajes anteriores de ese cliente a ese intermediario
 
 hacer que sea mas tipo wizard: agregar 2da opción para fijar lugar, pasa de un lado al otro
+
+enviar sugerencias de mejoras del sistema, incorporar una opcion en el menu desplegable del avatar pero tambien desde el drawer, loq ue ingrese el usuario debe llegar a los emails especificados por env var

@@ -135,34 +135,40 @@ export default function DevolucionesPage({ hojaRuta, selectedLugar, onChangeLuga
       filteredTree.length > 0
         ? filteredTree
         : selectedLugar
-        ? [{ lugar: selectedLugar, clientes: [] }]
-        : rawTree;
+          ? [{ lugar: selectedLugar, clientes: [] }]
+          : rawTree;
 
     const draft = getHojaRutaDraft(user?.email, hojaRuta?.Transaccionid, selectedLugar).devoluciones;
-
-    if (draft?.dirty && Array.isArray(draft.grupos)) {
-      setGrupos(draft.grupos);
-    } else {
-      setGrupos(tree);
-    }
+    const resolvedGrupos = draft?.dirty && Array.isArray(draft.grupos) ? draft.grupos : tree;
+    setGrupos(resolvedGrupos);
 
     if (draft?.expandedLugares !== undefined) {
       setExpandedLugares(draft.expandedLugares);
-      setExpandedClientes(draft.expandedClientes || {});
+      const restoredClientes = { ...(draft.expandedClientes || {}) };
+      resolvedGrupos.forEach((g) => {
+        if (g.clientes.length === 1) {
+          const onlyKey = g.clientes[0].clientKey;
+          if (restoredClientes[onlyKey] === undefined) {
+            restoredClientes[onlyKey] = true;
+          }
+        }
+      });
+      setExpandedClientes(restoredClientes);
     } else {
       const nextLugares = {};
       const nextClientes = {};
-      tree.forEach((g) => {
-        nextLugares[g.lugar] = true;
-        g.clientes.forEach((c) => {
-          if (c.productos.length > 0) {
-            nextClientes[c.clientKey] = true;
-          }
+        resolvedGrupos.forEach((g) => {
+          nextLugares[g.lugar] = true;
+          const singleClient = g.clientes.length === 1;
+          g.clientes.forEach((c) => {
+              if (singleClient || c.productos.length > 0) {
+                nextClientes[c.clientKey] = true;
+              }
+            });
         });
-      });
-      setExpandedLugares(nextLugares);
-      setExpandedClientes(nextClientes);
-    }
+        setExpandedLugares(nextLugares);
+        setExpandedClientes(nextClientes);
+      }
   }, [hojaRuta, selectedLugar, user?.email]);
 
   const loadDevoluciones = useCallback(async () => {
@@ -722,7 +728,7 @@ export default function DevolucionesPage({ hojaRuta, selectedLugar, onChangeLuga
                             onClick={() => handleAddProduct(grupo.lugar, cli.clientKey)}
                           >
                             <Plus size={16} />
-                            <span>Agregar devolución</span>
+                            <span>Agregar otro producto a devolver</span>
                           </button>
                         </div>
                       )}
@@ -737,7 +743,7 @@ export default function DevolucionesPage({ hojaRuta, selectedLugar, onChangeLuga
                 onClick={() => setClientModalLugar(grupo.lugar)}
               >
                 <UserPlus size={16} />
-                <span>Agregar cliente en {grupo.lugar}</span>
+                <span>Agregar cliente para devolución en este lugar</span>
               </button>
             </div>
           ))}
