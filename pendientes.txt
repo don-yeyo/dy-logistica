@@ -1,17 +1,20 @@
 - agregar test funcionales con playright y test unitarios con jest
-- ver si mantenemos el nobre del chofer en cada hoja de ruta como dato redundante o solo mostrarlo al principio en la cabecera
-- panel de gestion de usuarios y roles, hace falta?
 - permitir registrar mas de un ejemplar por remito
 - productos posibles de seleccionar de una devolucion deben ser los de entregas anteriores para el cliente o intermediario seleccionado
-- que para el ingreso de cantidades, aparezca un incrementar / decrementar y al hacer foco seleccionar el dato existente
-- registrar geoposicionamiento del camión
-- que onda la tabla gestion_logistica que me mostro Leo?
-- tabla auditoria
-- obtencion del maestro de productos(cache? finnegans?)
-
-
-virtual: cosas que el cliente devuelve al distribuidor
-
 
 # fuera de scope. Etapa 2
 - agregar mapa de recorrido
+
+----------------------
+
+unificar totales de remitido por lugar de entrega
+
+devolución libre, algunos clientes deben soportar en lugar de cargar prod, adjuntar foto del remito
+
+al agregar cliente en las devoluciones que solo muestre una lista de los clientes de ese intermediario
+
+en cajones (cambiar nombre a cajones y pallets) que existan los dos. Y considerar el resumen discriminado
+
+en remitos: mostrar remitos de viajes anteriores de ese cliente a ese intermediario
+
+hacer que sea mas tipo wizard: agregar 2da opción para fijar lugar, pasa de un lado al otro
