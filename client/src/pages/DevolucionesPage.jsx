@@ -101,7 +101,7 @@ function normalizeBarcode(val) {
  * Módulo 4.2.2: Devolución de Mercadería (Logística DY - Devoluciones).
  * Persiste estado de acordeones y borradores en localStorage hasta confirmar en DB.
  */
-export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
+export default function DevolucionesPage({ hojaRuta, selectedLugar, onChangeLugar }) {
   const { user } = useAuth();
   const [headerInfo, setHeaderInfo] = useState(hojaRuta);
   const [grupos, setGrupos] = useState([]);
@@ -126,8 +126,19 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
     setHeaderInfo(resolvedHeader);
     setCatalogos(resolvedCatalogos);
 
-    const tree = buildDevolucionesTree(rows || []);
-    const draft = getHojaRutaDraft(user?.email, hojaRuta?.Transaccionid).devoluciones;
+    const rawTree = buildDevolucionesTree(rows || []);
+    const cleanSelected = String(selectedLugar || '').trim().toLowerCase();
+    const filteredTree = cleanSelected
+      ? rawTree.filter((g) => String(g.lugar || '').trim().toLowerCase() === cleanSelected)
+      : rawTree;
+    const tree =
+      filteredTree.length > 0
+        ? filteredTree
+        : selectedLugar
+        ? [{ lugar: selectedLugar, clientes: [] }]
+        : rawTree;
+
+    const draft = getHojaRutaDraft(user?.email, hojaRuta?.Transaccionid, selectedLugar).devoluciones;
 
     if (draft?.dirty && Array.isArray(draft.grupos)) {
       setGrupos(draft.grupos);
@@ -141,11 +152,8 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
     } else {
       const nextLugares = {};
       const nextClientes = {};
-      tree.forEach((g, idx) => {
-        const hasItems = g.clientes.some((c) => c.productos.length > 0);
-        if (idx === 0 || hasItems) {
-          nextLugares[g.lugar] = true;
-        }
+      tree.forEach((g) => {
+        nextLugares[g.lugar] = true;
         g.clientes.forEach((c) => {
           if (c.productos.length > 0) {
             nextClientes[c.clientKey] = true;
@@ -155,29 +163,34 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
       setExpandedLugares(nextLugares);
       setExpandedClientes(nextClientes);
     }
-  }, [hojaRuta, user?.email]);
+  }, [hojaRuta, selectedLugar, user?.email]);
 
   const loadDevoluciones = useCallback(async () => {
-    if (!hojaRuta?.Transaccionid) return;
+    if (!hojaRuta?.Transaccionid || !selectedLugar) return;
     try {
       setLoading(true);
       setErrorMsg(null);
 
       if (navigator.onLine) {
         try {
-          const res = await fetchDevolucionesHojaRuta(hojaRuta.Transaccionid);
+          const res = await fetchDevolucionesHojaRuta(hojaRuta.Transaccionid, selectedLugar);
           if (res && res.ok) {
-            await cacheDevoluciones(hojaRuta.Transaccionid, {
-              hoja_ruta: res.hoja_ruta,
-              rows: res.rows,
-              catalogos: res.catalogos
-            });
+            await cacheDevoluciones(
+              hojaRuta.Transaccionid,
+              {
+                hoja_ruta: res.hoja_ruta,
+                lugar: selectedLugar,
+                rows: res.rows,
+                catalogos: res.catalogos
+              },
+              selectedLugar
+            );
             applyLoadedData(res.hoja_ruta, res.rows, res.catalogos);
             return;
           }
         } catch (apiErr) {
           console.warn('[DevolucionesPage] Error API, usando caché local:', apiErr.message);
-          const cached = await getCachedDevoluciones(hojaRuta.Transaccionid);
+          const cached = await getCachedDevoluciones(hojaRuta.Transaccionid, selectedLugar);
           if (cached) {
             applyLoadedData(cached.hoja_ruta, cached.rows, cached.catalogos);
             return;
@@ -185,7 +198,7 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
           throw apiErr;
         }
       } else {
-        const cached = await getCachedDevoluciones(hojaRuta.Transaccionid);
+        const cached = await getCachedDevoluciones(hojaRuta.Transaccionid, selectedLugar);
         if (cached) {
           applyLoadedData(cached.hoja_ruta, cached.rows, cached.catalogos);
           return;
@@ -198,7 +211,7 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
     } finally {
       setLoading(false);
     }
-  }, [hojaRuta, applyLoadedData]);
+  }, [hojaRuta, selectedLugar, applyLoadedData]);
 
   useEffect(() => {
     loadDevoluciones();
@@ -206,50 +219,53 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
 
   useEffect(() => {
     const onExternalSaved = (e) => {
-      if (
-        Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid) &&
-        Array.isArray(e.detail?.sections) &&
-        e.detail.sections.includes('devoluciones')
-      ) {
+      const sameTx = Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid);
+      const sameLugar =
+        !e.detail?.lugar ||
+        String(e.detail.lugar).trim().toLowerCase() === String(selectedLugar || '').trim().toLowerCase();
+      if (sameTx && sameLugar && Array.isArray(e.detail?.sections) && e.detail.sections.includes('devoluciones')) {
         loadDevoluciones();
       }
     };
     window.addEventListener('dy-draft-saved', onExternalSaved);
     return () => window.removeEventListener('dy-draft-saved', onExternalSaved);
-  }, [hojaRuta?.Transaccionid, loadDevoluciones]);
-
-  const toggleLugar = (lugar) => {
-    setExpandedLugares((prev) => {
-      const next = { ...prev, [lugar]: !prev[lugar] };
-      patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'devoluciones', {
-        expandedLugares: next,
-        expandedClientes
-      });
-      return next;
-    });
-  };
+  }, [hojaRuta?.Transaccionid, selectedLugar, loadDevoluciones]);
 
   const toggleCliente = (clientKey) => {
     setExpandedClientes((prev) => {
       const next = { ...prev, [clientKey]: !prev[clientKey] };
-      patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'devoluciones', {
-        expandedLugares,
-        expandedClientes: next
-      });
+      patchSectionDraft(
+        user?.email,
+        hojaRuta?.Transaccionid,
+        'devoluciones',
+        {
+          lugar: selectedLugar,
+          expandedLugares,
+          expandedClientes: next
+        },
+        selectedLugar
+      );
       return next;
     });
   };
 
   const persistGruposDraft = (nextGrupos, nextExpLugares = expandedLugares, nextExpClientes = expandedClientes) => {
-    patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'devoluciones', {
-      grupos: nextGrupos,
-      expandedLugares: nextExpLugares,
-      expandedClientes: nextExpClientes,
-      headerInfo,
-      catalogos,
-      dirty: true,
-      dirtySince: Date.now()
-    });
+    patchSectionDraft(
+      user?.email,
+      hojaRuta?.Transaccionid,
+      'devoluciones',
+      {
+        lugar: selectedLugar,
+        grupos: nextGrupos,
+        expandedLugares: nextExpLugares,
+        expandedClientes: nextExpClientes,
+        headerInfo,
+        catalogos,
+        dirty: true,
+        dirtySince: Date.now()
+      },
+      selectedLugar
+    );
   };
 
   const handleAddProduct = (lugarName, clientKey) => {
@@ -457,318 +473,274 @@ export default function DevolucionesPage({ hojaRuta, onChangeHojaRuta }) {
     <div className="module-page page-transition">
       <HojaRutaHeader
         hojaRuta={headerInfo}
-        title="Logística DY - Devoluciones"
-        onChangeHojaRuta={onChangeHojaRuta}
+        selectedLugar={selectedLugar}
+        onChangeLugar={onChangeLugar}
       />
 
       {loading ? (
         <div className="hr-empty-state">
           <RefreshCw size={30} className="spin" style={{ color: 'var(--dy-blue)' }} />
-          <p>Cargando lugares de entrega y devoluciones...</p>
-        </div>
-      ) : grupos.length === 0 ? (
-        <div className="hr-empty-state">
-          <Inbox size={42} style={{ color: 'var(--text-muted)' }} />
-          <h3>Sin paradas cargadas en esta hoja de ruta</h3>
-          <p>Puedes agregar un cliente manualmente para registrar una devolución.</p>
-          <button
-            type="button"
-            className="dev-add-btn"
-            onClick={() => setClientModalLugar('Entrega Directa / Ruta')}
-          >
-            <UserPlus size={16} />
-            <span>Agregar Cliente</span>
-          </button>
+          <p>Cargando devoluciones de {selectedLugar}...</p>
         </div>
       ) : (
         <div className="dev-groups-list">
-          {grupos.map((grupo) => {
-            const isLugarExpanded = Boolean(expandedLugares[grupo.lugar]);
-            const totalDevsLugar = grupo.clientes.reduce((acc, c) => acc + c.productos.length, 0);
-
-            return (
-              <section key={grupo.lugar} className="dev-lugar-card">
-                <button
-                  type="button"
-                  className="dev-lugar-toggle"
-                  onClick={() => toggleLugar(grupo.lugar)}
-                >
-                  <div className="dev-lugar-left">
-                    {isLugarExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                    <MapPin size={15} />
-                    <span>Lugar de entrega: <strong>{grupo.lugar}</strong></span>
-                  </div>
-                  <span className={`dev-count-pill ${totalDevsLugar > 0 ? 'has-items' : ''}`}>
-                    {totalDevsLugar} ítem(s)
-                  </span>
-                </button>
-
-                {isLugarExpanded && (
-                  <div className="dev-lugar-body">
-                    {grupo.clientes.length === 0 ? (
-                      <div className="dev-empty-client-row">
-                        <span>Cliente: <em>Sin clientes asignados</em></span>
+          {grupos.map((grupo) => (
+            <div key={grupo.lugar} className="dev-lugar-direct">
+              {grupo.clientes.length === 0 ? (
+                <div className="hr-empty-state" style={{ padding: '24px 16px' }}>
+                  <Inbox size={36} style={{ color: 'var(--text-muted)' }} />
+                  <h3>Sin clientes cargados en {grupo.lugar}</h3>
+                  <p>Agregá un cliente para registrar productos devueltos en este lugar.</p>
+                </div>
+              ) : (
+                grupo.clientes.map((cli) => {
+                  const isCliExpanded = Boolean(expandedClientes[cli.clientKey]);
+                  return (
+                    <div key={cli.clientKey} className="dev-client-card">
+                      <div className="dev-client-header-row">
                         <button
                           type="button"
-                          className="dev-search-client-btn"
-                          onClick={() => setClientModalLugar(grupo.lugar)}
+                          className="dev-client-toggle"
+                          onClick={() => toggleCliente(cli.clientKey)}
                         >
-                          <Search size={15} />
-                          <span>Agregar Cliente</span>
+                          <div className="dev-client-title">
+                            {isCliExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            <span>Cliente: <strong>{cli.Cliente}</strong></span>
+                          </div>
+                          <div className="dev-client-right">
+                            {cli.productos.length > 0 && (
+                              <span className="dev-client-badge">{cli.productos.length}</span>
+                            )}
+                            <Search size={15} className="dev-magnify-icon" />
+                          </div>
                         </button>
                       </div>
-                    ) : (
-                      grupo.clientes.map((cli) => {
-                        const isCliExpanded = Boolean(expandedClientes[cli.clientKey]);
-                        return (
-                          <div key={cli.clientKey} className="dev-client-card">
-                            <div className="dev-client-header-row">
-                              <button
-                                type="button"
-                                className="dev-client-toggle"
-                                onClick={() => toggleCliente(cli.clientKey)}
-                              >
-                                <div className="dev-client-title">
-                                  {isCliExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                                  <span>Cliente: <strong>{cli.Cliente}</strong></span>
-                                </div>
-                                <div className="dev-client-right">
-                                  {cli.productos.length > 0 && (
-                                    <span className="dev-client-badge">{cli.productos.length}</span>
-                                  )}
-                                  <Search size={15} className="dev-magnify-icon" />
-                                </div>
-                              </button>
-                            </div>
 
-                            {isCliExpanded && (
-                              <div className="dev-client-body">
-                                {cli.productos.length === 0 ? (
-                                  <p className="dev-no-prods-hint">
-                                    Sin productos devueltos registrados para este cliente.
-                                  </p>
-                                ) : (
-                                  <div className="dev-products-stack">
-                                    {cli.productos.map((prod) => {
-                                      const conRetorno = prod.Tipo !== 'Virtual';
-                                      const qtyNum = /^\d+$/.test(String(prod.Cantidad ?? ''))
-                                        ? parseInt(prod.Cantidad, 10)
-                                        : 1;
+                      {isCliExpanded && (
+                        <div className="dev-client-body">
+                          {cli.productos.length === 0 ? (
+                            <p className="dev-no-prods-hint">
+                              Sin productos devueltos registrados para este cliente.
+                            </p>
+                          ) : (
+                            <div className="dev-products-stack">
+                              {cli.productos.map((prod) => {
+                                const conRetorno = prod.Tipo !== 'Virtual';
+                                const qtyNum = /^\d+$/.test(String(prod.Cantidad ?? ''))
+                                  ? parseInt(prod.Cantidad, 10)
+                                  : 1;
 
-                                      return (
-                                        <div key={prod.localId} className="dev-product-row-card">
-                                          <div className="dev-prod-top-row">
-                                            <button
-                                              type="button"
-                                              className="dev-scan-btn"
-                                              onClick={() =>
-                                                setScannerTarget({
-                                                  lugar: grupo.lugar,
-                                                  clientKey: cli.clientKey,
-                                                  localId: prod.localId
-                                                })
-                                              }
-                                              title="Escanear código de barras (MTX)"
-                                              aria-label="Escanear código de barras MTX del producto"
-                                            >
-                                              <ScanLine size={16} />
-                                            </button>
+                                return (
+                                  <div key={prod.localId} className="dev-product-row-card">
+                                    <div className="dev-prod-top-row">
+                                      <button
+                                        type="button"
+                                        className="dev-scan-btn"
+                                        onClick={() =>
+                                          setScannerTarget({
+                                            lugar: grupo.lugar,
+                                            clientKey: cli.clientKey,
+                                            localId: prod.localId
+                                          })
+                                        }
+                                        title="Escanear código de barras (MTX)"
+                                        aria-label="Escanear código de barras MTX del producto"
+                                      >
+                                        <ScanLine size={16} />
+                                      </button>
 
-                                            <div className="dev-field-full">
-                                              <label className="dev-col-label">Producto *</label>
-                                              <ProductCombobox
-                                                productos={catalogos.productos || []}
-                                                value={prod.id_producto}
-                                                selectedLabel={prod.Producto}
-                                                onSelect={(picked) =>
-                                                  handleProductFieldChange(
-                                                    grupo.lugar,
-                                                    cli.clientKey,
-                                                    prod.localId,
-                                                    'id_producto',
-                                                    picked ? picked.id_producto : null
-                                                  )
-                                                }
-                                              />
-                                            </div>
+                                      <div className="dev-field-full">
+                                        <label className="dev-col-label">Producto *</label>
+                                        <ProductCombobox
+                                          productos={catalogos.productos || []}
+                                          value={prod.id_producto}
+                                          selectedLabel={prod.Producto}
+                                          onSelect={(picked) =>
+                                            handleProductFieldChange(
+                                              grupo.lugar,
+                                              cli.clientKey,
+                                              prod.localId,
+                                              'id_producto',
+                                              picked ? picked.id_producto : null
+                                            )
+                                          }
+                                        />
+                                      </div>
 
-                                            {!prod.id_remito_devoluciones_item && (
-                                              <button
-                                                type="button"
-                                                className="dev-del-btn"
-                                                onClick={() =>
-                                                  handleRemoveUnsavedProduct(grupo.lugar, cli.clientKey, prod.localId)
-                                                }
-                                                title="Quitar ítem"
-                                              >
-                                                <Trash2 size={15} />
-                                              </button>
-                                            )}
-                                          </div>
+                                      {!prod.id_remito_devoluciones_item && (
+                                        <button
+                                          type="button"
+                                          className="dev-del-btn"
+                                          onClick={() =>
+                                            handleRemoveUnsavedProduct(grupo.lugar, cli.clientKey, prod.localId)
+                                          }
+                                          title="Quitar ítem"
+                                        >
+                                          <Trash2 size={15} />
+                                        </button>
+                                      )}
+                                    </div>
 
-                                          <div className="dev-fields-4grid">
-                                            <div className="dev-green-cell">
-                                              <label className="dev-col-label">Cantidad</label>
-                                              <div className="entregado-stepper dev-qty-stepper">
-                                                <button
-                                                  type="button"
-                                                  className="entregado-step-btn"
-                                                  aria-label="Disminuir cantidad devuelta"
-                                                  disabled={qtyNum <= 1 && prod.Cantidad !== ''}
-                                                  onClick={() =>
-                                                    handleStepCantidad(
-                                                      grupo.lugar,
-                                                      cli.clientKey,
-                                                      prod.localId,
-                                                      prod.Cantidad,
-                                                      -1
-                                                    )
-                                                  }
-                                                >
-                                                  <Minus size={14} />
-                                                </button>
-                                                <input
-                                                  type="text"
-                                                  inputMode="numeric"
-                                                  pattern="[0-9]*"
-                                                  className="entregado-input"
-                                                  value={prod.Cantidad}
-                                                  onFocus={handleFocusSelectAll}
-                                                  onKeyDown={(e) => {
-                                                    if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) e.preventDefault();
-                                                  }}
-                                                  onChange={(e) =>
-                                                    handleProductFieldChange(
-                                                      grupo.lugar,
-                                                      cli.clientKey,
-                                                      prod.localId,
-                                                      'Cantidad',
-                                                      e.target.value
-                                                    )
-                                                  }
-                                                />
-                                                <button
-                                                  type="button"
-                                                  className="entregado-step-btn"
-                                                  aria-label="Incrementar cantidad devuelta"
-                                                  onClick={() =>
-                                                    handleStepCantidad(
-                                                      grupo.lugar,
-                                                      cli.clientKey,
-                                                      prod.localId,
-                                                      prod.Cantidad,
-                                                      1
-                                                    )
-                                                  }
-                                                >
-                                                  <Plus size={14} />
-                                                </button>
-                                              </div>
-                                            </div>
-
-                                            <div className="dev-green-cell">
-                                              <label className="dev-col-label">Vencimiento</label>
-                                              <input
-                                                type="date"
-                                                className="dev-green-input"
-                                                value={prod.Vencimiento}
-                                                onChange={(e) =>
-                                                  handleProductFieldChange(
-                                                    grupo.lugar,
-                                                    cli.clientKey,
-                                                    prod.localId,
-                                                    'Vencimiento',
-                                                    e.target.value
-                                                  )
-                                                }
-                                              />
-                                            </div>
-
-                                            <div className="dev-green-cell dev-cell-span2">
-                                              <label className="dev-col-label">Motivo *</label>
-                                              <select
-                                                required
-                                                className={`dev-green-input ${!prod.codigo_motivo_dif ? 'empty' : ''}`}
-                                                value={prod.codigo_motivo_dif || ''}
-                                                onChange={(e) =>
-                                                  handleProductFieldChange(
-                                                    grupo.lugar,
-                                                    cli.clientKey,
-                                                    prod.localId,
-                                                    'codigo_motivo_dif',
-                                                    e.target.value
-                                                  )
-                                                }
-                                              >
-                                                <option value="">Seleccionar motivo...</option>
-                                                {sortedMotivos.map((m) => (
-                                                  <option key={m.id_motivo} value={m.id_motivo}>
-                                                    {m.descripcion}
-                                                  </option>
-                                                ))}
-                                              </select>
-                                            </div>
-
-                                            <div className="dev-green-cell dev-cell-span2">
-                                              <label className="dev-col-label">Tipo de devolución</label>
-                                              <button
-                                                type="button"
-                                                role="switch"
-                                                aria-checked={conRetorno}
-                                                className={`dev-toggle-btn ${conRetorno ? 'on' : 'off'}`}
-                                                onClick={() =>
-                                                  handleProductFieldChange(
-                                                    grupo.lugar,
-                                                    cli.clientKey,
-                                                    prod.localId,
-                                                    'Tipo',
-                                                    conRetorno ? 'Virtual' : 'Físico'
-                                                  )
-                                                }
-                                              >
-                                                <span className="dev-toggle-track">
-                                                  <span className="dev-toggle-thumb" />
-                                                </span>
-                                                <span className="dev-toggle-text">
-                                                  {conRetorno ? 'Con retorno del producto' : 'Sin retorno del producto'}
-                                                </span>
-                                              </button>
-                                            </div>
-                                          </div>
+                                    <div className="dev-fields-4grid">
+                                      <div className="dev-green-cell">
+                                        <label className="dev-col-label">Cantidad</label>
+                                        <div className="entregado-stepper dev-qty-stepper">
+                                          <button
+                                            type="button"
+                                            className="entregado-step-btn"
+                                            aria-label="Disminuir cantidad devuelta"
+                                            disabled={qtyNum <= 1 && prod.Cantidad !== ''}
+                                            onClick={() =>
+                                              handleStepCantidad(
+                                                grupo.lugar,
+                                                cli.clientKey,
+                                                prod.localId,
+                                                prod.Cantidad,
+                                                -1
+                                              )
+                                            }
+                                          >
+                                            <Minus size={14} />
+                                          </button>
+                                          <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            className="entregado-input"
+                                            value={prod.Cantidad}
+                                            onFocus={handleFocusSelectAll}
+                                            onKeyDown={(e) => {
+                                              if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) e.preventDefault();
+                                            }}
+                                            onChange={(e) =>
+                                              handleProductFieldChange(
+                                                grupo.lugar,
+                                                cli.clientKey,
+                                                prod.localId,
+                                                'Cantidad',
+                                                e.target.value
+                                              )
+                                            }
+                                          />
+                                          <button
+                                            type="button"
+                                            className="entregado-step-btn"
+                                            aria-label="Incrementar cantidad devuelta"
+                                            onClick={() =>
+                                              handleStepCantidad(
+                                                grupo.lugar,
+                                                cli.clientKey,
+                                                prod.localId,
+                                                prod.Cantidad,
+                                                1
+                                              )
+                                            }
+                                          >
+                                            <Plus size={14} />
+                                          </button>
                                         </div>
-                                      );
-                                    })}
+                                      </div>
+
+                                      <div className="dev-green-cell">
+                                        <label className="dev-col-label">Vencimiento</label>
+                                        <input
+                                          type="date"
+                                          className="dev-green-input"
+                                          value={prod.Vencimiento}
+                                          onChange={(e) =>
+                                            handleProductFieldChange(
+                                              grupo.lugar,
+                                              cli.clientKey,
+                                              prod.localId,
+                                              'Vencimiento',
+                                              e.target.value
+                                            )
+                                          }
+                                        />
+                                      </div>
+
+                                      <div className="dev-green-cell dev-cell-span2">
+                                        <label className="dev-col-label">Motivo *</label>
+                                        <select
+                                          required
+                                          className={`dev-green-input ${!prod.codigo_motivo_dif ? 'empty' : ''}`}
+                                          value={prod.codigo_motivo_dif || ''}
+                                          onChange={(e) =>
+                                            handleProductFieldChange(
+                                              grupo.lugar,
+                                              cli.clientKey,
+                                              prod.localId,
+                                              'codigo_motivo_dif',
+                                              e.target.value
+                                            )
+                                          }
+                                        >
+                                          <option value="">Seleccionar motivo...</option>
+                                          {sortedMotivos.map((m) => (
+                                            <option key={m.id_motivo} value={m.id_motivo}>
+                                              {m.descripcion}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+
+                                      <div className="dev-green-cell dev-cell-span2">
+                                        <label className="dev-col-label">Tipo de devolución</label>
+                                        <button
+                                          type="button"
+                                          role="switch"
+                                          aria-checked={conRetorno}
+                                          className={`dev-toggle-btn ${conRetorno ? 'on' : 'off'}`}
+                                          onClick={() =>
+                                            handleProductFieldChange(
+                                              grupo.lugar,
+                                              cli.clientKey,
+                                              prod.localId,
+                                              'Tipo',
+                                              conRetorno ? 'Virtual' : 'Físico'
+                                            )
+                                          }
+                                        >
+                                          <span className="dev-toggle-track">
+                                            <span className="dev-toggle-thumb" />
+                                          </span>
+                                          <span className="dev-toggle-text">
+                                            {conRetorno ? 'Con retorno del producto' : 'Sin retorno del producto'}
+                                          </span>
+                                        </button>
+                                      </div>
+                                    </div>
                                   </div>
-                                )}
+                                );
+                              })}
+                            </div>
+                          )}
 
-                                <button
-                                  type="button"
-                                  className="dev-add-btn"
-                                  onClick={() => handleAddProduct(grupo.lugar, cli.clientKey)}
-                                >
-                                  <Plus size={16} />
-                                  <span>Agregar devolución</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
+                          <button
+                            type="button"
+                            className="dev-add-btn"
+                            onClick={() => handleAddProduct(grupo.lugar, cli.clientKey)}
+                          >
+                            <Plus size={16} />
+                            <span>Agregar devolución</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
 
-                    <button
-                      type="button"
-                      className="dev-add-client-link"
-                      onClick={() => setClientModalLugar(grupo.lugar)}
-                    >
-                      <UserPlus size={15} />
-                      <span>Agregar cliente en {grupo.lugar}</span>
-                    </button>
-                  </div>
-                )}
-              </section>
-            );
-          })}
+              <button
+                type="button"
+                className="dev-add-client-cta"
+                onClick={() => setClientModalLugar(grupo.lugar)}
+              >
+                <UserPlus size={16} />
+                <span>Agregar cliente en {grupo.lugar}</span>
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

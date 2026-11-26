@@ -2,14 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import HojaRutaHeader from '../components/HojaRutaHeader';
 import AlertModal from '../components/AlertModal';
 import { fetchCajonesHojaRuta } from '../services/api';
-import {
-  cacheCajones,
-  getCachedCajones
-} from '../services/offlineStorage';
-import {
-  getHojaRutaDraft,
-  patchSectionDraft
-} from '../services/draftStorage';
+import { cacheCajones, getCachedCajones } from '../services/offlineStorage';
+import { getHojaRutaDraft, patchSectionDraft } from '../services/draftStorage';
 import { useAuth } from '../config/AuthContext';
 import {
   RefreshCw,
@@ -18,82 +12,100 @@ import {
   Plus,
   Minus,
   Inbox,
+  UserPlus,
+  Search,
   X
 } from 'lucide-react';
 
 const NON_NEGATIVE_INT_REGEX = /^\d+$/;
 
 /**
- * Módulo 4.2.3: Entrega y Devolución de Cajones (Logística DY - Cajones).
- * Mantiene borradores en localStorage hasta confirmar con el botón flotante.
+ * Módulo 4.2.3: Cajones y Pallets filtrados por el Lugar de Entrega seleccionado.
  */
-export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
+export default function CajonesPage({ hojaRuta, selectedLugar, onChangeLugar }) {
   const { user } = useAuth();
   const [headerInfo, setHeaderInfo] = useState(hojaRuta);
   const [items, setItems] = useState([]);
+  const [clientesCatalogo, setClientesCatalogo] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newStop, setNewStop] = useState({ Lugar_de_Entrega: '', Cliente: '' });
+  const [clientSearch, setClientSearch] = useState('');
+  const [manualCliente, setManualCliente] = useState('');
   const [errorMsg, setErrorMsg] = useState(null);
 
   const loadCajones = useCallback(async () => {
-    if (!hojaRuta?.Transaccionid) return;
+    if (!hojaRuta?.Transaccionid || !selectedLugar) return;
     try {
       setLoading(true);
       setErrorMsg(null);
       let loadedHeader = hojaRuta;
       let loadedItems = [];
+      let loadedCatalog = [];
 
       if (navigator.onLine) {
         try {
-          const res = await fetchCajonesHojaRuta(hojaRuta.Transaccionid);
+          const res = await fetchCajonesHojaRuta(hojaRuta.Transaccionid, selectedLugar);
           if (res && res.ok) {
             loadedHeader = res.hoja_ruta || hojaRuta;
             loadedItems = res.items || [];
-            await cacheCajones(hojaRuta.Transaccionid, {
-              hoja_ruta: loadedHeader,
-              items: loadedItems
-            });
+            loadedCatalog = res.clientes_catalogo || [];
+            await cacheCajones(
+              hojaRuta.Transaccionid,
+              {
+                hoja_ruta: loadedHeader,
+                lugar: selectedLugar,
+                items: loadedItems,
+                clientes_catalogo: loadedCatalog
+              },
+              selectedLugar
+            );
           }
         } catch (apiErr) {
           console.warn('[CajonesPage] Error API, usando caché local:', apiErr.message);
-          const cached = await getCachedCajones(hojaRuta.Transaccionid);
+          const cached = await getCachedCajones(hojaRuta.Transaccionid, selectedLugar);
           if (cached) {
             loadedHeader = cached.hoja_ruta || hojaRuta;
             loadedItems = cached.items || [];
+            loadedCatalog = cached.clientes_catalogo || [];
           } else {
             throw apiErr;
           }
         }
       } else {
-        const cached = await getCachedCajones(hojaRuta.Transaccionid);
+        const cached = await getCachedCajones(hojaRuta.Transaccionid, selectedLugar);
         if (cached) {
           loadedHeader = cached.hoja_ruta || hojaRuta;
           loadedItems = cached.items || [];
+          loadedCatalog = cached.clientes_catalogo || [];
         }
       }
 
       setHeaderInfo(loadedHeader);
+      setClientesCatalogo(loadedCatalog);
+
       const baseItems = loadedItems.map((it, idx) => ({
         ...it,
-        localKey: `${it.Lugar_de_Entrega}__${it.Cliente || idx}`,
+        Lugar_de_Entrega: it.Lugar_de_Entrega || selectedLugar,
+        localKey: `${it.Id_etapa || idx}__${it.Cliente || idx}`,
         cajones_entregados: String(it.cajones_entregados ?? 0),
         cajones_devueltos: String(it.cajones_devueltos ?? 0),
+        pallets_entregados: String(it.pallets_entregados ?? 0),
+        pallets_devueltos: String(it.pallets_devueltos ?? 0),
         observaciones: it.observaciones || ''
       }));
 
-      const draft = getHojaRutaDraft(user?.email, hojaRuta.Transaccionid).cajones;
+      const draft = getHojaRutaDraft(user?.email, hojaRuta.Transaccionid, selectedLugar).cajones;
       if (draft?.dirty && Array.isArray(draft.items)) {
         setItems(draft.items);
       } else {
         setItems(baseItems);
       }
     } catch (err) {
-      setErrorMsg(err.response?.data?.error || err.message || 'Error al cargar movimiento de cajones.');
+      setErrorMsg(err.response?.data?.error || err.message || 'Error al cargar cajones y pallets.');
     } finally {
       setLoading(false);
     }
-  }, [hojaRuta, user?.email]);
+  }, [hojaRuta, selectedLugar, user?.email]);
 
   useEffect(() => {
     loadCajones();
@@ -101,29 +113,43 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
 
   useEffect(() => {
     const onExternalSaved = (e) => {
-      if (
-        Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid) &&
-        Array.isArray(e.detail?.sections) &&
-        e.detail.sections.includes('cajones')
-      ) {
+      const sameTx = Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid);
+      const sameLugar =
+        !e.detail?.lugar ||
+        String(e.detail.lugar).trim().toLowerCase() === String(selectedLugar || '').trim().toLowerCase();
+      if (sameTx && sameLugar && Array.isArray(e.detail?.sections) && e.detail.sections.includes('cajones')) {
         loadCajones();
       }
     };
     window.addEventListener('dy-draft-saved', onExternalSaved);
     return () => window.removeEventListener('dy-draft-saved', onExternalSaved);
-  }, [hojaRuta?.Transaccionid, loadCajones]);
+  }, [hojaRuta?.Transaccionid, selectedLugar, loadCajones]);
 
   const persistCajonesDraft = (nextItems) => {
-    patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'cajones', {
-      items: nextItems,
-      headerInfo,
-      dirty: true,
-      dirtySince: Date.now()
-    });
+    patchSectionDraft(
+      user?.email,
+      hojaRuta?.Transaccionid,
+      'cajones',
+      {
+        lugar: selectedLugar,
+        items: nextItems,
+        headerInfo,
+        clientesCatalogo,
+        dirty: true,
+        dirtySince: Date.now()
+      },
+      selectedLugar
+    );
   };
 
   const handleFieldChange = (localKey, field, value) => {
-    if ((field === 'cajones_entregados' || field === 'cajones_devueltos') && value !== '' && !NON_NEGATIVE_INT_REGEX.test(value)) {
+    const numericFields = [
+      'cajones_entregados',
+      'cajones_devueltos',
+      'pallets_entregados',
+      'pallets_devueltos'
+    ];
+    if (numericFields.includes(field) && value !== '' && !NON_NEGATIVE_INT_REGEX.test(value)) {
       return;
     }
 
@@ -134,7 +160,7 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
     });
   };
 
-  const handleStepCajon = (localKey, field, currentVal, delta) => {
+  const handleStep = (localKey, field, currentVal, delta) => {
     const rawStr = String(currentVal ?? '').trim();
     const currentNum = NON_NEGATIVE_INT_REGEX.test(rawStr) ? parseInt(rawStr, 10) : 0;
     const nextVal = Math.max(0, currentNum + delta);
@@ -147,101 +173,155 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
     requestAnimationFrame(() => input.select());
   };
 
-  const handleAddStop = (e) => {
-    e.preventDefault();
-    const lugar = newStop.Lugar_de_Entrega.trim() || 'Entrega en Ruta';
-    const cliente = newStop.Cliente.trim();
-    if (!cliente) {
-      setErrorMsg('Ingrese el nombre del cliente o receptor.');
+  const appendClientItem = ({ id_cliente = null, Cliente }) => {
+    const cleanName = String(Cliente || '').trim();
+    if (!cleanName) {
+      setErrorMsg('Ingrese o seleccione el nombre del cliente.');
       return;
     }
 
-    const localKey = `${lugar}__${cliente}__${Date.now()}`;
+    const already = items.some(
+      (it) =>
+        (id_cliente && Number(it.id_cliente) === Number(id_cliente)) ||
+        String(it.Cliente || '').trim().toLowerCase() === cleanName.toLowerCase()
+    );
+    if (already) {
+      setShowAddModal(false);
+      setClientSearch('');
+      setManualCliente('');
+      return;
+    }
+
+    const localKey = `${selectedLugar}__${cleanName}__${Date.now()}`;
     setItems((prev) => {
       const next = [
         ...prev,
         {
           localKey,
           Transaccionid: hojaRuta.Transaccionid,
-          Lugar_de_Entrega: lugar,
-          id_cliente: null,
-          Cliente: cliente,
+          Id_etapa: id_cliente ? `MANUAL-${id_cliente}` : null,
+          Lugar_de_Entrega: selectedLugar,
+          id_cliente,
+          Cliente: cleanName,
           cajones_entregados: '0',
           cajones_devueltos: '0',
+          pallets_entregados: '0',
+          pallets_devueltos: '0',
           observaciones: ''
         }
       ];
       persistCajonesDraft(next);
       return next;
     });
-    setNewStop({ Lugar_de_Entrega: '', Cliente: '' });
+    setClientSearch('');
+    setManualCliente('');
     setShowAddModal(false);
   };
 
   const totals = useMemo(() => {
     return items.reduce(
       (acc, it) => {
-        const ent = parseInt(it.cajones_entregados || '0', 10) || 0;
-        const dev = parseInt(it.cajones_devueltos || '0', 10) || 0;
-        acc.entregados += ent;
-        acc.devueltos += dev;
-        acc.diferencia += ent - dev;
+        const cEnt = parseInt(it.cajones_entregados || '0', 10) || 0;
+        const cDev = parseInt(it.cajones_devueltos || '0', 10) || 0;
+        const pEnt = parseInt(it.pallets_entregados || '0', 10) || 0;
+        const pDev = parseInt(it.pallets_devueltos || '0', 10) || 0;
+        acc.cajEnt += cEnt;
+        acc.cajDev += cDev;
+        acc.cajDif += cEnt - cDev;
+        acc.palEnt += pEnt;
+        acc.palDev += pDev;
+        acc.palDif += pEnt - pDev;
         return acc;
       },
-      { entregados: 0, devueltos: 0, diferencia: 0 }
+      { cajEnt: 0, cajDev: 0, cajDif: 0, palEnt: 0, palDev: 0, palDif: 0 }
     );
   }, [items]);
+
+  const filteredCatalog = useMemo(() => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return clientesCatalogo;
+    return clientesCatalogo.filter(
+      (c) =>
+        String(c.nombre || '').toLowerCase().includes(q) ||
+        String(c.id_cliente || '').includes(q) ||
+        String(c.codigo || '').toLowerCase().includes(q)
+    );
+  }, [clientesCatalogo, clientSearch]);
 
   return (
     <div className="module-page page-transition">
       <HojaRutaHeader
         hojaRuta={headerInfo}
-        title="Logística DY - Cajones"
-        onChangeHojaRuta={onChangeHojaRuta}
+        selectedLugar={selectedLugar}
+        onChangeLugar={onChangeLugar}
       />
 
-      {!loading && (
-        <div className="cajones-summary-grid">
-          <div className="cajon-stat-box">
-            <span>Entregados</span>
-            <strong>{totals.entregados}</strong>
-          </div>
-          <div className="cajon-stat-box">
-            <span>Devueltos</span>
-            <strong>{totals.devueltos}</strong>
-          </div>
-          <div className={`cajon-stat-box ${totals.diferencia !== 0 ? 'diff' : 'balanced'}`}>
-            <span>Diferencia</span>
-            <strong>{totals.diferencia > 0 ? `+${totals.diferencia}` : totals.diferencia}</strong>
+      <div className="cajones-pallets-summary">
+        <div className="cp-summary-block">
+          <div className="cp-summary-label">Cajones</div>
+          <div className="cajones-summary-grid">
+            <div className="cajon-sum-card">
+              <span>Entregados</span>
+              <strong>{totals.cajEnt}</strong>
+            </div>
+            <div className="cajon-sum-card">
+              <span>Devueltos</span>
+              <strong>{totals.cajDev}</strong>
+            </div>
+            <div className="cajon-sum-card accent">
+              <span>Dif. Cajones</span>
+              <strong>{totals.cajDif > 0 ? `+${totals.cajDif}` : totals.cajDif}</strong>
+            </div>
           </div>
         </div>
-      )}
+
+        <div className="cp-summary-block">
+          <div className="cp-summary-label">Pallets</div>
+          <div className="cajones-summary-grid">
+            <div className="cajon-sum-card">
+              <span>Entregados</span>
+              <strong>{totals.palEnt}</strong>
+            </div>
+            <div className="cajon-sum-card">
+              <span>Devueltos</span>
+              <strong>{totals.palDev}</strong>
+            </div>
+            <div className="cajon-sum-card pallet-accent">
+              <span>Dif. Pallets</span>
+              <strong>{totals.palDif > 0 ? `+${totals.palDif}` : totals.palDif}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {loading ? (
         <div className="hr-empty-state">
           <RefreshCw size={30} className="spin" style={{ color: 'var(--dy-blue)' }} />
-          <p>Cargando paradas y saldos de cajones...</p>
+          <p>Cargando cajones y pallets...</p>
         </div>
       ) : items.length === 0 ? (
         <div className="hr-empty-state">
           <Inbox size={42} style={{ color: 'var(--text-muted)' }} />
-          <h3>Sin clientes registrados</h3>
-          <p>Agrega un cliente para registrar entrega y devolución de cajones.</p>
+          <h3>Sin clientes cargados en este lugar</h3>
+          <p>Agregá un cliente en {selectedLugar} para registrar cajones y pallets.</p>
           <button
             type="button"
-            className="dev-add-btn"
+            className="dev-add-client-cta"
             onClick={() => setShowAddModal(true)}
           >
-            <Plus size={16} />
-            <span>Agregar Parada / Cliente</span>
+            <UserPlus size={16} />
+            <span>Agregar cliente en {selectedLugar}</span>
           </button>
         </div>
       ) : (
         <div className="cajones-list">
           {items.map((it) => {
-            const ent = parseInt(it.cajones_entregados || '0', 10) || 0;
-            const dev = parseInt(it.cajones_devueltos || '0', 10) || 0;
-            const diff = ent - dev;
+            const cEnt = parseInt(it.cajones_entregados || '0', 10) || 0;
+            const cDev = parseInt(it.cajones_devueltos || '0', 10) || 0;
+            const cDiff = cEnt - cDev;
+            const pEnt = parseInt(it.pallets_entregados || '0', 10) || 0;
+            const pDev = parseInt(it.pallets_devueltos || '0', 10) || 0;
+            const pDiff = pEnt - pDev;
 
             return (
               <div key={it.localKey} className="cajon-card">
@@ -253,21 +333,26 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
                       <span>{it.Lugar_de_Entrega}</span>
                     </div>
                   </div>
-                  <span className={`cajon-diff-badge ${diff === 0 ? 'zero' : diff > 0 ? 'pos' : 'neg'}`}>
-                    Dif: {diff > 0 ? `+${diff}` : diff}
-                  </span>
+                  <div className="cajon-badges-col">
+                    <span className={`cajon-diff-badge ${cDiff === 0 ? 'zero' : cDiff > 0 ? 'pos' : 'neg'}`}>
+                      Caj: {cDiff > 0 ? `+${cDiff}` : cDiff}
+                    </span>
+                    <span className={`cajon-diff-badge ${pDiff === 0 ? 'zero' : pDiff > 0 ? 'pos' : 'neg'}`}>
+                      Pal: {pDiff > 0 ? `+${pDiff}` : pDiff}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="cajon-inputs-row">
                   <div className="cajon-input-box">
-                    <label>Entregados</label>
+                    <label>CAJONES ENTREGADOS</label>
                     <div className="entregado-stepper cajon-qty-stepper">
                       <button
                         type="button"
                         className="entregado-step-btn"
                         aria-label={`Disminuir cajones entregados de ${it.Cliente}`}
-                        disabled={ent <= 0 && it.cajones_entregados !== ''}
-                        onClick={() => handleStepCajon(it.localKey, 'cajones_entregados', it.cajones_entregados, -1)}
+                        disabled={cEnt <= 0 && it.cajones_entregados !== ''}
+                        onClick={() => handleStep(it.localKey, 'cajones_entregados', it.cajones_entregados, -1)}
                       >
                         <Minus size={14} />
                       </button>
@@ -287,7 +372,7 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
                         type="button"
                         className="entregado-step-btn"
                         aria-label={`Incrementar cajones entregados de ${it.Cliente}`}
-                        onClick={() => handleStepCajon(it.localKey, 'cajones_entregados', it.cajones_entregados, 1)}
+                        onClick={() => handleStep(it.localKey, 'cajones_entregados', it.cajones_entregados, 1)}
                       >
                         <Plus size={14} />
                       </button>
@@ -295,14 +380,14 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
                   </div>
 
                   <div className="cajon-input-box">
-                    <label>Devueltos</label>
+                    <label>CAJONES DEVUELTOS</label>
                     <div className="entregado-stepper cajon-qty-stepper">
                       <button
                         type="button"
                         className="entregado-step-btn"
                         aria-label={`Disminuir cajones devueltos de ${it.Cliente}`}
-                        disabled={dev <= 0 && it.cajones_devueltos !== ''}
-                        onClick={() => handleStepCajon(it.localKey, 'cajones_devueltos', it.cajones_devueltos, -1)}
+                        disabled={cDev <= 0 && it.cajones_devueltos !== ''}
+                        onClick={() => handleStep(it.localKey, 'cajones_devueltos', it.cajones_devueltos, -1)}
                       >
                         <Minus size={14} />
                       </button>
@@ -322,7 +407,79 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
                         type="button"
                         className="entregado-step-btn"
                         aria-label={`Incrementar cajones devueltos de ${it.Cliente}`}
-                        onClick={() => handleStepCajon(it.localKey, 'cajones_devueltos', it.cajones_devueltos, 1)}
+                        onClick={() => handleStep(it.localKey, 'cajones_devueltos', it.cajones_devueltos, 1)}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="cajon-inputs-row">
+                  <div className="cajon-input-box pallet-input-box">
+                    <label>PALLETS ENTREGADOS</label>
+                    <div className="entregado-stepper cajon-qty-stepper">
+                      <button
+                        type="button"
+                        className="entregado-step-btn"
+                        aria-label={`Disminuir pallets entregados de ${it.Cliente}`}
+                        disabled={pEnt <= 0 && it.pallets_entregados !== ''}
+                        onClick={() => handleStep(it.localKey, 'pallets_entregados', it.pallets_entregados, -1)}
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        className="entregado-input"
+                        value={it.pallets_entregados}
+                        onFocus={handleFocusSelectAll}
+                        onKeyDown={(e) => {
+                          if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) e.preventDefault();
+                        }}
+                        onChange={(e) => handleFieldChange(it.localKey, 'pallets_entregados', e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="entregado-step-btn"
+                        aria-label={`Incrementar pallets entregados de ${it.Cliente}`}
+                        onClick={() => handleStep(it.localKey, 'pallets_entregados', it.pallets_entregados, 1)}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="cajon-input-box pallet-input-box">
+                    <label>PALLETS DEVUELTOS</label>
+                    <div className="entregado-stepper cajon-qty-stepper">
+                      <button
+                        type="button"
+                        className="entregado-step-btn"
+                        aria-label={`Disminuir pallets devueltos de ${it.Cliente}`}
+                        disabled={pDev <= 0 && it.pallets_devueltos !== ''}
+                        onClick={() => handleStep(it.localKey, 'pallets_devueltos', it.pallets_devueltos, -1)}
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        className="entregado-input"
+                        value={it.pallets_devueltos}
+                        onFocus={handleFocusSelectAll}
+                        onKeyDown={(e) => {
+                          if (['-', '+', '.', ',', 'e', 'E'].includes(e.key)) e.preventDefault();
+                        }}
+                        onChange={(e) => handleFieldChange(it.localKey, 'pallets_devueltos', e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="entregado-step-btn"
+                        aria-label={`Incrementar pallets devueltos de ${it.Cliente}`}
+                        onClick={() => handleStep(it.localKey, 'pallets_devueltos', it.pallets_devueltos, 1)}
                       >
                         <Plus size={14} />
                       </button>
@@ -343,11 +500,11 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
 
           <button
             type="button"
-            className="dev-add-btn"
+            className="dev-add-client-cta"
             onClick={() => setShowAddModal(true)}
           >
-            <Plus size={16} />
-            <span>Agregar otro cliente / parada</span>
+            <UserPlus size={16} />
+            <span>Agregar cliente en {selectedLugar}</span>
           </button>
         </div>
       )}
@@ -356,14 +513,14 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div
             className="modal-card glass"
-            style={{ textAlign: 'left', alignItems: 'stretch', padding: '18px' }}
+            style={{ maxHeight: '82vh', alignItems: 'stretch', textAlign: 'left', padding: '18px' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-header-row">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Boxes size={20} style={{ color: 'var(--dy-blue)' }} />
                 <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--text)' }}>
-                  Agregar Parada / Cliente
+                  Agregar Cliente
                 </h3>
               </div>
               <button
@@ -376,35 +533,67 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
               </button>
             </div>
 
-            <form onSubmit={handleAddStop} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div className="login-field-group">
-                <label className="login-field-label">Lugar de Entrega</label>
-                <input
-                  type="text"
-                  className="login-input"
-                  style={{ paddingLeft: 12 }}
-                  placeholder="Ej. Zona Sur - Mercado Central"
-                  value={newStop.Lugar_de_Entrega}
-                  onChange={(e) => setNewStop((prev) => ({ ...prev, Lugar_de_Entrega: e.target.value }))}
-                />
-              </div>
+            <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Lugar: <strong>{selectedLugar}</strong>
+            </p>
 
-              <div className="login-field-group">
-                <label className="login-field-label">Cliente</label>
-                <input
-                  type="text"
-                  className="login-input"
-                  style={{ paddingLeft: 12 }}
-                  placeholder="Nombre del cliente"
-                  value={newStop.Cliente}
-                  onChange={(e) => setNewStop((prev) => ({ ...prev, Cliente: e.target.value }))}
-                />
-              </div>
+            {clientesCatalogo.length > 0 && (
+              <>
+                <div style={{ position: 'relative' }}>
+                  <Search
+                    size={15}
+                    style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
+                  />
+                  <input
+                    type="text"
+                    className="login-input"
+                    style={{ paddingLeft: 32 }}
+                    placeholder="Buscar cliente por nombre o código..."
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                  />
+                </div>
 
-              <button type="submit" className="btn-login-primary" style={{ marginTop: 4 }}>
-                Agregar a la Lista
+                <div className="dev-client-picker-list">
+                  {filteredCatalog.length === 0 ? (
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center', padding: '12px' }}>
+                      Sin coincidencias en catálogo. Podés cargarlo manualmente abajo.
+                    </p>
+                  ) : (
+                    filteredCatalog.slice(0, 60).map((cli) => (
+                      <button
+                        key={cli.id_cliente}
+                        type="button"
+                        className="dev-client-picker-item"
+                        onClick={() => appendClientItem({ id_cliente: cli.id_cliente, Cliente: cli.nombre })}
+                      >
+                        <strong>{cli.nombre}</strong>
+                        <span>Cód. #{cli.id_cliente}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                className="login-input"
+                style={{ paddingLeft: 12, flex: 1 }}
+                placeholder="O ingresá nombre manualmente..."
+                value={manualCliente}
+                onChange={(e) => setManualCliente(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn-login-primary"
+                style={{ width: 'auto', padding: '0 14px', height: 42 }}
+                onClick={() => appendClientItem({ id_cliente: null, Cliente: manualCliente })}
+              >
+                Agregar
               </button>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -413,7 +602,7 @@ export default function CajonesPage({ hojaRuta, onChangeHojaRuta }) {
         isOpen={Boolean(errorMsg)}
         onClose={() => setErrorMsg(null)}
         type="error"
-        title="Validación de Cajones"
+        title="Validación de Cajones y Pallets"
         message={errorMsg}
         confirmText="Corregir"
       />

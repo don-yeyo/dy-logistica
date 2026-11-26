@@ -2,6 +2,7 @@ import React from 'react';
 import {
   X,
   ClipboardList,
+  MapPin,
   PackageCheck,
   PackageMinus,
   Boxes,
@@ -23,16 +24,18 @@ export default function Drawer({
   onNavigate,
   onOpenHelp,
   currentScreen,
-  selectedHojaRuta
+  selectedHojaRuta,
+  selectedLugar
 }) {
   const { user, logout, impersonationEnabled, availableUsers, impersonateUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const menuItems = [
     { id: 'hojas_ruta', label: 'Hojas de Ruta', icon: <ClipboardList size={20} />, badge: selectedHojaRuta ? selectedHojaRuta.Hoja_de_ruta : null },
+    { id: 'lugares', label: 'Lugares de Entrega', icon: <MapPin size={20} />, badge: selectedLugar ? 'Activo' : null },
     { id: 'entregas', label: 'Entregas de Mercadería', icon: <PackageCheck size={20} />, badge: null },
     { id: 'devoluciones', label: 'Devoluciones', icon: <PackageMinus size={20} />, badge: null },
-    { id: 'cajones', label: 'Movimiento de Cajones', icon: <Boxes size={20} />, badge: null },
+    { id: 'cajones', label: 'Cajones y Pallets', icon: <Boxes size={20} />, badge: null },
     { id: 'remitos', label: 'Remitos de la Hoja', icon: <FileSignature size={20} />, badge: null },
     { id: 'scan', label: 'Escanear Código 1D', icon: <ScanLine size={20} />, badge: null }
   ];

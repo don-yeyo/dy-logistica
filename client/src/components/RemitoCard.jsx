@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Calendar, Camera, FileText, CheckCircle2, AlertCircle, Clock, ChevronRight } from 'lucide-react';
+import { MapPin, Calendar, Camera, FileText, CheckCircle2, AlertCircle, Clock, ChevronRight, History } from 'lucide-react';
 
 const STATUS_CONFIG = {
   PENDIENTE: {
@@ -48,9 +48,25 @@ function formatEjemplarTag(ej) {
 }
 
 export default function RemitoCard({ remito, onSelect }) {
-  const statusInfo = STATUS_CONFIG[remito.estado_firma] || STATUS_CONFIG.PENDIENTE;
-  const StatusIcon = statusInfo.icon;
   const ejemplaresList = Array.isArray(remito.ejemplares) ? remito.ejemplares : [];
+  const regCount =
+    remito.ejemplares_registrados !== undefined ? Number(remito.ejemplares_registrados) : ejemplaresList.length;
+  const espCount =
+    remito.ejemplares_esperados !== undefined ? Number(remito.ejemplares_esperados) : 2;
+  const isPendiente =
+    remito.pendiente_ejemplares !== undefined
+      ? Boolean(remito.pendiente_ejemplares)
+      : remito.estado_firma === 'PENDIENTE';
+
+  const baseStatus = STATUS_CONFIG[remito.estado_firma] || STATUS_CONFIG.PENDIENTE;
+  const statusInfo = isPendiente
+    ? {
+        label: `Pendiente (${regCount}/${espCount} ej.)`,
+        icon: Clock,
+        className: 'PENDIENTE'
+      }
+    : baseStatus;
+  const StatusIcon = statusInfo.icon;
 
   let formattedDate = remito.finne_Fecha || '';
   if (formattedDate.includes('T')) {
@@ -59,13 +75,13 @@ export default function RemitoCard({ remito, onSelect }) {
 
   return (
     <div
-      className={`remito-card status-${remito.estado_firma || 'PENDIENTE'}`}
+      className={`remito-card status-${statusInfo.className}`}
       onClick={() => onSelect(remito)}
     >
       <div className="card-header-row">
         <div>
           <div className="comprobante-code">{remito.finne_Comprobante || 'Sin Comprobante'}</div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px', flexWrap: 'wrap' }}>
             <Calendar size={13} />
             <span>{formattedDate}</span>
             {remito.nro_hoja_ruta && (
@@ -73,6 +89,12 @@ export default function RemitoCard({ remito, onSelect }) {
                 <span>•</span>
                 <span style={{ fontWeight: 700, color: 'var(--dy-blue)' }}>HR: {remito.nro_hoja_ruta}</span>
               </>
+            )}
+            {remito.es_viaje_actual === false && (
+              <span className="viaje-anterior-badge">
+                <History size={11} />
+                Viaje anterior
+              </span>
             )}
           </div>
         </div>
@@ -100,32 +122,22 @@ export default function RemitoCard({ remito, onSelect }) {
             <span key={ej.ejemplar} className="remito-ejemplar-pill">
               <FileText size={11} />
               <span>{formatEjemplarTag(ej)}</span>
-              {(ej.foto_sharepoint_url || ej.foto_url) && <Camera size={11} />}
             </span>
           ))}
         </div>
       )}
 
-      <div className="card-footer-row">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {ejemplaresList.length === 0 && remito.tipo_documento && remito.tipo_documento !== 'REMITO' && (
-            <span className="doc-tag">
-              <FileText size={13} />
-              {remito.tipo_documento === 'RECEPCION_VALORIZADA' ? 'Recep. Valorizada' : remito.tipo_documento}
-            </span>
-          )}
-          {ejemplaresList.length === 0 && remito.foto_url && (
-            <span className="doc-tag" style={{ background: '#dbeafe', color: '#1e40af' }}>
-              <Camera size={13} />
-              Foto adjunta
+      <div className="remito-footer-meta">
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {(remito.foto_sharepoint_url || remito.foto_url) && (
+            <span style={{ color: '#059669', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}>
+              <Camera size={14} /> Foto
             </span>
           )}
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 700, color: 'var(--dy-blue)' }}>
-          <span>Controlar</span>
-          <ChevronRight size={16} />
-        </div>
+        <span style={{ color: 'var(--dy-blue)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '2px' }}>
+          Controlar <ChevronRight size={15} />
+        </span>
       </div>
     </div>
   );

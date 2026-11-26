@@ -107,13 +107,13 @@ export function AuthProvider({ children }) {
       for (const op of otherItems) {
         try {
           if (op.op_type === 'entregas') {
-            await saveEntregasHojaRuta(op.transaccionId, op.items);
+            await saveEntregasHojaRuta(op.transaccionId, op.items, op.lugar || null);
             syncedIds.push(op.queue_id);
           } else if (op.op_type === 'devoluciones') {
-            await saveDevolucionesHojaRuta(op.transaccionId, op.clientes);
+            await saveDevolucionesHojaRuta(op.transaccionId, op.clientes, op.lugar || null);
             syncedIds.push(op.queue_id);
           } else if (op.op_type === 'cajones') {
-            await saveCajonesHojaRuta(op.transaccionId, op.items);
+            await saveCajonesHojaRuta(op.transaccionId, op.items, op.lugar || null);
             syncedIds.push(op.queue_id);
           }
         } catch (opErr) {
@@ -302,6 +302,7 @@ export function AuthProvider({ children }) {
   const impersonateUser = useCallback(async (email) => {
     if (!IMPERSONATION_ENABLED || !email) return;
     localStorage.removeItem('dy_selected_hoja_ruta');
+    localStorage.removeItem('dy_selected_lugar');
     localStorage.setItem('dy_impersonated_email', email);
     setIsImpersonating(true);
     await loadUser(email);
@@ -318,6 +319,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('dy_user_rol');
     localStorage.removeItem('dy_impersonated_email');
     localStorage.removeItem('dy_selected_hoja_ruta');
+    localStorage.removeItem('dy_selected_lugar');
     clearAllDrafts();
     setIsImpersonating(false);
     setUser(null);

@@ -2,25 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import HojaRutaHeader from '../components/HojaRutaHeader';
 import AlertModal from '../components/AlertModal';
 import { fetchEntregasHojaRuta } from '../services/api';
-import {
-  cacheEntregas,
-  getCachedEntregas
-} from '../services/offlineStorage';
-import {
-  getHojaRutaDraft,
-  patchSectionDraft
-} from '../services/draftStorage';
+import { cacheEntregas, getCachedEntregas } from '../services/offlineStorage';
+import { getHojaRutaDraft, patchSectionDraft } from '../services/draftStorage';
 import { useAuth } from '../config/AuthContext';
-import {
-  RefreshCw,
-  Inbox,
-  MapPin,
-  FileText,
-  ChevronDown,
-  ChevronRight,
-  Minus,
-  Plus
-} from 'lucide-react';
+import { RefreshCw, Inbox, Minus, Plus, PackageCheck } from 'lucide-react';
 
 const POSITIVE_INT_REGEX = /^\d+$/;
 
@@ -35,26 +20,22 @@ function computeHasEntregasChanges(currentMap, baseMap) {
 }
 
 /**
- * Módulo 4.2.1: Confirmación de Descarga (Logística DY - Entregas).
- * Mantiene estado de acordeones y borradores editados en localStorage entre pantallas.
+ * Paso 3: Confirmación de Descarga consolidada por producto en el Lugar de Entrega seleccionado.
+ * Suma totales remitidos por producto sin abrir remitos individuales y persiste borradores locales.
  */
-export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
+export default function EntregasPage({ hojaRuta, selectedLugar, onChangeLugar }) {
   const { user } = useAuth();
   const [headerInfo, setHeaderInfo] = useState(hojaRuta);
   const [items, setItems] = useState([]);
   const [entregadoMap, setEntregadoMap] = useState({});
   const [invalidIds, setInvalidIds] = useState({});
-  const [openLugares, setOpenLugares] = useState(() => {
-    const draft = getHojaRutaDraft(user?.email, hojaRuta?.Transaccionid);
-    return draft.entregas?.openLugares || {};
-  });
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
 
   const baseEntregadoMapRef = useRef({});
 
   const loadEntregas = useCallback(async () => {
-    if (!hojaRuta?.Transaccionid) return;
+    if (!hojaRuta?.Transaccionid || !selectedLugar) return;
     try {
       setLoading(true);
       setErrorMsg(null);
@@ -63,18 +44,23 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
 
       if (navigator.onLine) {
         try {
-          const res = await fetchEntregasHojaRuta(hojaRuta.Transaccionid);
+          const res = await fetchEntregasHojaRuta(hojaRuta.Transaccionid, selectedLugar);
           if (res && res.ok) {
             loadedHeader = res.hoja_ruta || hojaRuta;
             loadedItems = res.items || [];
-            await cacheEntregas(hojaRuta.Transaccionid, {
-              hoja_ruta: loadedHeader,
-              items: loadedItems
-            });
+            await cacheEntregas(
+              hojaRuta.Transaccionid,
+              {
+                hoja_ruta: loadedHeader,
+                lugar: selectedLugar,
+                items: loadedItems
+              },
+              selectedLugar
+            );
           }
         } catch (apiErr) {
           console.warn('[EntregasPage] Error API, usando caché local:', apiErr.message);
-          const cached = await getCachedEntregas(hojaRuta.Transaccionid);
+          const cached = await getCachedEntregas(hojaRuta.Transaccionid, selectedLugar);
           if (cached) {
             loadedHeader = cached.hoja_ruta || hojaRuta;
             loadedItems = cached.items || [];
@@ -83,7 +69,7 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
           }
         }
       } else {
-        const cached = await getCachedEntregas(hojaRuta.Transaccionid);
+        const cached = await getCachedEntregas(hojaRuta.Transaccionid, selectedLugar);
         if (cached) {
           loadedHeader = cached.hoja_ruta || hojaRuta;
           loadedItems = cached.items || [];
@@ -95,7 +81,8 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
 
       const baseMap = {};
       for (const it of loadedItems) {
-        baseMap[it.Hojarutaitemid] =
+        const key = it.Productoid ?? it.Hojarutaitemid;
+        baseMap[key] =
           it.Entregado !== null && it.Entregado !== undefined
             ? String(it.Entregado)
             : String(it.Remitido ?? 0);
@@ -105,20 +92,16 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
       const hasUnconfirmed = loadedItems.some(
         (it) => it.Entregado === null || it.Entregado === undefined
       );
-      const draft = getHojaRutaDraft(user?.email, hojaRuta.Transaccionid).entregas;
-      const resolvedOpenLugares =
-        draft?.openLugares !== undefined ? draft.openLugares : openLugares;
-      if (draft?.openLugares !== undefined) {
-        setOpenLugares(draft.openLugares);
-      }
+      const draft = getHojaRutaDraft(user?.email, hojaRuta.Transaccionid, selectedLugar).entregas;
 
       let finalMap = baseMap;
       let nextDirty = false;
       if (draft?.dirty && draft?.entregadoMap) {
         const restoredMap = { ...baseMap };
         for (const it of loadedItems) {
-          if (draft.entregadoMap[it.Hojarutaitemid] !== undefined) {
-            restoredMap[it.Hojarutaitemid] = String(draft.entregadoMap[it.Hojarutaitemid]);
+          const key = it.Productoid ?? it.Hojarutaitemid;
+          if (draft.entregadoMap[key] !== undefined) {
+            restoredMap[key] = String(draft.entregadoMap[key]);
           }
         }
         finalMap = restoredMap;
@@ -128,20 +111,26 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
       setEntregadoMap(finalMap);
       setInvalidIds({});
 
-      patchSectionDraft(user?.email, hojaRuta.Transaccionid, 'entregas', {
-        openLugares: resolvedOpenLugares,
-        entregadoMap: finalMap,
-        items: loadedItems,
-        headerInfo: loadedHeader,
-        unconfirmedDb: hasUnconfirmed,
-        dirty: nextDirty
-      });
+      patchSectionDraft(
+        user?.email,
+        hojaRuta.Transaccionid,
+        'entregas',
+        {
+          lugar: selectedLugar,
+          entregadoMap: finalMap,
+          items: loadedItems,
+          headerInfo: loadedHeader,
+          unconfirmedDb: hasUnconfirmed,
+          dirty: nextDirty
+        },
+        selectedLugar
+      );
     } catch (err) {
-      setErrorMsg(err.response?.data?.error || err.message || 'Error al cargar los ítems a entregar.');
+      setErrorMsg(err.response?.data?.error || err.message || 'Error al cargar los productos a entregar.');
     } finally {
       setLoading(false);
     }
-  }, [hojaRuta, user?.email]);
+  }, [hojaRuta, selectedLugar, user?.email]);
 
   useEffect(() => {
     loadEntregas();
@@ -149,115 +138,89 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
 
   useEffect(() => {
     const onExternalSaved = (e) => {
-      if (
-        Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid) &&
-        Array.isArray(e.detail?.sections) &&
-        e.detail.sections.includes('entregas')
-      ) {
+      const sameTx = Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid);
+      const sameLugar =
+        !e.detail?.lugar ||
+        String(e.detail.lugar).trim().toLowerCase() === String(selectedLugar || '').trim().toLowerCase();
+      if (sameTx && sameLugar && Array.isArray(e.detail?.sections) && e.detail.sections.includes('entregas')) {
         loadEntregas();
       }
     };
     window.addEventListener('dy-draft-saved', onExternalSaved);
     return () => window.removeEventListener('dy-draft-saved', onExternalSaved);
-  }, [hojaRuta?.Transaccionid, loadEntregas]);
+  }, [hojaRuta?.Transaccionid, selectedLugar, loadEntregas]);
 
-  // Agrupación en 2 cortes de control: Lugar_de_Entrega -> Remito
-  const groupedData = useMemo(() => {
-    const lugares = [];
-    const lugarMap = new Map();
-
-    for (const item of items) {
-      const lugarKey = item.Lugar_de_Entrega || 'Sin Lugar de Entrega';
-      if (!lugarMap.has(lugarKey)) {
-        const lugarObj = {
-          lugar: lugarKey,
-          remitos: [],
-          remitoMap: new Map()
-        };
-        lugarMap.set(lugarKey, lugarObj);
-        lugares.push(lugarObj);
-      }
-
-      const lugarObj = lugarMap.get(lugarKey);
-      const remitoKey = item.Remito || 'Sin Remito';
-      if (!lugarObj.remitoMap.has(remitoKey)) {
-        const remitoObj = {
-          remito: remitoKey,
-          cliente: item.Cliente || '',
-          productos: []
-        };
-        lugarObj.remitoMap.set(remitoKey, remitoObj);
-        lugarObj.remitos.push(remitoObj);
-      }
-
-      lugarObj.remitoMap.get(remitoKey).productos.push(item);
+  const totals = useMemo(() => {
+    let remitido = 0;
+    let entregado = 0;
+    for (const it of items) {
+      const key = it.Productoid ?? it.Hojarutaitemid;
+      remitido += Number(it.Remitido ?? 0);
+      const raw = String(entregadoMap[key] ?? '').trim();
+      entregado += POSITIVE_INT_REGEX.test(raw) ? parseInt(raw, 10) : 0;
     }
-
-    return lugares;
-  }, [items]);
-
-  const toggleLugar = (lugarKey) => {
-    setOpenLugares((prev) => {
-      const next = {
-        ...prev,
-        [lugarKey]: !prev[lugarKey]
-      };
-      patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'entregas', {
-        openLugares: next
-      });
-      return next;
-    });
-  };
+    return {
+      productos: items.length,
+      remitido,
+      entregado
+    };
+  }, [items, entregadoMap]);
 
   const syncEntregadoDraft = (nextMap) => {
     const hasChanges = computeHasEntregasChanges(nextMap, baseEntregadoMapRef.current);
-    patchSectionDraft(user?.email, hojaRuta?.Transaccionid, 'entregas', {
-      openLugares,
-      entregadoMap: nextMap,
-      items,
-      headerInfo,
-      dirty: hasChanges,
-      dirtySince: hasChanges ? Date.now() : null
-    });
+    patchSectionDraft(
+      user?.email,
+      hojaRuta?.Transaccionid,
+      'entregas',
+      {
+        lugar: selectedLugar,
+        entregadoMap: nextMap,
+        items,
+        headerInfo,
+        dirty: hasChanges,
+        dirtySince: hasChanges ? Date.now() : null
+      },
+      selectedLugar
+    );
   };
 
-  const handleEntregadoChange = (hojaRutaItemId, rawValue) => {
+  const handleEntregadoChange = (itemKey, rawValue) => {
     if (rawValue !== '' && !POSITIVE_INT_REGEX.test(rawValue)) {
       return;
     }
 
     const nextMap = {
       ...entregadoMap,
-      [hojaRutaItemId]: rawValue
+      [itemKey]: rawValue
     };
     setEntregadoMap(nextMap);
     syncEntregadoDraft(nextMap);
 
-    if (invalidIds[hojaRutaItemId] && POSITIVE_INT_REGEX.test(rawValue)) {
+    if (invalidIds[itemKey] && POSITIVE_INT_REGEX.test(rawValue)) {
       setInvalidIds((prev) => {
         const next = { ...prev };
-        delete next[hojaRutaItemId];
+        delete next[itemKey];
         return next;
       });
     }
   };
 
-  const handleStepEntregado = (hojaRutaItemId, delta) => {
-    const rawCurrent = String(entregadoMap[hojaRutaItemId] ?? '').trim();
+  const handleStepEntregado = (itemKey, delta) => {
+    const rawCurrent = String(entregadoMap[itemKey] ?? '').trim();
     const parsedCurrent = POSITIVE_INT_REGEX.test(rawCurrent) ? parseInt(rawCurrent, 10) : 0;
     const nextVal = Math.max(0, parsedCurrent + delta);
 
     const nextMap = {
       ...entregadoMap,
-      [hojaRutaItemId]: String(nextVal)
+      [itemKey]: String(nextVal)
     };
     setEntregadoMap(nextMap);
     syncEntregadoDraft(nextMap);
 
-    if (invalidIds[hojaRutaItemId]) {
+    if (invalidIds[itemKey]) {
       setInvalidIds((prev) => {
         const next = { ...prev };
-        delete next[hojaRutaItemId];
+        delete next[itemKey];
         return next;
       });
     }
@@ -279,130 +242,112 @@ export default function EntregasPage({ hojaRuta, onChangeHojaRuta }) {
     <div className="module-page page-transition">
       <HojaRutaHeader
         hojaRuta={headerInfo}
-        title="Logística DY - Entregas"
-        onChangeHojaRuta={onChangeHojaRuta}
+        selectedLugar={selectedLugar}
+        onChangeLugar={onChangeLugar}
       />
 
       {loading ? (
         <div className="hr-empty-state">
           <RefreshCw size={30} className="spin" style={{ color: 'var(--dy-blue)' }} />
-          <p>Cargando ítems a entregar...</p>
+          <p>Cargando productos consolidados...</p>
         </div>
       ) : items.length === 0 ? (
         <div className="hr-empty-state">
           <Inbox size={42} style={{ color: 'var(--text-muted)' }} />
-          <h3>Sin ítems para esta hoja de ruta</h3>
-          <p>No se encontraron productos pendientes de entrega en ITEMS_A_ENTREGAR.</p>
+          <h3>Sin productos en este lugar</h3>
+          <p>No se encontraron ítems asignados a {selectedLugar}.</p>
         </div>
       ) : (
-        <div className="entregas-groups">
-          {groupedData.map((lugarGroup) => {
-            const isOpen = Boolean(openLugares[lugarGroup.lugar]);
-            return (
-              <section key={lugarGroup.lugar} className="lugar-section">
-                <button
-                  type="button"
-                  className={`lugar-header-banner lugar-accordion-btn ${isOpen ? 'open' : ''}`}
-                  onClick={() => toggleLugar(lugarGroup.lugar)}
-                  aria-expanded={isOpen}
-                >
-                  <div className="lugar-accordion-title">
-                    <MapPin size={16} style={{ flexShrink: 0 }} />
-                    <span>Lugar de entrega: <strong>{lugarGroup.lugar}</strong></span>
-                  </div>
-                  <div className="lugar-accordion-meta">
-                    <span className="lugar-remitos-count">
-                      {lugarGroup.remitos.length} rem.
-                    </span>
-                    {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                  </div>
-                </button>
+        <>
+          <div className="entregas-summary-bar">
+            <span className="entregas-sum-pill">
+              <PackageCheck size={14} />
+              <strong>{totals.productos}</strong> {totals.productos === 1 ? 'producto' : 'productos'}
+            </span>
+            <span className="entregas-sum-pill">
+              Remitido: <strong>{totals.remitido}</strong>
+            </span>
+            <span className={`entregas-sum-pill ${totals.entregado !== totals.remitido ? 'diff' : 'ok'}`}>
+              Entregado: <strong>{totals.entregado}</strong>
+            </span>
+          </div>
 
-                {isOpen && (
-                  <div className="lugar-remitos-stack">
-                    {lugarGroup.remitos.map((remitoGroup) => (
-                      <div key={`${lugarGroup.lugar}-${remitoGroup.remito}`} className="remito-grid-card">
-                        <div className="remito-cut-header">
-                          <FileText size={15} />
-                          <span>
-                            Remito: <strong>{remitoGroup.remito}</strong>
-                            {remitoGroup.cliente ? ` / Cliente: ${remitoGroup.cliente}` : ''}
-                          </span>
-                        </div>
+          <div className="remito-grid-card entregas-consolidated-card">
+            <div className="entregas-table-wrap">
+              <table className="entregas-table">
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left' }}>Producto</th>
+                    <th style={{ width: '68px', textAlign: 'center' }}>Remitido</th>
+                    <th style={{ width: '124px', textAlign: 'center' }}>Entregado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((prod) => {
+                    const key = prod.Productoid ?? prod.Hojarutaitemid;
+                    const rawVal = String(entregadoMap[key] ?? '');
+                    const currentNum = POSITIVE_INT_REGEX.test(rawVal) ? parseInt(rawVal, 10) : 0;
+                    const isInvalid = Boolean(invalidIds[key]);
+                    const isModified =
+                      POSITIVE_INT_REGEX.test(rawVal) &&
+                      currentNum !== Number(prod.Remitido ?? 0);
 
-                        <div className="entregas-table-wrap">
-                          <table className="entregas-table">
-                            <thead>
-                              <tr>
-                                <th style={{ textAlign: 'left' }}>Producto</th>
-                                <th style={{ width: '64px', textAlign: 'center' }}>Remitido</th>
-                                <th style={{ width: '124px', textAlign: 'center' }}>Entregado</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {remitoGroup.productos.map((prod) => {
-                                const rawVal = String(entregadoMap[prod.Hojarutaitemid] ?? '');
-                                const currentNum = POSITIVE_INT_REGEX.test(rawVal) ? parseInt(rawVal, 10) : 0;
-                                const isInvalid = Boolean(invalidIds[prod.Hojarutaitemid]);
-                                const isModified =
-                                  POSITIVE_INT_REGEX.test(rawVal) &&
-                                  currentNum !== Number(prod.Remitido ?? 0);
+                    return (
+                      <tr key={key}>
+                        <td className="prod-name-cell">
+                          <div>{prod.Producto}</div>
+                          {Number(prod.cantidad_lineas || 0) > 1 && (
+                            <span className="prod-lines-sub">
+                              Acumulado de {prod.cantidad_lineas} líneas
+                            </span>
+                          )}
+                        </td>
+                        <td className="remitido-cell">{prod.Remitido}</td>
+                        <td className="entregado-cell">
+                          <div
+                            className={`entregado-stepper ${isModified ? 'modified' : ''} ${isInvalid ? 'invalid' : ''}`}
+                          >
+                            <button
+                              type="button"
+                              className="entregado-step-btn"
+                              aria-label={`Disminuir entregado de ${prod.Producto}`}
+                              disabled={currentNum <= 0 && rawVal !== ''}
+                              onClick={() => handleStepEntregado(key, -1)}
+                            >
+                              <Minus size={14} />
+                            </button>
 
-                                return (
-                                  <tr key={prod.Hojarutaitemid}>
-                                    <td className="prod-name-cell">{prod.Producto}</td>
-                                    <td className="remitido-cell">{prod.Remitido}</td>
-                                    <td className="entregado-cell">
-                                      <div
-                                        className={`entregado-stepper ${isModified ? 'modified' : ''} ${isInvalid ? 'invalid' : ''}`}
-                                      >
-                                        <button
-                                          type="button"
-                                          className="entregado-step-btn"
-                                          aria-label={`Disminuir entregado de ${prod.Producto}`}
-                                          disabled={currentNum <= 0 && rawVal !== ''}
-                                          onClick={() => handleStepEntregado(prod.Hojarutaitemid, -1)}
-                                        >
-                                          <Minus size={14} />
-                                        </button>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              aria-label={`Cantidad entregada de ${prod.Producto}`}
+                              className={`entregado-input ${isModified ? 'modified' : ''} ${isInvalid ? 'invalid' : ''}`}
+                              value={rawVal}
+                              onFocus={handleFocusSelectAll}
+                              onKeyDown={handleKeyDownNumeric}
+                              onChange={(e) => handleEntregadoChange(key, e.target.value)}
+                              placeholder="0"
+                            />
 
-                                        <input
-                                          type="text"
-                                          inputMode="numeric"
-                                          pattern="[0-9]*"
-                                          aria-label={`Cantidad entregada de ${prod.Producto}`}
-                                          className={`entregado-input ${isModified ? 'modified' : ''} ${isInvalid ? 'invalid' : ''}`}
-                                          value={rawVal}
-                                          onFocus={handleFocusSelectAll}
-                                          onKeyDown={handleKeyDownNumeric}
-                                          onChange={(e) => handleEntregadoChange(prod.Hojarutaitemid, e.target.value)}
-                                          placeholder="0"
-                                        />
-
-                                        <button
-                                          type="button"
-                                          className="entregado-step-btn"
-                                          aria-label={`Incrementar entregado de ${prod.Producto}`}
-                                          onClick={() => handleStepEntregado(prod.Hojarutaitemid, 1)}
-                                        >
-                                          <Plus size={14} />
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-            );
-          })}
-        </div>
+                            <button
+                              type="button"
+                              className="entregado-step-btn"
+                              aria-label={`Incrementar entregado de ${prod.Producto}`}
+                              onClick={() => handleStepEntregado(key, 1)}
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
 
       <AlertModal

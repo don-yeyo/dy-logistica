@@ -12,6 +12,14 @@ const VALID_EJEMPLARES = [
   'RECEPCION_VALORIZADA',
   'OTRO'
 ];
+const REMITO_EJEMPLARES_ESPERADOS_DEFAULT = Math.max(
+  parseInt(process.env.REMITO_EJEMPLARES_ESPERADOS_DEFAULT || '2', 10) || 2,
+  1
+);
+const REMITOS_LUGAR_DIAS_ATRAS = Math.max(
+  parseInt(process.env.REMITOS_LUGAR_DIAS_ATRAS || '30', 10) || 30,
+  1
+);
 
 function isStageIdTypeMismatch(err) {
   const msg = String(err?.message || '');
@@ -89,7 +97,7 @@ function computeConsolidatedStatus(ejemplares = [], row = {}) {
  * Mapea una fila combinada de Gestion_Logistica (REMITO + ETAPA + HOJA_DE_RUTA + REMITOS_FIRMADOS + APP_REMITO_EJEMPLARES)
  * al contrato de remito utilizado por el frontend mobile.
  */
-function mapRemitoRow(row, rawEjemplares = []) {
+function mapRemitoRow(row, rawEjemplares = [], options = {}) {
   const ejemplares = (rawEjemplares || []).map((e) => ({
     id: e.id || null,
     ejemplar: e.ejemplar,
@@ -102,6 +110,16 @@ function mapRemitoRow(row, rawEjemplares = []) {
     foto_nombre_archivo: e.foto_nombre_archivo || null,
     fecha_hora: e.fecha_hora || null
   }));
+
+  const ejemplaresRegistrados = ejemplares.length;
+  const ejemplaresEsperados = REMITO_EJEMPLARES_ESPERADOS_DEFAULT;
+  const pendienteEjemplares = ejemplaresRegistrados < ejemplaresEsperados;
+  const esViajeActual =
+    options.currentTxId !== undefined && options.currentTxId !== null
+      ? row.en_viaje_actual !== undefined
+        ? Boolean(row.en_viaje_actual)
+        : Number(row.HojaRutaTransaccionId) === Number(options.currentTxId)
+      : true;
 
   const estadoFirma = computeConsolidatedStatus(ejemplares, row);
   const hasCliente = estadoFirma === 'FIRMADO_CLIENTE' || estadoFirma === 'FIRMADO_AMBOS';
@@ -134,6 +152,10 @@ function mapRemitoRow(row, rawEjemplares = []) {
     id_etapa: row.Id_etapa || null,
     ejemplar: ejemplares[0]?.ejemplar || 'ORIGINAL',
     ejemplares,
+    ejemplares_registrados: ejemplaresRegistrados,
+    ejemplares_esperados: ejemplaresEsperados,
+    pendiente_ejemplares: pendienteEjemplares,
+    es_viaje_actual: esViajeActual,
     estado_firma: estadoFirma,
     tiene_firma_cliente: hasCliente,
     tiene_firma_intermediario: hasInterm,
@@ -282,7 +304,8 @@ async function buscarRemito(req, res) {
 }
 
 /**
- * Obtener los remitos de la hoja de ruta seleccionada o de las últimas hojas del chofer.
+ * Obtener remitos filtrados por Lugar de Entrega (todos los del viaje actual + viajes anteriores pendientes)
+ * o por hoja de ruta / últimos viajes en modo legacy.
  */
 async function getMisRemitos(req, res) {
   try {
@@ -292,12 +315,24 @@ async function getMisRemitos(req, res) {
     const limit = Number.isInteger(limitN) && limitN > 0 ? limitN : 4;
     const selectedRoute = req.query.hoja_ruta;
     const selectedTxId = req.query.transaccion_id ? Number(req.query.transaccion_id) : null;
+    const cleanLugar = String(req.query.lugar || '').trim();
     const searchQuery = (req.query.q || '').trim();
 
     const whereClauses = ['hr.Usr_estadohojaruta = 1'];
     const params = [];
 
-    if (selectedTxId && Number.isInteger(selectedTxId)) {
+    if (cleanLugar) {
+      whereClauses.push('TRIM(etapa.Direccionentrega) COLLATE utf8mb4_0900_ai_ci = ? COLLATE utf8mb4_0900_ai_ci');
+      params.push(cleanLugar);
+
+      if (selectedTxId && Number.isInteger(selectedTxId)) {
+        whereClauses.push('(hr.Transaccionid = ? OR DATE(hr.Fecha) >= DATE_SUB(CURDATE(), INTERVAL ? DAY))');
+        params.push(selectedTxId, REMITOS_LUGAR_DIAS_ATRAS);
+      } else {
+        whereClauses.push('DATE(hr.Fecha) >= DATE_SUB(CURDATE(), INTERVAL ? DAY)');
+        params.push(REMITOS_LUGAR_DIAS_ATRAS);
+      }
+    } else if (selectedTxId && Number.isInteger(selectedTxId)) {
       whereClauses.push('hr.Transaccionid = ?');
       params.push(selectedTxId);
     } else if (selectedRoute && selectedRoute !== 'TODAS') {
@@ -347,6 +382,11 @@ async function getMisRemitos(req, res) {
       params.push(pattern, pattern, pattern, pattern, pattern, pattern);
     }
 
+    const selectCurrentFlag = selectedTxId
+      ? 'MAX(CASE WHEN hr.Transaccionid = ? THEN 1 ELSE 0 END) AS en_viaje_actual,'
+      : '1 AS en_viaje_actual,';
+    const sqlParams = selectedTxId ? [selectedTxId, ...params] : params;
+
     const sql = `
       SELECT
         r.Id_transaccion_remito,
@@ -358,9 +398,10 @@ async function getMisRemitos(req, res) {
         cl.Codigo AS ClienteCodigo,
         cl.Nombre AS ClienteNombre,
         MAX(etapa.Id_etapa) AS Id_etapa,
-        MAX(etapa.Direccionentrega) AS Direccionentrega,
+        MAX(TRIM(etapa.Direccionentrega)) AS Direccionentrega,
         MAX(hr.Transaccionid) AS HojaRutaTransaccionId,
         MAX(hr.Numerocomprobante) AS Hoja_de_ruta,
+        ${selectCurrentFlag}
         MAX(rf.Firmado_cliente) AS Firmado_cliente,
         MAX(rf.Firmado_distribuidor) AS Firmado_distribuidor,
         MAX(rf.Url_imagen) AS Url_imagen,
@@ -377,14 +418,25 @@ async function getMisRemitos(req, res) {
       ORDER BY r.Fecha DESC, r.Id_transaccion_remito DESC
     `;
 
-    const [rows] = await pool.query(sql, params);
+    const [rows] = await pool.query(sql, sqlParams);
     const ejMap = await fetchEjemplaresMap((rows || []).map((r) => r.Id_transaccion_remito));
-    const mappedRemitos = (rows || []).map((r) => mapRemitoRow(r, ejMap.get(r.Id_transaccion_remito) || []));
+    let mappedRemitos = (rows || []).map((r) =>
+      mapRemitoRow(r, ejMap.get(r.Id_transaccion_remito) || [], { currentTxId: selectedTxId })
+    );
+
+    if (cleanLugar) {
+      mappedRemitos = mappedRemitos.filter(
+        (rem) => rem.es_viaje_actual || rem.pendiente_ejemplares
+      );
+    }
 
     mappedRemitos.sort((a, b) => {
-      const aPend = a.estado_firma === 'PENDIENTE' ? 0 : 1;
-      const bPend = b.estado_firma === 'PENDIENTE' ? 0 : 1;
+      const aPend = a.pendiente_ejemplares ? 0 : 1;
+      const bPend = b.pendiente_ejemplares ? 0 : 1;
       if (aPend !== bPend) return aPend - bPend;
+      const aCur = a.es_viaje_actual ? 0 : 1;
+      const bCur = b.es_viaje_actual ? 0 : 1;
+      if (aCur !== bCur) return aCur - bCur;
       return b.id - a.id;
     });
 
@@ -393,6 +445,8 @@ async function getMisRemitos(req, res) {
     return res.json({
       ok: true,
       total: mappedRemitos.length,
+      lugar: cleanLugar || null,
+      ejemplares_esperados_default: REMITO_EJEMPLARES_ESPERADOS_DEFAULT,
       hojas_ruta_disponibles: rutasDisponibles,
       remitos: mappedRemitos
     });

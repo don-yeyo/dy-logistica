@@ -1,62 +1,78 @@
 import React from 'react';
-import { Home, PackageCheck, PackageMinus, Boxes, FileSignature } from 'lucide-react';
+import { Home, MapPin, PackageCheck, PackageMinus, Boxes, FileSignature } from 'lucide-react';
 
 /**
- * Barra inferior operativa (Sección 4.2):
- * Inicio (azul), Entregas (verde), Devoluciones (naranja), Cajones (violeta), Remitos (cian).
- * Muestra un puntito lleno cuando la sección tiene borradores locales sin confirmar en BD.
+ * Barra inferior operativa de 6 pasos encadenados:
+ * Inicio -> Lugares -> Entregas -> Devoluciones -> Cajones y Pallets -> Remitos.
  */
-export default function BottomNav({ currentScreen, onNavigate, hasSelectedHojaRuta, dirtyModules = {} }) {
+export default function BottomNav({
+  currentScreen,
+  onNavigate,
+  hasSelectedHojaRuta,
+  hasSelectedLugar,
+  dirtyModules = {}
+}) {
   const navItems = [
     {
       id: 'hojas_ruta',
       label: 'Inicio',
       colorClass: 'mod-inicio',
-      icon: <Home size={20} />,
+      icon: <Home size={19} />,
       isActive: currentScreen === 'hojas_ruta',
-      alwaysEnabled: true
+      isEnabled: true
+    },
+    {
+      id: 'lugares',
+      label: 'Lugares',
+      colorClass: 'mod-lugares',
+      icon: <MapPin size={19} />,
+      isActive: currentScreen === 'lugares',
+      isEnabled: Boolean(hasSelectedHojaRuta)
     },
     {
       id: 'entregas',
       label: 'Entregas',
       colorClass: 'mod-entregas',
-      icon: <PackageCheck size={20} />,
-      isActive: currentScreen === 'entregas'
+      icon: <PackageCheck size={19} />,
+      isActive: currentScreen === 'entregas',
+      isEnabled: Boolean(hasSelectedHojaRuta && hasSelectedLugar)
     },
     {
       id: 'devoluciones',
-      label: 'Devoluciones',
+      label: 'Devol.',
       colorClass: 'mod-devoluciones',
-      icon: <PackageMinus size={20} />,
-      isActive: currentScreen === 'devoluciones'
+      icon: <PackageMinus size={19} />,
+      isActive: currentScreen === 'devoluciones',
+      isEnabled: Boolean(hasSelectedHojaRuta && hasSelectedLugar)
     },
     {
       id: 'cajones',
       label: 'Cajones',
       colorClass: 'mod-cajones',
-      icon: <Boxes size={20} />,
-      isActive: currentScreen === 'cajones'
+      icon: <Boxes size={19} />,
+      isActive: currentScreen === 'cajones',
+      isEnabled: Boolean(hasSelectedHojaRuta && hasSelectedLugar)
     },
     {
       id: 'remitos',
       label: 'Remitos',
       colorClass: 'mod-remitos',
-      icon: <FileSignature size={20} />,
-      isActive: currentScreen === 'remitos' || currentScreen === 'scan'
+      icon: <FileSignature size={19} />,
+      isActive: currentScreen === 'remitos' || currentScreen === 'scan',
+      isEnabled: Boolean(hasSelectedHojaRuta && hasSelectedLugar)
     }
   ];
 
   return (
     <nav className="bottom-nav glass">
-      <div className="bottom-nav-inner">
+      <div className="bottom-nav-inner bottom-nav-6">
         {navItems.map((item) => {
-          const isEnabled = Boolean(item.alwaysEnabled || hasSelectedHojaRuta);
           const hasDirty = Boolean(dirtyModules[item.id]);
           return (
             <button
               key={item.id}
               type="button"
-              className={`bottom-nav-btn ${item.colorClass} ${item.isActive ? 'active' : ''} ${isEnabled ? 'ready' : 'needs-hr'}`}
+              className={`bottom-nav-btn ${item.colorClass} ${item.isActive ? 'active' : ''} ${item.isEnabled ? 'ready' : 'needs-hr'}`}
               onClick={() => onNavigate(item.id)}
               title={hasDirty ? `${item.label} (cambios sin confirmar)` : item.label}
             >

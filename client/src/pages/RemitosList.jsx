@@ -7,31 +7,32 @@ import SearchBar from '../components/SearchBar';
 import RemitoCard from '../components/RemitoCard';
 import { RefreshCw, Inbox, CheckCircle2, Clock, ScanLine } from 'lucide-react';
 
-export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, onSelectRemito }) {
+export default function RemitosList({
+  hojaRuta,
+  selectedLugar,
+  onChangeLugar,
+  onOpenScan,
+  onSelectRemito
+}) {
   const { user } = useAuth();
   const [remitos, setRemitos] = useState([]);
-  const [selectedRoute, setSelectedRoute] = useState(hojaRuta?.Hoja_de_ruta || 'TODAS');
+  const [tripFilter, setTripFilter] = useState('TODOS');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (hojaRuta?.Hoja_de_ruta) {
-      setSelectedRoute(hojaRuta.Hoja_de_ruta);
-    }
-  }, [hojaRuta]);
-
-  // Cargar remitos desde API o Caché Offline
   const loadData = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
       else setRefreshing(true);
 
-      const queryParams = { n_viajes: 4 };
+      const queryParams = {};
       if (hojaRuta?.Transaccionid) {
         queryParams.transaccion_id = hojaRuta.Transaccionid;
       }
-      if (hojaRuta?.Hoja_de_ruta) {
+      if (selectedLugar) {
+        queryParams.lugar = selectedLugar;
+      } else if (hojaRuta?.Hoja_de_ruta) {
         queryParams.hoja_ruta = hojaRuta.Hoja_de_ruta;
       }
 
@@ -43,21 +44,34 @@ export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, on
           await cacheRemitos(list);
         }
       } else {
-        console.log('[RemitosList] Cargando remitos desde caché local offline...');
         const cached = await getCachedRemitos();
-        setRemitos(cached);
+        const filteredCached = selectedLugar
+          ? cached.filter(
+              (r) =>
+                String(r.finne_domicilio || '').trim().toLowerCase() ===
+                String(selectedLugar).trim().toLowerCase()
+            )
+          : cached;
+        setRemitos(filteredCached);
       }
     } catch (error) {
       console.warn('[RemitosList] Error al cargar remitos:', error);
       const cached = await getCachedRemitos();
       if (cached.length > 0) {
-        setRemitos(cached);
+        const filteredCached = selectedLugar
+          ? cached.filter(
+              (r) =>
+                String(r.finne_domicilio || '').trim().toLowerCase() ===
+                String(selectedLugar).trim().toLowerCase()
+            )
+          : cached;
+        setRemitos(filteredCached);
       }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [hojaRuta]);
+  }, [hojaRuta, selectedLugar]);
 
   useEffect(() => {
     loadData();
@@ -65,11 +79,8 @@ export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, on
 
   useEffect(() => {
     const onExternalSaved = (e) => {
-      if (
-        Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid) &&
-        Array.isArray(e.detail?.sections) &&
-        e.detail.sections.includes('remitos')
-      ) {
+      const sameTx = Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid);
+      if (sameTx && Array.isArray(e.detail?.sections) && e.detail.sections.includes('remitos')) {
         loadData(true);
       }
     };
@@ -77,29 +88,21 @@ export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, on
     return () => window.removeEventListener('dy-draft-saved', onExternalSaved);
   }, [hojaRuta?.Transaccionid, loadData]);
 
-  // Lista de hojas de ruta únicas para los chips
-  const routeOptions = useMemo(() => {
-    const routesSet = new Set();
-    if (hojaRuta?.Hoja_de_ruta) {
-      routesSet.add(hojaRuta.Hoja_de_ruta);
-    }
-    remitos.forEach((r) => {
-      if (r.nro_hoja_ruta) routesSet.add(r.nro_hoja_ruta);
-    });
-    return Array.from(routesSet);
-  }, [remitos, hojaRuta]);
+  const tripCounts = useMemo(() => {
+    const actual = remitos.filter((r) => r.es_viaje_actual !== false).length;
+    const anteriores = remitos.filter((r) => r.es_viaje_actual === false).length;
+    return { todos: remitos.length, actual, anteriores };
+  }, [remitos]);
 
-  // Filtrado predictivo instantáneo por texto y hoja de ruta
   const filteredRemitos = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
 
     return remitos.filter((remito) => {
-      if (selectedRoute !== 'TODAS') {
-        const normRoute = String(selectedRoute).replace(/^HR-/i, '');
-        const normRemito = String(remito.nro_hoja_ruta || '').replace(/^HR-/i, '');
-        if (normRemito !== normRoute) {
-          return false;
-        }
+      if (tripFilter === 'ACTUAL' && remito.es_viaje_actual === false) {
+        return false;
+      }
+      if (tripFilter === 'ANTERIORES' && remito.es_viaje_actual !== false) {
+        return false;
       }
 
       if (!q) return true;
@@ -118,12 +121,13 @@ export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, on
         hr.includes(q)
       );
     });
-  }, [remitos, selectedRoute, searchQuery]);
+  }, [remitos, tripFilter, searchQuery]);
 
-  // Contadores rápidos
   const stats = useMemo(() => {
     const total = filteredRemitos.length;
-    const pendientes = filteredRemitos.filter((r) => r.estado_firma === 'PENDIENTE').length;
+    const pendientes = filteredRemitos.filter((r) =>
+      r.pendiente_ejemplares !== undefined ? r.pendiente_ejemplares : r.estado_firma === 'PENDIENTE'
+    ).length;
     const completados = total - pendientes;
     return { total, pendientes, completados };
   }, [filteredRemitos]);
@@ -133,12 +137,11 @@ export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, on
       {hojaRuta && (
         <HojaRutaHeader
           hojaRuta={hojaRuta}
-          title="Logística DY - Remitos"
-          onChangeHojaRuta={onChangeHojaRuta}
+          selectedLugar={selectedLugar}
+          onChangeLugar={onChangeLugar}
         />
       )}
 
-      {/* Botón Directo de Escáner 1D */}
       {onOpenScan && (
         <button
           type="button"
@@ -146,47 +149,45 @@ export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, on
           onClick={onOpenScan}
         >
           <ScanLine size={20} />
-          <span>Encontrar Remito por Código de Barras</span>
+          <span>Escanear Código de Barras 1D del Remito</span>
         </button>
       )}
 
-      {/* Buscador Predictivo */}
       <SearchBar
         value={searchQuery}
         onChange={setSearchQuery}
-        placeholder="🔍 Escribe comprobante, cliente o dirección..."
+        placeholder="🔍 Escribe comprobante, cliente o Nro. HR..."
       />
 
-      {/* Selector de Viajes / Hojas de Ruta (Chips horizontales) */}
-      {routeOptions.length > 1 && (
+      {tripCounts.anteriores > 0 && (
         <div className="routes-chips-container">
           <button
             type="button"
-            className={`route-chip ${selectedRoute === 'TODAS' ? 'active' : ''}`}
-            onClick={() => setSelectedRoute('TODAS')}
+            className={`route-chip ${tripFilter === 'TODOS' ? 'active' : ''}`}
+            onClick={() => setTripFilter('TODOS')}
           >
             <span>Todos</span>
-            <span className="route-chip-badge">{remitos.length}</span>
+            <span className="route-chip-badge">{tripCounts.todos}</span>
           </button>
-
-          {routeOptions.map((route) => {
-            const count = remitos.filter((r) => r.nro_hoja_ruta === route).length;
-            return (
-              <button
-                key={route}
-                type="button"
-                className={`route-chip ${selectedRoute === route ? 'active' : ''}`}
-                onClick={() => setSelectedRoute(route)}
-              >
-                <span>{route}</span>
-                <span className="route-chip-badge">{count}</span>
-              </button>
-            );
-          })}
+          <button
+            type="button"
+            className={`route-chip ${tripFilter === 'ACTUAL' ? 'active' : ''}`}
+            onClick={() => setTripFilter('ACTUAL')}
+          >
+            <span>Viaje actual</span>
+            <span className="route-chip-badge">{tripCounts.actual}</span>
+          </button>
+          <button
+            type="button"
+            className={`route-chip ${tripFilter === 'ANTERIORES' ? 'active' : ''}`}
+            onClick={() => setTripFilter('ANTERIORES')}
+          >
+            <span>Viajes anteriores pendientes</span>
+            <span className="route-chip-badge">{tripCounts.anteriores}</span>
+          </button>
         </div>
       )}
 
-      {/* Barra de Estadísticas y Refresco */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', fontSize: '0.85rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#b45309', fontWeight: 700 }}>
@@ -195,7 +196,7 @@ export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, on
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#047857', fontWeight: 700 }}>
             <CheckCircle2 size={15} />
-            {stats.completados} Listos
+            {stats.completados} Completos
           </span>
         </div>
 
@@ -210,20 +211,19 @@ export default function RemitosList({ hojaRuta, onChangeHojaRuta, onOpenScan, on
         </button>
       </div>
 
-      {/* Listado de Remitos */}
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '50px 0', gap: '12px', color: 'var(--text-muted)' }}>
           <RefreshCw size={32} className="spin" style={{ color: 'var(--dy-blue)' }} />
-          <p style={{ fontWeight: 600 }}>Cargando remitos de la hoja de ruta...</p>
+          <p style={{ fontWeight: 600 }}>Cargando remitos del lugar...</p>
         </div>
       ) : filteredRemitos.length === 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '50px 20px', background: 'var(--surface)', borderRadius: 'var(--radius-lg)', textAlign: 'center', gap: '12px' }}>
           <Inbox size={44} style={{ color: 'var(--text-muted)' }} />
-          <h3 style={{ fontSize: '1.05rem', color: 'var(--text-main)', margin: 0 }}>No se encontraron remitos</h3>
+          <h3 style={{ fontSize: '1.05rem', color: 'var(--text-main)', margin: 0 }}>Sin remitos pendientes</h3>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '280px', margin: 0 }}>
             {searchQuery
               ? `No hay remitos que coincidan con "${searchQuery}".`
-              : 'No hay remitos asignados en la hoja de ruta seleccionada.'}
+              : `No hay remitos del viaje actual ni pendientes anteriores para ${selectedLugar || 'este lugar'}.`}
           </p>
           {searchQuery && (
             <button

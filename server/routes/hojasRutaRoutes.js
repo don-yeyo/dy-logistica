@@ -9,6 +9,9 @@ router.use(authMiddleware, requireRole('chofer'));
 // Sección 4.2: Listado de hojas de ruta desde HOJAS_DE_RUTA_A_ENTREGAR filtrando EMail
 router.get('/', hojasRutaController.getHojasDeRuta);
 
+// Paso 2 del wizard: Listado de lugares de entrega únicos de la hoja de ruta
+router.get('/:transaccionId/lugares', hojasRutaController.getLugaresByTransaccion);
+
 // Sección 4.2.1: Confirmación de descarga (Entregas)
 router.get('/:transaccionId/entregas', hojasRutaController.getEntregasByTransaccion);
 router.put('/:transaccionId/entregas', hojasRutaController.guardarEntregas);

@@ -8,6 +8,7 @@ import HelpChatModal from './components/HelpChatModal';
 import AlertModal from './components/AlertModal';
 import OfflineBanner from './components/OfflineBanner';
 import HojasRutaPage from './pages/HojasRutaPage';
+import LugaresPage from './pages/LugaresPage';
 import EntregasPage from './pages/EntregasPage';
 import DevolucionesPage from './pages/DevolucionesPage';
 import CajonesPage from './pages/CajonesPage';
@@ -35,7 +36,7 @@ const UNSAVED_REMINDER_SECONDS = Math.max(
 const SECTION_LABELS = {
   entregas: 'Entregas',
   devoluciones: 'Devoluciones',
-  cajones: 'Cajones',
+  cajones: 'Cajones y Pallets',
   remitos: 'Remitos'
 };
 
@@ -50,6 +51,13 @@ export default function App() {
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
+    }
+  });
+  const [selectedLugar, setSelectedLugar] = useState(() => {
+    try {
+      return localStorage.getItem('dy_selected_lugar') || '';
+    } catch {
+      return '';
     }
   });
   const [selectedRemito, setSelectedRemito] = useState(null);
@@ -80,8 +88,8 @@ export default function App() {
   const [adminDetailTxId, setAdminDetailTxId] = useState(null);
 
   const syncDirtySummary = useCallback(() => {
-    if (user?.rol === 'chofer' && user?.email && selectedHojaRuta?.Transaccionid) {
-      setDirtySummary(getDirtySummary(user.email, selectedHojaRuta.Transaccionid));
+    if (user?.rol === 'chofer' && user?.email && selectedHojaRuta?.Transaccionid && selectedLugar) {
+      setDirtySummary(getDirtySummary(user.email, selectedHojaRuta.Transaccionid, selectedLugar));
     } else {
       setDirtySummary({
         entregas: false,
@@ -94,11 +102,12 @@ export default function App() {
         lastDirtyAt: null
       });
     }
-  }, [user?.rol, user?.email, selectedHojaRuta?.Transaccionid]);
+  }, [user?.rol, user?.email, selectedHojaRuta?.Transaccionid, selectedLugar]);
 
   useEffect(() => {
     if (!user) {
       setSelectedHojaRuta(null);
+      setSelectedLugar('');
       setSelectedRemito(null);
       setCurrentScreen('hojas_ruta');
       setAdminTab('dashboard');
@@ -180,21 +189,51 @@ export default function App() {
   }, [reminderOpen, confirmingAll]);
 
   const handleSelectHojaRuta = (hr) => {
+    const isNewHr = Number(hr?.Transaccionid) !== Number(selectedHojaRuta?.Transaccionid);
     setSelectedHojaRuta(hr);
+    setSelectedRemito(null);
     setReminderOpen(false);
+
     try {
       if (hr) {
         localStorage.setItem('dy_selected_hoja_ruta', JSON.stringify(hr));
       } else {
         localStorage.removeItem('dy_selected_hoja_ruta');
       }
+      if (!hr || isNewHr) {
+        setSelectedLugar('');
+        localStorage.removeItem('dy_selected_lugar');
+      }
     } catch {
       // Ignorar errores de cuota de almacenamiento
+    }
+
+    if (hr) {
+      setCurrentScreen('lugares');
+    }
+  };
+
+  const handleSelectLugar = (lugarStr) => {
+    const cleanLugar = String(lugarStr || '').trim();
+    setSelectedLugar(cleanLugar);
+    setSelectedRemito(null);
+    setReminderOpen(false);
+    try {
+      if (cleanLugar) {
+        localStorage.setItem('dy_selected_lugar', cleanLugar);
+      } else {
+        localStorage.removeItem('dy_selected_lugar');
+      }
+    } catch {
+      // Ignorar errores de cuota
+    }
+    if (cleanLugar) {
+      setCurrentScreen('entregas');
     }
   };
 
   const handleConfirmAllPending = async () => {
-    if (!user?.email || !selectedHojaRuta?.Transaccionid) return;
+    if (!user?.email || !selectedHojaRuta?.Transaccionid || !selectedLugar) return;
     const sectionsToSave = [...dirtySummary.dirtySections];
     if (
       sectionsToSave.length === 0 &&
@@ -221,6 +260,7 @@ export default function App() {
           const res = await saveDraftSection(sec, {
             email: user.email,
             hojaRuta: selectedHojaRuta,
+            lugar: selectedLugar,
             refreshPendingCount
           });
           if (res?.offlineQueued) {
@@ -296,15 +336,24 @@ export default function App() {
     );
   }
 
-  // App Mobile PWA exclusiva para Choferes
+  // App Mobile PWA exclusiva para Choferes (flujo encadenado: Inicio -> Lugares -> Entregas/Devol/Cajones/Remitos)
   const handleNavigate = (screenId) => {
-    const requiresHojaRuta = ['entregas', 'devoluciones', 'cajones', 'remitos', 'scan'].includes(screenId);
+    const requiresHojaRuta = ['lugares', 'entregas', 'devoluciones', 'cajones', 'remitos', 'scan'].includes(screenId);
+    const requiresLugar = ['entregas', 'devoluciones', 'cajones', 'remitos', 'scan'].includes(screenId);
 
     if (requiresHojaRuta && !selectedHojaRuta) {
       setNavWarning(
-        'Debe seleccionar previamente una Hoja de Ruta del listado antes de acceder a Entregas, Devoluciones, Cajones o Remitos.'
+        'Debe seleccionar previamente una Hoja de Ruta del listado antes de continuar.'
       );
       setCurrentScreen('hojas_ruta');
+      return;
+    }
+
+    if (requiresLugar && !selectedLugar) {
+      setNavWarning(
+        'Debe seleccionar primero un Lugar de Entrega de la Hoja de Ruta para habilitar las operaciones.'
+      );
+      setCurrentScreen('lugares');
       return;
     }
 
@@ -314,6 +363,7 @@ export default function App() {
 
   const showGlobalSaveFab =
     Boolean(selectedHojaRuta?.Transaccionid) &&
+    Boolean(selectedLugar) &&
     (dirtySummary.anyDirty || (currentScreen === 'entregas' && !selectedRemito && dirtySummary.entregasUnconfirmed));
 
   return (
@@ -330,6 +380,7 @@ export default function App() {
         onOpenHelp={() => setIsHelpOpen(true)}
         currentScreen={currentScreen}
         selectedHojaRuta={selectedHojaRuta}
+        selectedLugar={selectedLugar}
       />
 
       <OfflineBanner />
@@ -340,6 +391,7 @@ export default function App() {
             <RemitoDetail
               remito={selectedRemito}
               hojaRuta={selectedHojaRuta}
+              selectedLugar={selectedLugar}
               onBack={() => setSelectedRemito(null)}
               onSaved={() => {
                 setSelectedRemito(null);
@@ -347,23 +399,33 @@ export default function App() {
               }}
             />
           </div>
+        ) : currentScreen === 'lugares' ? (
+          <LugaresPage
+            key={`lugares-${selectedHojaRuta?.Transaccionid}`}
+            hojaRuta={selectedHojaRuta}
+            selectedLugar={selectedLugar}
+            onSelectLugar={handleSelectLugar}
+          />
         ) : currentScreen === 'entregas' ? (
           <EntregasPage
-            key={`entregas-${selectedHojaRuta?.Transaccionid}`}
+            key={`entregas-${selectedHojaRuta?.Transaccionid}-${selectedLugar}`}
             hojaRuta={selectedHojaRuta}
-            onChangeHojaRuta={() => handleNavigate('hojas_ruta')}
+            selectedLugar={selectedLugar}
+            onChangeLugar={() => handleNavigate('lugares')}
           />
         ) : currentScreen === 'devoluciones' ? (
           <DevolucionesPage
-            key={`devoluciones-${selectedHojaRuta?.Transaccionid}`}
+            key={`devoluciones-${selectedHojaRuta?.Transaccionid}-${selectedLugar}`}
             hojaRuta={selectedHojaRuta}
-            onChangeHojaRuta={() => handleNavigate('hojas_ruta')}
+            selectedLugar={selectedLugar}
+            onChangeLugar={() => handleNavigate('lugares')}
           />
         ) : currentScreen === 'cajones' ? (
           <CajonesPage
-            key={`cajones-${selectedHojaRuta?.Transaccionid}`}
+            key={`cajones-${selectedHojaRuta?.Transaccionid}-${selectedLugar}`}
             hojaRuta={selectedHojaRuta}
-            onChangeHojaRuta={() => handleNavigate('hojas_ruta')}
+            selectedLugar={selectedLugar}
+            onChangeLugar={() => handleNavigate('lugares')}
           />
         ) : currentScreen === 'scan' ? (
           <div key="scan" className="page-transition">
@@ -383,10 +445,11 @@ export default function App() {
             />
           </div>
         ) : currentScreen === 'remitos' ? (
-          <div key={`remitos-${selectedHojaRuta?.Transaccionid}`} className="page-transition">
+          <div key={`remitos-${selectedHojaRuta?.Transaccionid}-${selectedLugar}`} className="page-transition">
             <RemitosList
               hojaRuta={selectedHojaRuta}
-              onChangeHojaRuta={() => handleNavigate('hojas_ruta')}
+              selectedLugar={selectedLugar}
+              onChangeLugar={() => handleNavigate('lugares')}
               onOpenScan={() => handleNavigate('scan')}
               onSelectRemito={(remito) => setSelectedRemito(remito)}
             />
@@ -413,6 +476,7 @@ export default function App() {
           currentScreen={currentScreen}
           onNavigate={handleNavigate}
           hasSelectedHojaRuta={Boolean(selectedHojaRuta)}
+          hasSelectedLugar={Boolean(selectedLugar)}
           dirtyModules={dirtySummary}
         />
       )}

@@ -59,50 +59,73 @@ export async function fetchHojasDeRuta(params = {}) {
 }
 
 /**
- * Sección 4.2.1: Obtener ítems a entregar (ITEMS_A_ENTREGAR) de una hoja de ruta
+ * Paso 2 del wizard: Obtener lugares de entrega únicos de una hoja de ruta
  */
-export async function fetchEntregasHojaRuta(transaccionId) {
-  const { data } = await api.get(`/hojas-ruta/${transaccionId}/entregas`);
+export async function fetchLugaresHojaRuta(transaccionId) {
+  const { data } = await api.get(`/hojas-ruta/${transaccionId}/lugares`);
   return data;
 }
 
 /**
- * Sección 4.2.1: Guardar confirmación de descarga (HOJA_RUTA_ITEM_REMITO)
+ * Sección 4.2.1: Obtener ítems a entregar (consolidados por producto si se indica lugar)
  */
-export async function saveEntregasHojaRuta(transaccionId, items) {
-  const { data } = await api.put(`/hojas-ruta/${transaccionId}/entregas`, { items });
+export async function fetchEntregasHojaRuta(transaccionId, lugar = '') {
+  const { data } = await api.get(`/hojas-ruta/${transaccionId}/entregas`, {
+    params: lugar ? { lugar } : {}
+  });
+  return data;
+}
+
+/**
+ * Sección 4.2.1: Guardar confirmación de descarga
+ */
+export async function saveEntregasHojaRuta(transaccionId, items, lugar = null) {
+  const { data } = await api.put(`/hojas-ruta/${transaccionId}/entregas`, {
+    items,
+    ...(lugar ? { lugar } : {})
+  });
   return data;
 }
 
 /**
  * Sección 4.2.2: Obtener devoluciones (HOJA_DE_RUTA_DEVOLUCIONES) y catálogos
  */
-export async function fetchDevolucionesHojaRuta(transaccionId) {
-  const { data } = await api.get(`/hojas-ruta/${transaccionId}/devoluciones`);
+export async function fetchDevolucionesHojaRuta(transaccionId, lugar = '') {
+  const { data } = await api.get(`/hojas-ruta/${transaccionId}/devoluciones`, {
+    params: lugar ? { lugar } : {}
+  });
   return data;
 }
 
 /**
  * Sección 4.2.2: Guardar / actualizar REMITO_DEVOLUCIONES y REMITO_DEVOLUCIONES_ITEMS
  */
-export async function saveDevolucionesHojaRuta(transaccionId, clientes) {
-  const { data } = await api.post(`/hojas-ruta/${transaccionId}/devoluciones`, { clientes });
+export async function saveDevolucionesHojaRuta(transaccionId, clientes, lugar = null) {
+  const { data } = await api.post(`/hojas-ruta/${transaccionId}/devoluciones`, {
+    clientes,
+    ...(lugar ? { lugar } : {})
+  });
   return data;
 }
 
 /**
- * Sección 4.2.3: Obtener movimientos de cajones por hoja de ruta
+ * Sección 4.2.3: Obtener movimientos de cajones y pallets por hoja de ruta y lugar
  */
-export async function fetchCajonesHojaRuta(transaccionId) {
-  const { data } = await api.get(`/hojas-ruta/${transaccionId}/cajones`);
+export async function fetchCajonesHojaRuta(transaccionId, lugar = '') {
+  const { data } = await api.get(`/hojas-ruta/${transaccionId}/cajones`, {
+    params: lugar ? { lugar } : {}
+  });
   return data;
 }
 
 /**
- * Sección 4.2.3: Guardar entrega y devolución de cajones
+ * Sección 4.2.3: Guardar entrega y devolución de cajones y pallets
  */
-export async function saveCajonesHojaRuta(transaccionId, items) {
-  const { data } = await api.post(`/hojas-ruta/${transaccionId}/cajones`, { items });
+export async function saveCajonesHojaRuta(transaccionId, items, lugar = null) {
+  const { data } = await api.post(`/hojas-ruta/${transaccionId}/cajones`, {
+    items,
+    ...(lugar ? { lugar } : {})
+  });
   return data;
 }
 

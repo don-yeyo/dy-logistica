@@ -99,31 +99,36 @@ function flattenGruposToRows(grupos = [], txId, headerInfo = {}) {
   return rows;
 }
 
-export function dispatchDraftSaved(transaccionId, sections = []) {
+export function dispatchDraftSaved(transaccionId, sections = [], lugar = '') {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(
     new CustomEvent('dy-draft-saved', {
-      detail: { transaccionId, sections }
+      detail: { transaccionId, sections, lugar }
     })
   );
 }
 
-export async function saveDraftSection(section, { email, hojaRuta, draftSection, refreshPendingCount }) {
+export async function saveDraftSection(
+  section,
+  { email, hojaRuta, lugar = '', draftSection, refreshPendingCount }
+) {
   if (!hojaRuta?.Transaccionid || !email) {
     throw new Error('Falta información de hoja de ruta o usuario.');
   }
 
   const txId = hojaRuta.Transaccionid;
-  const draft = draftSection || getHojaRutaDraft(email, txId)[section];
+  const draft = draftSection || getHojaRutaDraft(email, txId, lugar)[section];
   if (!draft) return { ok: true, skipped: true };
 
   if (section === 'entregas') {
     const items = draft.items || [];
     const entregadoMap = draft.entregadoMap || {};
+    const targetLugar = draft.lugar || lugar || '';
     const payloadItems = [];
 
     for (const item of items) {
-      const valStr = String(entregadoMap[item.Hojarutaitemid] ?? '').trim();
+      const itemKey = item.Productoid ?? item.Hojarutaitemid;
+      const valStr = String(entregadoMap[itemKey] ?? '').trim();
       if (!NON_NEGATIVE_INT_REGEX.test(valStr)) {
         throw new Error(
           `En Entregas, "${item.Producto || 'Producto'}" debe tener una cantidad entera válida (>= 0).`
@@ -132,38 +137,49 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
       const nextVal = parseInt(valStr, 10);
       const isUnconfirmed = item.Entregado === null || item.Entregado === undefined;
       if (isUnconfirmed || Number(item.Entregado) !== nextVal) {
-        payloadItems.push({
-          Hojarutaitemid: item.Hojarutaitemid,
-          Entregado: nextVal
-        });
+        if (item.Productoid) {
+          payloadItems.push({
+            Productoid: item.Productoid,
+            Producto: item.Producto,
+            Remitido: item.Remitido,
+            Entregado: nextVal,
+            codigo_motivo_dif: item.codigo_motivo_dif || null
+          });
+        } else {
+          payloadItems.push({
+            Hojarutaitemid: item.Hojarutaitemid,
+            Entregado: nextVal
+          });
+        }
       }
     }
 
     if (payloadItems.length === 0) {
-      clearSectionDirty(email, txId, 'entregas', {
-        openLugares: draft.openLugares || {},
-        unconfirmedDb: false
-      });
+      clearSectionDirty(email, txId, 'entregas', { unconfirmedDb: false }, targetLugar);
       return { ok: true, offlineQueued: false };
     }
 
-    const updatedItemsList = items.map((it) => ({
-      ...it,
-      Entregado: parseInt(String(entregadoMap[it.Hojarutaitemid]).trim(), 10)
-    }));
+    const updatedItemsList = items.map((it) => {
+      const itemKey = it.Productoid ?? it.Hojarutaitemid;
+      return {
+        ...it,
+        Entregado: parseInt(String(entregadoMap[itemKey]).trim(), 10)
+      };
+    });
 
     let offlineQueued = false;
     let cachedItems = updatedItemsList;
 
     if (navigator.onLine) {
       try {
-        const res = await saveEntregasHojaRuta(txId, payloadItems);
+        const res = await saveEntregasHojaRuta(txId, payloadItems, targetLugar || null);
         cachedItems = res?.items || updatedItemsList;
       } catch (err) {
         if (!isConnectivityError(err)) throw err;
         await queuePendingControl({
           op_type: 'entregas',
           transaccionId: txId,
+          lugar: targetLugar || null,
           items: payloadItems
         });
         offlineQueued = true;
@@ -173,28 +189,32 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
       await queuePendingControl({
         op_type: 'entregas',
         transaccionId: txId,
+        lugar: targetLugar || null,
         items: payloadItems
       });
       offlineQueued = true;
       if (refreshPendingCount) await refreshPendingCount();
     }
 
-    await cacheEntregas(txId, {
-      hoja_ruta: draft.headerInfo || hojaRuta,
-      items: cachedItems
-    });
+    await cacheEntregas(
+      txId,
+      {
+        hoja_ruta: draft.headerInfo || hojaRuta,
+        lugar: targetLugar,
+        items: cachedItems
+      },
+      targetLugar
+    );
 
-    clearSectionDirty(email, txId, 'entregas', {
-      openLugares: draft.openLugares || {},
-      unconfirmedDb: false
-    });
-    dispatchDraftSaved(txId, ['entregas']);
+    clearSectionDirty(email, txId, 'entregas', { unconfirmedDb: false }, targetLugar);
+    dispatchDraftSaved(txId, ['entregas'], targetLugar);
     return { ok: true, offlineQueued };
   }
 
   if (section === 'devoluciones') {
     const grupos = draft.grupos || [];
     const headerInfo = draft.headerInfo || hojaRuta;
+    const targetLugar = draft.lugar || lugar || '';
     const clientesConProductos = [];
 
     for (const grupo of grupos) {
@@ -221,11 +241,13 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
         }
 
         clientesConProductos.push({
-          Lugar_de_Entrega: cli.Lugar_de_Entrega,
+          Lugar_de_Entrega: cli.Lugar_de_Entrega || targetLugar,
           id_cliente: cli.id_cliente,
           Cliente: cli.Cliente,
           id_etapa: cli.id_etapa || `${txId}-${cli.id_cliente}`,
-          fecha: cli.fecha || (headerInfo?.Fecha ? String(headerInfo.Fecha).slice(0, 10) : new Date().toISOString().slice(0, 10)),
+          fecha:
+            cli.fecha ||
+            (headerInfo?.Fecha ? String(headerInfo.Fecha).slice(0, 10) : new Date().toISOString().slice(0, 10)),
           id_remito_devoluciones: cli.id_remito_devoluciones || null,
           productos: cli.productos.map((p) => ({
             id_remito_devoluciones_item: p.id_remito_devoluciones_item || null,
@@ -247,26 +269,44 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
         await queuePendingControl({
           op_type: 'devoluciones',
           transaccionId: txId,
+          lugar: targetLugar || null,
           clientes: clientesConProductos
         });
-        await cacheDevoluciones(txId, {
-          hoja_ruta: headerInfo,
-          rows: flattenGruposToRows(grupos, txId, headerInfo),
-          catalogos: draft.catalogos || { productos: [], clientes: [], motivos: [] }
-        });
+        await cacheDevoluciones(
+          txId,
+          {
+            hoja_ruta: headerInfo,
+            lugar: targetLugar,
+            rows: flattenGruposToRows(grupos, txId, headerInfo),
+            catalogos: draft.catalogos || { productos: [], clientes: [], motivos: [] }
+          },
+          targetLugar
+        );
         offlineQueued = true;
         if (refreshPendingCount) await refreshPendingCount();
       };
 
       if (navigator.onLine) {
         try {
-          const res = await saveDevolucionesHojaRuta(txId, clientesConProductos);
+          const res = await saveDevolucionesHojaRuta(txId, clientesConProductos, targetLugar || null);
           if (res && res.ok) {
-            await cacheDevoluciones(txId, {
-              hoja_ruta: headerInfo,
-              rows: res.rows,
-              catalogos: draft.catalogos || { productos: [], clientes: [], motivos: [] }
-            });
+            const filteredRows = targetLugar
+              ? (res.rows || []).filter(
+                  (r) =>
+                    String(r.Lugar_de_Entrega || '').trim().toLowerCase() ===
+                    String(targetLugar).trim().toLowerCase()
+                )
+              : res.rows;
+            await cacheDevoluciones(
+              txId,
+              {
+                hoja_ruta: headerInfo,
+                lugar: targetLugar,
+                rows: filteredRows,
+                catalogos: draft.catalogos || { productos: [], clientes: [], motivos: [] }
+              },
+              targetLugar
+            );
           }
         } catch (err) {
           if (!isConnectivityError(err)) throw err;
@@ -277,32 +317,50 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
       }
     }
 
-    clearSectionDirty(email, txId, 'devoluciones', {
-      expandedLugares: draft.expandedLugares || {},
-      expandedClientes: draft.expandedClientes || {}
-    });
-    dispatchDraftSaved(txId, ['devoluciones']);
+    clearSectionDirty(
+      email,
+      txId,
+      'devoluciones',
+      {
+        expandedLugares: draft.expandedLugares || {},
+        expandedClientes: draft.expandedClientes || {}
+      },
+      targetLugar
+    );
+    dispatchDraftSaved(txId, ['devoluciones'], targetLugar);
     return { ok: true, offlineQueued };
   }
 
   if (section === 'cajones') {
     const items = draft.items || [];
     const headerInfo = draft.headerInfo || hojaRuta;
+    const targetLugar = draft.lugar || lugar || '';
     const payloadItems = [];
 
     for (const it of items) {
       const entStr = String(it.cajones_entregados ?? '').trim() || '0';
       const devStr = String(it.cajones_devueltos ?? '').trim() || '0';
-      if (!NON_NEGATIVE_INT_REGEX.test(entStr) || !NON_NEGATIVE_INT_REGEX.test(devStr)) {
-        throw new Error(`En Cajones ("${it.Cliente}"), las cantidades deben ser enteros >= 0.`);
+      const palEntStr = String(it.pallets_entregados ?? '').trim() || '0';
+      const palDevStr = String(it.pallets_devueltos ?? '').trim() || '0';
+      if (
+        !NON_NEGATIVE_INT_REGEX.test(entStr) ||
+        !NON_NEGATIVE_INT_REGEX.test(devStr) ||
+        !NON_NEGATIVE_INT_REGEX.test(palEntStr) ||
+        !NON_NEGATIVE_INT_REGEX.test(palDevStr)
+      ) {
+        throw new Error(
+          `En Cajones y Pallets ("${it.Cliente}"), las cantidades deben ser enteros >= 0.`
+        );
       }
       payloadItems.push({
         Id_etapa: it.Id_etapa || null,
-        Lugar_de_Entrega: it.Lugar_de_Entrega,
+        Lugar_de_Entrega: it.Lugar_de_Entrega || targetLugar,
         id_cliente: it.id_cliente || null,
         Cliente: it.Cliente,
         cajones_entregados: parseInt(entStr, 10),
         cajones_devueltos: parseInt(devStr, 10),
+        pallets_entregados: parseInt(palEntStr, 10),
+        pallets_devueltos: parseInt(palDevStr, 10),
         id_remito_cajones_entrega: it.id_remito_cajones_entrega || null,
         id_remito_cajones_item_entrega: it.id_remito_cajones_item_entrega || null,
         id_remito_cajones_devolucion: it.id_remito_cajones_devolucion || null,
@@ -317,6 +375,7 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
         await queuePendingControl({
           op_type: 'cajones',
           transaccionId: txId,
+          lugar: targetLugar || null,
           items: payloadItems
         });
         offlineQueued = true;
@@ -325,7 +384,7 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
 
       if (navigator.onLine) {
         try {
-          await saveCajonesHojaRuta(txId, payloadItems);
+          await saveCajonesHojaRuta(txId, payloadItems, targetLugar || null);
         } catch (err) {
           if (!isConnectivityError(err)) throw err;
           await saveOfflineCajones();
@@ -334,14 +393,20 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
         await saveOfflineCajones();
       }
 
-      await cacheCajones(txId, {
-        hoja_ruta: headerInfo,
-        items: payloadItems
-      });
+      await cacheCajones(
+        txId,
+        {
+          hoja_ruta: headerInfo,
+          lugar: targetLugar,
+          items: payloadItems,
+          clientes_catalogo: draft.clientesCatalogo || []
+        },
+        targetLugar
+      );
     }
 
-    clearSectionDirty(email, txId, 'cajones');
-    dispatchDraftSaved(txId, ['cajones']);
+    clearSectionDirty(email, txId, 'cajones', {}, targetLugar);
+    dispatchDraftSaved(txId, ['cajones'], targetLugar);
     return { ok: true, offlineQueued };
   }
 
@@ -466,8 +531,8 @@ export async function saveDraftSection(section, { email, hojaRuta, draftSection,
       }
     }
 
-    clearSectionDirty(email, txId, 'remitos', { byRemitoId: {} });
-    dispatchDraftSaved(txId, ['remitos']);
+    clearSectionDirty(email, txId, 'remitos', { byRemitoId: {} }, lugar);
+    dispatchDraftSaved(txId, ['remitos'], lugar);
     return { ok: true, offlineQueued };
   }
 

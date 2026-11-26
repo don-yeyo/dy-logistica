@@ -146,7 +146,7 @@ function hydrateDraftEjemplares(ejemplaresMap = {}) {
   return out;
 }
 
-export default function RemitoDetail({ remito, hojaRuta, onBack, onSaved }) {
+export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onBack, onSaved }) {
   const { user, refreshPendingCount } = useAuth();
   const initialSnapshotRef = useRef('');
 
@@ -172,7 +172,7 @@ export default function RemitoDetail({ remito, hojaRuta, onBack, onSaved }) {
     initialSnapshotRef.current = JSON.stringify(serializeRemitoSnapshot(base.map, baseSig));
 
     const savedDraft =
-      getHojaRutaDraft(user?.email, hojaRuta?.Transaccionid).remitos?.byRemitoId?.[String(remito.id)];
+      getHojaRutaDraft(user?.email, hojaRuta?.Transaccionid, selectedLugar).remitos?.byRemitoId?.[String(remito.id)];
 
     if (savedDraft) {
       const hydratedMap = hydrateDraftEjemplares(savedDraft.ejemplaresMap || {});
@@ -190,21 +190,21 @@ export default function RemitoDetail({ remito, hojaRuta, onBack, onSaved }) {
       setActiveEjemplar(base.firstKey);
       setSignatureInfo(baseSig);
     }
-  }, [remito, user?.email, hojaRuta?.Transaccionid]);
+  }, [remito, user?.email, hojaRuta?.Transaccionid, selectedLugar]);
 
   useEffect(() => {
     const onExternalSaved = (e) => {
-      if (
-        Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid) &&
-        Array.isArray(e.detail?.sections) &&
-        e.detail.sections.includes('remitos')
-      ) {
+      const sameTx = Number(e.detail?.transaccionId) === Number(hojaRuta?.Transaccionid);
+      const sameLugar =
+        !e.detail?.lugar ||
+        String(e.detail.lugar).trim().toLowerCase() === String(selectedLugar || '').trim().toLowerCase();
+      if (sameTx && sameLugar && Array.isArray(e.detail?.sections) && e.detail.sections.includes('remitos')) {
         if (onSaved) onSaved(remito);
       }
     };
     window.addEventListener('dy-draft-saved', onExternalSaved);
     return () => window.removeEventListener('dy-draft-saved', onExternalSaved);
-  }, [hojaRuta?.Transaccionid, onSaved, remito]);
+  }, [hojaRuta?.Transaccionid, selectedLugar, onSaved, remito]);
 
   const syncRemitoDraft = useCallback(
     (nextMap, nextSig) => {
@@ -213,18 +213,24 @@ export default function RemitoDetail({ remito, hojaRuta, onBack, onSaved }) {
       const changed = JSON.stringify(snapshot) !== initialSnapshotRef.current;
 
       if (changed) {
-        patchRemitoItemDraft(user.email, hojaRuta.Transaccionid, remito.id, {
-          remitoId: remito.id,
-          comprobante: remito.finne_Comprobante || null,
-          id_etapa: remito.id_etapa || null,
-          ejemplaresMap: snapshot.ejemplaresMap,
-          signatureInfo: snapshot.signatureInfo
-        });
+        patchRemitoItemDraft(
+          user.email,
+          hojaRuta.Transaccionid,
+          remito.id,
+          {
+            remitoId: remito.id,
+            comprobante: remito.finne_Comprobante || null,
+            id_etapa: remito.id_etapa || null,
+            ejemplaresMap: snapshot.ejemplaresMap,
+            signatureInfo: snapshot.signatureInfo
+          },
+          selectedLugar
+        );
       } else {
-        patchRemitoItemDraft(user.email, hojaRuta.Transaccionid, remito.id, null);
+        patchRemitoItemDraft(user.email, hojaRuta.Transaccionid, remito.id, null, selectedLugar);
       }
     },
-    [user?.email, hojaRuta?.Transaccionid, remito?.id, remito?.finne_Comprobante, remito?.id_etapa]
+    [user?.email, hojaRuta?.Transaccionid, selectedLugar, remito?.id, remito?.finne_Comprobante, remito?.id_etapa]
   );
 
   let formattedDate = remito.finne_Fecha || '';
@@ -415,7 +421,7 @@ export default function RemitoDetail({ remito, hojaRuta, onBack, onSaved }) {
       }
 
       if (user?.email && hojaRuta?.Transaccionid) {
-        patchRemitoItemDraft(user.email, hojaRuta.Transaccionid, remito.id, null);
+        patchRemitoItemDraft(user.email, hojaRuta.Transaccionid, remito.id, null, selectedLugar);
       }
 
       setSuccessModal(true);

@@ -172,9 +172,9 @@ async function getHojasDeRuta(req, res) {
 }
 
 /**
- * Sección 4.2.1: Obtener ítems a entregar desde ITEMS_A_ENTREGAR filtrado por Transaccionid.
+ * Paso 2 del wizard: Listar los lugares de entrega únicos de la hoja de ruta seleccionada.
  */
-async function getEntregasByTransaccion(req, res) {
+async function getLugaresByTransaccion(req, res) {
   try {
     const { transaccionId } = req.params;
     const hojaRuta = await findHojaRutaHeader(transaccionId, req.user);
@@ -183,6 +183,140 @@ async function getEntregasByTransaccion(req, res) {
       return res.status(404).json({
         ok: false,
         error: 'Hoja de ruta no encontrada o no asignada al chofer autenticado.'
+      });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT
+         TRIM(e.Direccionentrega) AS lugar,
+         COUNT(DISTINCT e.Organizacionidoperador) AS total_clientes,
+         GROUP_CONCAT(DISTINCT NULLIF(TRIM(cl.Nombre), '') ORDER BY cl.Nombre ASC SEPARATOR ' · ') AS clientes_preview,
+         COUNT(DISTINCT ir.Id_transaccion_remito) AS total_remitos,
+         COUNT(DISTINCT ir.Productoid) AS total_productos,
+         COALESCE(SUM(ir.Cantidad), 0) AS total_unidades,
+         COUNT(DISTINCT ael.productoid) AS productos_confirmados_ael,
+         COUNT(DISTINCT CASE WHEN ir.cantidad_descargada_Chofer IS NOT NULL THEN ir.Productoid END) AS productos_confirmados_ir
+       FROM HOJA_RUTA_ETAPA e
+       LEFT JOIN ORGANIZACION cl ON cl.Organizacionid = e.Organizacionidoperador
+       LEFT JOIN HOJA_RUTA_ITEM_REMITO ir ON ir.Id_etapa = e.Id_etapa
+       LEFT JOIN APP_ENTREGAS_LUGAR ael
+         ON ael.transaccion_id = e.Transaccionid_hoja_de_ruta
+         AND ael.lugar_entrega COLLATE utf8mb4_0900_ai_ci = TRIM(e.Direccionentrega) COLLATE utf8mb4_0900_ai_ci
+         AND ael.productoid = ir.Productoid
+       WHERE e.Transaccionid_hoja_de_ruta = ?
+         AND NULLIF(TRIM(e.Direccionentrega), '') IS NOT NULL
+       GROUP BY TRIM(e.Direccionentrega)
+       ORDER BY TRIM(e.Direccionentrega) ASC`,
+      [hojaRuta.Transaccionid]
+    );
+
+    const lugares = (rows || []).map((r) => {
+      const totalProductos = Number(r.total_productos || 0);
+      const confirmados = Math.max(
+        Number(r.productos_confirmados_ael || 0),
+        Number(r.productos_confirmados_ir || 0)
+      );
+      return {
+        lugar: r.lugar,
+        total_clientes: Number(r.total_clientes || 0),
+        clientes_preview: r.clientes_preview || '',
+        total_remitos: Number(r.total_remitos || 0),
+        total_productos: totalProductos,
+        total_unidades: Number(r.total_unidades || 0),
+        productos_confirmados: confirmados,
+        confirmado: totalProductos > 0 && confirmados >= totalProductos
+      };
+    });
+
+    return res.json({
+      ok: true,
+      hoja_ruta: hojaRuta,
+      lugares
+    });
+  } catch (error) {
+    console.error(`[HojasRutaController.getLugaresByTransaccion] Error: ${error.message}`);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error al consultar los lugares de entrega de la hoja de ruta.',
+      details: error.message
+    });
+  }
+}
+
+async function queryEntregasConsolidadasByLugar(transaccionId, lugar) {
+  const cleanLugar = String(lugar || '').trim();
+  const [rows] = await pool.query(
+    `SELECT
+       ir.Productoid,
+       COALESCE(MAX(pr.Nombre), MAX(ael.producto_nombre), CONCAT('Producto #', ir.Productoid)) AS Producto,
+       COALESCE(SUM(COALESCE(ir.Cantidad, 0)), 0) AS Remitido,
+       COUNT(ir.Hojarutaitemid) AS cantidad_lineas,
+       MAX(ael.entregado_total) AS ael_entregado,
+       COUNT(CASE WHEN ir.cantidad_descargada_Chofer IS NOT NULL THEN 1 END) AS lineas_confirmadas,
+       COALESCE(SUM(ir.cantidad_descargada_Chofer), 0) AS ir_entregado,
+       MAX(ir.codigo_motivo_dif) AS codigo_motivo_dif
+     FROM HOJA_RUTA_ITEM_REMITO ir
+     INNER JOIN HOJA_RUTA_ETAPA e ON e.Id_etapa = ir.Id_etapa
+     LEFT JOIN PRODUCTO pr ON pr.Productoid = ir.Productoid
+     LEFT JOIN APP_ENTREGAS_LUGAR ael
+       ON ael.transaccion_id = e.Transaccionid_hoja_de_ruta
+       AND ael.lugar_entrega COLLATE utf8mb4_0900_ai_ci = TRIM(e.Direccionentrega) COLLATE utf8mb4_0900_ai_ci
+       AND ael.productoid = ir.Productoid
+     WHERE e.Transaccionid_hoja_de_ruta = ?
+       AND TRIM(e.Direccionentrega) COLLATE utf8mb4_0900_ai_ci = ? COLLATE utf8mb4_0900_ai_ci
+       AND ir.Hojarutaitemid IS NOT NULL
+     GROUP BY ir.Productoid
+     ORDER BY Producto ASC, ir.Productoid ASC`,
+    [transaccionId, cleanLugar]
+  );
+
+  return (rows || []).map((r) => {
+    const hasAel = r.ael_entregado !== null && r.ael_entregado !== undefined;
+    const allIrConfirmed =
+      Number(r.cantidad_lineas || 0) > 0 &&
+      Number(r.lineas_confirmadas || 0) >= Number(r.cantidad_lineas || 0);
+    return {
+      Lugar_de_Entrega: cleanLugar,
+      Transaccionid: Number(transaccionId),
+      Productoid: Number(r.Productoid),
+      Producto: r.Producto,
+      Remitido: Number(r.Remitido || 0),
+      Entregado: hasAel
+        ? Number(r.ael_entregado)
+        : allIrConfirmed
+        ? Number(r.ir_entregado || 0)
+        : null,
+      cantidad_lineas: Number(r.cantidad_lineas || 0),
+      codigo_motivo_dif: r.codigo_motivo_dif || null
+    };
+  });
+}
+
+/**
+ * Sección 4.2.1: Obtener ítems a entregar.
+ * Si se informa ?lugar=..., devuelve el listado único consolidado por producto en ese lugar.
+ */
+async function getEntregasByTransaccion(req, res) {
+  try {
+    const { transaccionId } = req.params;
+    const cleanLugar = String(req.query.lugar || '').trim();
+    const hojaRuta = await findHojaRutaHeader(transaccionId, req.user);
+
+    if (!hojaRuta) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Hoja de ruta no encontrada o no asignada al chofer autenticado.'
+      });
+    }
+
+    if (cleanLugar) {
+      const items = await queryEntregasConsolidadasByLugar(hojaRuta.Transaccionid, cleanLugar);
+      return res.json({
+        ok: true,
+        hoja_ruta: hojaRuta,
+        lugar: cleanLugar,
+        agrupado_por_producto: true,
+        items
       });
     }
 
@@ -207,6 +341,7 @@ async function getEntregasByTransaccion(req, res) {
     return res.json({
       ok: true,
       hoja_ruta: hojaRuta,
+      agrupado_por_producto: false,
       items: items || []
     });
   } catch (error) {
@@ -220,12 +355,14 @@ async function getEntregasByTransaccion(req, res) {
 }
 
 /**
- * Sección 4.2.1: Actualizar cantidad_descargada_Chofer en HOJA_RUTA_ITEM_REMITO por Hojarutaitemid.
+ * Sección 4.2.1: Guardar confirmación de descarga.
+ * Si recibe `lugar`, persiste totales consolidados en APP_ENTREGAS_LUGAR y los distribuye en HOJA_RUTA_ITEM_REMITO.
  */
 async function guardarEntregas(req, res) {
   try {
     const { transaccionId } = req.params;
-    const { items } = req.body;
+    const { items, lugar } = req.body;
+    const cleanLugar = String(lugar || '').trim();
     const hojaRuta = await findHojaRutaHeader(transaccionId, req.user);
 
     if (!hojaRuta) {
@@ -239,6 +376,169 @@ async function guardarEntregas(req, res) {
       return res.status(400).json({
         ok: false,
         error: 'Debe informar al menos un producto para confirmar la descarga.'
+      });
+    }
+
+    if (cleanLugar) {
+      const normalizedProdItems = [];
+      for (const item of items) {
+        const prodId = Number(item.Productoid);
+        const rawEnt = item.Entregado === null || item.Entregado === undefined ? '' : String(item.Entregado).trim();
+
+        if (!Number.isInteger(prodId) || prodId <= 0) {
+          return res.status(400).json({
+            ok: false,
+            error: 'Identificador Productoid inválido en uno de los productos.'
+          });
+        }
+        if (!NON_NEGATIVE_INT_REGEX.test(rawEnt)) {
+          return res.status(400).json({
+            ok: false,
+            error: 'El campo Entregado debe ser únicamente un número entero positivo o cero.'
+          });
+        }
+
+        normalizedProdItems.push({
+          Productoid: prodId,
+          Producto: String(item.Producto || '').slice(0, 200),
+          Remitido: Math.max(0, parseInt(item.Remitido ?? '0', 10) || 0),
+          Entregado: parseInt(rawEnt, 10),
+          codigo_motivo_dif: item.codigo_motivo_dif ? Number(item.codigo_motivo_dif) : null
+        });
+      }
+
+      const updatedCount = await withAuditConnection(req.user, async (connection) => {
+        await connection.beginTransaction();
+        try {
+          for (let i = 0; i < normalizedProdItems.length; i += DB_BULK_UPDATE_CHUNK_SIZE) {
+            const chunk = normalizedProdItems.slice(i, i + DB_BULK_UPDATE_CHUNK_SIZE);
+            const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+            const params = [];
+            for (const p of chunk) {
+              params.push(
+                hojaRuta.Transaccionid,
+                cleanLugar,
+                p.Productoid,
+                p.Producto || null,
+                p.Remitido,
+                p.Entregado,
+                req.user?.email || null
+              );
+            }
+            await connection.query(
+              `INSERT INTO APP_ENTREGAS_LUGAR
+                 (transaccion_id, lugar_entrega, productoid, producto_nombre, remitido_total, entregado_total, usuario_email)
+               VALUES ${placeholders}
+               ON DUPLICATE KEY UPDATE
+                 producto_nombre = VALUES(producto_nombre),
+                 remitido_total = VALUES(remitido_total),
+                 entregado_total = VALUES(entregado_total),
+                 usuario_email = VALUES(usuario_email)`,
+              params
+            );
+          }
+
+          const prodIds = normalizedProdItems.map((p) => p.Productoid);
+          const [lineRows] = await connection.query(
+            `SELECT ir.Hojarutaitemid, ir.Productoid, COALESCE(ir.Cantidad, 0) AS Cantidad
+             FROM HOJA_RUTA_ITEM_REMITO ir
+             INNER JOIN HOJA_RUTA_ETAPA e ON e.Id_etapa = ir.Id_etapa
+             WHERE e.Transaccionid_hoja_de_ruta = ?
+               AND TRIM(e.Direccionentrega) COLLATE utf8mb4_0900_ai_ci = ? COLLATE utf8mb4_0900_ai_ci
+               AND ir.Productoid IN (${prodIds.map(() => '?').join(',')})
+             ORDER BY ir.Hojarutaitemid ASC`,
+            [hojaRuta.Transaccionid, cleanLugar, ...prodIds]
+          );
+
+          const linesByProd = new Map();
+          for (const lr of lineRows || []) {
+            const pid = Number(lr.Productoid);
+            if (!linesByProd.has(pid)) linesByProd.set(pid, []);
+            linesByProd.get(pid).push(lr);
+          }
+
+          const lineUpdates = [];
+          for (const p of normalizedProdItems) {
+            const lines = linesByProd.get(p.Productoid) || [];
+            if (lines.length === 0) continue;
+
+            const sumRem = lines.reduce((acc, l) => acc + Number(l.Cantidad || 0), 0);
+            const target = p.Entregado;
+
+            if (target === sumRem) {
+              for (const l of lines) {
+                lineUpdates.push({
+                  Hojarutaitemid: l.Hojarutaitemid,
+                  Entregado: Number(l.Cantidad || 0),
+                  codigo_motivo_dif: p.codigo_motivo_dif
+                });
+              }
+            } else if (target < sumRem) {
+              let remaining = target;
+              for (const l of lines) {
+                const qty = Number(l.Cantidad || 0);
+                const assigned = Math.min(remaining, qty);
+                remaining -= assigned;
+                lineUpdates.push({
+                  Hojarutaitemid: l.Hojarutaitemid,
+                  Entregado: assigned,
+                  codigo_motivo_dif: p.codigo_motivo_dif
+                });
+              }
+            } else {
+              const extra = target - sumRem;
+              lines.forEach((l, idx) => {
+                const qty = Number(l.Cantidad || 0);
+                lineUpdates.push({
+                  Hojarutaitemid: l.Hojarutaitemid,
+                  Entregado: idx === lines.length - 1 ? qty + extra : qty,
+                  codigo_motivo_dif: p.codigo_motivo_dif
+                });
+              });
+            }
+          }
+
+          let count = 0;
+          for (let i = 0; i < lineUpdates.length; i += DB_BULK_UPDATE_CHUNK_SIZE) {
+            const chunk = lineUpdates.slice(i, i + DB_BULK_UPDATE_CHUNK_SIZE);
+            const entregadoCases = chunk.map(() => 'WHEN ? THEN ?').join(' ');
+            const motivoCases = chunk.map(() => 'WHEN ? THEN COALESCE(?, ir.codigo_motivo_dif)').join(' ');
+            const idPlaceholders = chunk.map(() => '?').join(',');
+            const params = [];
+
+            for (const item of chunk) params.push(item.Hojarutaitemid, item.Entregado);
+            for (const item of chunk) params.push(item.Hojarutaitemid, item.codigo_motivo_dif);
+            params.push(hojaRuta.Transaccionid);
+            for (const item of chunk) params.push(item.Hojarutaitemid);
+
+            const [result] = await connection.query(
+              `UPDATE HOJA_RUTA_ITEM_REMITO ir
+               INNER JOIN HOJA_RUTA_ETAPA e ON e.Id_etapa = ir.Id_etapa
+               SET ir.cantidad_descargada_Chofer = CASE ir.Hojarutaitemid ${entregadoCases} ELSE ir.cantidad_descargada_Chofer END,
+                   ir.codigo_motivo_dif = CASE ir.Hojarutaitemid ${motivoCases} ELSE ir.codigo_motivo_dif END
+               WHERE e.Transaccionid_hoja_de_ruta = ?
+                 AND ir.Hojarutaitemid IN (${idPlaceholders})`,
+              params
+            );
+            count += result.affectedRows;
+          }
+
+          await connection.commit();
+          return count;
+        } catch (txErr) {
+          await connection.rollback();
+          throw txErr;
+        }
+      });
+
+      const refreshedItems = await queryEntregasConsolidadasByLugar(hojaRuta.Transaccionid, cleanLugar);
+      return res.json({
+        ok: true,
+        lugar: cleanLugar,
+        agrupado_por_producto: true,
+        message: `Descarga en ${cleanLugar} confirmada correctamente (${normalizedProdItems.length} productos, ${updatedCount} líneas ERP actualizadas).`,
+        actualizados: normalizedProdItems.length,
+        items: refreshedItems
       });
     }
 
@@ -343,13 +643,21 @@ async function guardarEntregas(req, res) {
   }
 }
 
-async function queryDevolucionesRows(transaccionId) {
+async function queryDevolucionesRows(transaccionId, lugar = '') {
+  const cleanLugar = String(lugar || '').trim();
+  const params = [transaccionId];
+  let lugarFilter = '';
+  if (cleanLugar) {
+    lugarFilter = 'AND TRIM(etapa.Direccionentrega) COLLATE utf8mb4_0900_ai_ci = ? COLLATE utf8mb4_0900_ai_ci';
+    params.push(cleanLugar);
+  }
+
   const [rows] = await pool.query(
     `SELECT
        etapa.Transaccionid_hoja_de_ruta AS Transaccionid,
        etapa.Id_etapa AS id_etapa,
        hr.Fecha AS fecha,
-       etapa.Direccionentrega AS Lugar_de_Entrega,
+       TRIM(etapa.Direccionentrega) AS Lugar_de_Entrega,
        COALESCE(de.id_cliente, etapa.Organizacionidoperador) AS id_cliente,
        COALESCE(cl_dev.Nombre, cl_op.Nombre) AS Cliente,
        de.id_remito_devoluciones,
@@ -370,18 +678,20 @@ async function queryDevolucionesRows(transaccionId) {
      LEFT JOIN PRODUCTO pr ON pr.Productoid = di.id_producto
      LEFT JOIN MOTIVO_DIFERENCIA md ON CAST(TRIM(md.Codigo) AS UNSIGNED) = di.codigo_motivo_dif
      WHERE etapa.Transaccionid_hoja_de_ruta = ?
-     ORDER BY etapa.Direccionentrega ASC, Cliente ASC, di.id_remito_devoluciones_item ASC`,
-    [transaccionId]
+       ${lugarFilter}
+     ORDER BY TRIM(etapa.Direccionentrega) ASC, Cliente ASC, di.id_remito_devoluciones_item ASC`,
+    params
   );
   return rows || [];
 }
 
 /**
- * Sección 4.2.2: Obtener devoluciones de la hoja de ruta y catálogos reales.
+ * Sección 4.2.2: Obtener devoluciones de la hoja de ruta (opcionalmente filtradas por lugar) y catálogos reales.
  */
 async function getDevolucionesByTransaccion(req, res) {
   try {
     const { transaccionId } = req.params;
+    const cleanLugar = String(req.query.lugar || '').trim();
     const hojaRuta = await findHojaRutaHeader(transaccionId, req.user);
 
     if (!hojaRuta) {
@@ -391,7 +701,7 @@ async function getDevolucionesByTransaccion(req, res) {
       });
     }
 
-    const rows = await queryDevolucionesRows(hojaRuta.Transaccionid);
+    const rows = await queryDevolucionesRows(hojaRuta.Transaccionid, cleanLugar);
 
     const [productos] = await pool.query(
       `SELECT
@@ -639,12 +949,25 @@ async function guardarDevoluciones(req, res) {
   }
 }
 
-async function queryCajonesGrouped(transaccionId) {
+async function queryCajonesGrouped(transaccionId, lugar = '') {
+  const cleanLugar = String(lugar || '').trim();
+  const baseParams = [transaccionId];
+  let lugarClauseRce = '';
+  let lugarClauseAcp = '';
+  const acpParams = [transaccionId];
+
+  if (cleanLugar) {
+    lugarClauseRce = 'AND TRIM(rce.Direccionentrega) COLLATE utf8mb4_0900_ai_ci = ? COLLATE utf8mb4_0900_ai_ci';
+    baseParams.push(cleanLugar);
+    lugarClauseAcp = 'AND TRIM(lugar_entrega) COLLATE utf8mb4_0900_ai_ci = ? COLLATE utf8mb4_0900_ai_ci';
+    acpParams.push(cleanLugar);
+  }
+
   const [rows] = await pool.query(
     `SELECT
        rce.Transaccionid,
        rce.Id_etapa,
-       rce.Direccionentrega AS Lugar_de_Entrega,
+       TRIM(rce.Direccionentrega) AS Lugar_de_Entrega,
        rce.Id_cliente AS id_cliente,
        rce.Cliente,
        rce.tipo,
@@ -657,23 +980,47 @@ async function queryCajonesGrouped(transaccionId) {
        AND rc.tipo <=> rce.tipo
        AND rc.id_cliente <=> rce.Id_cliente
      WHERE rce.Transaccionid = ?
-     ORDER BY rce.Direccionentrega ASC, rce.Cliente ASC`,
-    [transaccionId]
+       ${lugarClauseRce}
+     ORDER BY TRIM(rce.Direccionentrega) ASC, rce.Cliente ASC`,
+    baseParams
+  );
+
+  const [acpRows] = await pool.query(
+    `SELECT
+       id,
+       transaccion_id,
+       id_etapa,
+       TRIM(lugar_entrega) AS lugar_entrega,
+       id_cliente,
+       cliente,
+       cajones_entregados,
+       cajones_devueltos,
+       pallets_entregados,
+       pallets_devueltos,
+       observaciones
+     FROM APP_CAJONES_PALLETS
+     WHERE transaccion_id = ?
+       ${lugarClauseAcp}
+     ORDER BY id ASC`,
+    acpParams
   );
 
   const groupedMap = new Map();
   for (const row of rows || []) {
-    const key = row.Id_etapa || `${row.Lugar_de_Entrega}__${row.id_cliente}`;
+    const key = row.Id_etapa || `${row.Lugar_de_Entrega}__${row.id_cliente || row.Cliente}`;
     if (!groupedMap.has(key)) {
       groupedMap.set(key, {
         Transaccionid: row.Transaccionid,
         Id_etapa: row.Id_etapa,
-        Lugar_de_Entrega: row.Lugar_de_Entrega || 'Sin Dirección',
+        Lugar_de_Entrega: row.Lugar_de_Entrega || cleanLugar || 'Sin Dirección',
         id_cliente: row.id_cliente,
         Cliente: row.Cliente || 'Sin Cliente',
         cajones_entregados: 0,
         cajones_devueltos: 0,
         diferencia: 0,
+        pallets_entregados: 0,
+        pallets_devueltos: 0,
+        diferencia_pallets: 0,
         observaciones: '',
         id_remito_cajones_entrega: null,
         id_remito_cajones_item_entrega: null,
@@ -696,15 +1043,67 @@ async function queryCajonesGrouped(transaccionId) {
     entry.diferencia = entry.cajones_entregados - entry.cajones_devueltos;
   }
 
+  for (const acp of acpRows || []) {
+    let target = null;
+    if (acp.id_etapa && groupedMap.has(acp.id_etapa)) {
+      target = groupedMap.get(acp.id_etapa);
+    } else {
+      for (const entry of groupedMap.values()) {
+        const sameLugar =
+          String(entry.Lugar_de_Entrega || '').trim().toLowerCase() ===
+          String(acp.lugar_entrega || '').trim().toLowerCase();
+        const sameClient =
+          (acp.id_cliente && Number(entry.id_cliente) === Number(acp.id_cliente)) ||
+          String(entry.Cliente || '').trim().toLowerCase() === String(acp.cliente || '').trim().toLowerCase();
+        if (sameLugar && sameClient) {
+          target = entry;
+          break;
+        }
+      }
+    }
+
+    if (!target) {
+      const manualKey = acp.id_etapa || `MANUAL-${acp.id_cliente || acp.id}`;
+      target = {
+        Transaccionid: Number(transaccionId),
+        Id_etapa: acp.id_etapa || manualKey,
+        Lugar_de_Entrega: acp.lugar_entrega || cleanLugar || 'Sin Dirección',
+        id_cliente: acp.id_cliente || null,
+        Cliente: acp.cliente,
+        cajones_entregados: 0,
+        cajones_devueltos: 0,
+        diferencia: 0,
+        pallets_entregados: 0,
+        pallets_devueltos: 0,
+        diferencia_pallets: 0,
+        observaciones: '',
+        id_remito_cajones_entrega: null,
+        id_remito_cajones_item_entrega: null,
+        id_remito_cajones_devolucion: null,
+        id_remito_cajones_item_devolucion: null
+      };
+      groupedMap.set(manualKey, target);
+    }
+
+    target.cajones_entregados = Number(acp.cajones_entregados || 0);
+    target.cajones_devueltos = Number(acp.cajones_devueltos || 0);
+    target.diferencia = target.cajones_entregados - target.cajones_devueltos;
+    target.pallets_entregados = Number(acp.pallets_entregados || 0);
+    target.pallets_devueltos = Number(acp.pallets_devueltos || 0);
+    target.diferencia_pallets = target.pallets_entregados - target.pallets_devueltos;
+    target.observaciones = acp.observaciones || '';
+  }
+
   return Array.from(groupedMap.values());
 }
 
 /**
- * Sección 4.2.3: Obtener entrega y devolución de cajones.
+ * Sección 4.2.3: Obtener entrega y devolución de cajones y pallets (filtrados por lugar si se indica).
  */
 async function getCajonesByTransaccion(req, res) {
   try {
     const { transaccionId } = req.params;
+    const cleanLugar = String(req.query.lugar || '').trim();
     const hojaRuta = await findHojaRutaHeader(transaccionId, req.user);
 
     if (!hojaRuta) {
@@ -714,18 +1113,27 @@ async function getCajonesByTransaccion(req, res) {
       });
     }
 
-    const items = await queryCajonesGrouped(hojaRuta.Transaccionid);
+    const items = await queryCajonesGrouped(hojaRuta.Transaccionid, cleanLugar);
+    const [clientesCatalogo] = await pool.query(
+      `SELECT Organizacionid AS id_cliente, Codigo AS codigo, Nombre AS nombre
+       FROM ORGANIZACION
+       WHERE Activo = '1' OR Activo = 1 OR Activo IS NULL
+       ORDER BY Nombre ASC
+       LIMIT 600`
+    );
 
     return res.json({
       ok: true,
       hoja_ruta: hojaRuta,
-      items
+      lugar: cleanLugar || null,
+      items,
+      clientes_catalogo: clientesCatalogo || []
     });
   } catch (error) {
     console.error(`[HojasRutaController.getCajonesByTransaccion] Error: ${error.message}`);
     return res.status(500).json({
       ok: false,
-      error: 'Error al consultar movimientos de cajones.',
+      error: 'Error al consultar movimientos de cajones y pallets.',
       details: error.message
     });
   }
@@ -777,12 +1185,14 @@ async function upsertCajonTipo(connection, { idEtapa, fecha, idCliente, tipo, ca
 }
 
 /**
- * Sección 4.2.3: Guardar entrega y devolución de cajones.
+ * Sección 4.2.3: Guardar entrega y devolución de cajones y pallets en APP_CAJONES_PALLETS
+ * (+ sincronización opcional no bloqueante hacia REMITO_CAJONES).
  */
 async function guardarCajones(req, res) {
   try {
     const { transaccionId } = req.params;
-    const { items } = req.body;
+    const { items, lugar } = req.body;
+    const cleanLugar = String(lugar || '').trim();
     const hojaRuta = await findHojaRutaHeader(transaccionId, req.user);
 
     if (!hojaRuta) {
@@ -795,7 +1205,7 @@ async function guardarCajones(req, res) {
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         ok: false,
-        error: 'Debe informar al menos un movimiento de cajones.'
+        error: 'Debe informar al menos un movimiento de cajones o pallets.'
       });
     }
 
@@ -803,19 +1213,39 @@ async function guardarCajones(req, res) {
     for (const item of items) {
       const entStr = String(item.cajones_entregados ?? '0').trim();
       const devStr = String(item.cajones_devueltos ?? '0').trim();
+      const palEntStr = String(item.pallets_entregados ?? '0').trim();
+      const palDevStr = String(item.pallets_devueltos ?? '0').trim();
 
-      if (!NON_NEGATIVE_INT_REGEX.test(entStr) || !NON_NEGATIVE_INT_REGEX.test(devStr)) {
+      if (
+        !NON_NEGATIVE_INT_REGEX.test(entStr) ||
+        !NON_NEGATIVE_INT_REGEX.test(devStr) ||
+        !NON_NEGATIVE_INT_REGEX.test(palEntStr) ||
+        !NON_NEGATIVE_INT_REGEX.test(palDevStr)
+      ) {
         return res.status(400).json({
           ok: false,
-          error: 'Las cantidades de cajones entregados y devueltos deben ser números enteros positivos o cero.'
+          error: 'Las cantidades de cajones y pallets entregados/devueltos deben ser números enteros positivos o cero.'
         });
       }
 
+      const itemLugar = String(item.Lugar_de_Entrega || cleanLugar || 'Entrega en Ruta').trim();
+      const clienteName = String(item.Cliente || 'Cliente').trim().slice(0, 200);
+      const idCliente = item.id_cliente ? Number(item.id_cliente) : null;
+      const etapaKey = item.Id_etapa
+        ? String(item.Id_etapa).trim()
+        : `MANUAL-${idCliente || clienteName.replace(/\s+/g, '_').slice(0, 30)}`;
+
       normalized.push({
-        Id_etapa: item.Id_etapa ? String(item.Id_etapa).trim() : null,
-        id_cliente: item.id_cliente ? Number(item.id_cliente) : null,
+        Id_etapa: etapaKey,
+        rawIdEtapa: item.Id_etapa ? String(item.Id_etapa).trim() : null,
+        Lugar_de_Entrega: itemLugar.slice(0, 250),
+        id_cliente: idCliente,
+        Cliente: clienteName,
         cajones_entregados: parseInt(entStr, 10),
         cajones_devueltos: parseInt(devStr, 10),
+        pallets_entregados: parseInt(palEntStr, 10),
+        pallets_devueltos: parseInt(palDevStr, 10),
+        observaciones: String(item.observaciones || '').trim().slice(0, 500),
         id_remito_cajones_entrega: item.id_remito_cajones_entrega || null,
         id_remito_cajones_item_entrega: item.id_remito_cajones_item_entrega || null,
         id_remito_cajones_devolucion: item.id_remito_cajones_devolucion || null,
@@ -824,7 +1254,7 @@ async function guardarCajones(req, res) {
     }
 
     const fecha = (hojaRuta.Fecha || new Date().toISOString().slice(0, 10)).slice(0, 10);
-    const existingGrouped = await queryCajonesGrouped(hojaRuta.Transaccionid);
+    const existingGrouped = await queryCajonesGrouped(hojaRuta.Transaccionid, cleanLugar);
     const existingByEtapa = new Map(
       existingGrouped
         .filter((ex) => ex.Id_etapa)
@@ -835,39 +1265,76 @@ async function guardarCajones(req, res) {
       await connection.beginTransaction();
       try {
         for (const row of normalized) {
-          if (!row.Id_etapa) continue;
-          const existing = existingByEtapa.get(row.Id_etapa);
+          await connection.query(
+            `INSERT INTO APP_CAJONES_PALLETS
+               (transaccion_id, id_etapa, lugar_entrega, id_cliente, cliente,
+                cajones_entregados, cajones_devueltos, pallets_entregados, pallets_devueltos,
+                observaciones, usuario_email)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+               id_cliente = VALUES(id_cliente),
+               lugar_entrega = VALUES(lugar_entrega),
+               cajones_entregados = VALUES(cajones_entregados),
+               cajones_devueltos = VALUES(cajones_devueltos),
+               pallets_entregados = VALUES(pallets_entregados),
+               pallets_devueltos = VALUES(pallets_devueltos),
+               observaciones = VALUES(observaciones),
+               usuario_email = VALUES(usuario_email)`,
+            [
+              hojaRuta.Transaccionid,
+              row.Id_etapa,
+              row.Lugar_de_Entrega,
+              row.id_cliente,
+              row.Cliente,
+              row.cajones_entregados,
+              row.cajones_devueltos,
+              row.pallets_entregados,
+              row.pallets_devueltos,
+              row.observaciones || null,
+              req.user?.email || null
+            ]
+          );
 
-          const existingEntItemId = row.id_remito_cajones_item_entrega || existing?.id_remito_cajones_item_entrega || null;
-          const existingEntCabId = row.id_remito_cajones_entrega || existing?.id_remito_cajones_entrega || null;
-          const entUnchanged = Boolean(existingEntItemId) && existing && Number(existing.cajones_entregados) === row.cajones_entregados;
+          // Intentar sincronizar tabla legacy REMITO_CAJONES sin bloquear si REMITO_CAJONES.id_etapa sigue como INT
+          if (row.rawIdEtapa) {
+            const existing = existingByEtapa.get(row.rawIdEtapa);
+            const existingEntItemId = row.id_remito_cajones_item_entrega || existing?.id_remito_cajones_item_entrega || null;
+            const existingEntCabId = row.id_remito_cajones_entrega || existing?.id_remito_cajones_entrega || null;
+            const existingDevItemId = row.id_remito_cajones_item_devolucion || existing?.id_remito_cajones_item_devolucion || null;
+            const existingDevCabId = row.id_remito_cajones_devolucion || existing?.id_remito_cajones_devolucion || null;
 
-          if (!entUnchanged && (row.cajones_entregados > 0 || existingEntCabId || existingEntItemId)) {
-            await upsertCajonTipo(connection, {
-              idEtapa: row.Id_etapa,
-              fecha,
-              idCliente: row.id_cliente,
-              tipo: CAJONES_TIPO_ENTREGA,
-              cantidad: row.cajones_entregados,
-              existingCabId: existingEntCabId,
-              existingItemId: existingEntItemId
-            });
-          }
+            await connection.query('SAVEPOINT legacy_cajones');
+            try {
+              if (row.cajones_entregados > 0 || existingEntCabId || existingEntItemId) {
+                await upsertCajonTipo(connection, {
+                  idEtapa: row.rawIdEtapa,
+                  fecha,
+                  idCliente: row.id_cliente,
+                  tipo: CAJONES_TIPO_ENTREGA,
+                  cantidad: row.cajones_entregados,
+                  existingCabId: existingEntCabId,
+                  existingItemId: existingEntItemId
+                });
+              }
 
-          const existingDevItemId = row.id_remito_cajones_item_devolucion || existing?.id_remito_cajones_item_devolucion || null;
-          const existingDevCabId = row.id_remito_cajones_devolucion || existing?.id_remito_cajones_devolucion || null;
-          const devUnchanged = Boolean(existingDevItemId) && existing && Number(existing.cajones_devueltos) === row.cajones_devueltos;
-
-          if (!devUnchanged && (row.cajones_devueltos > 0 || existingDevCabId || existingDevItemId)) {
-            await upsertCajonTipo(connection, {
-              idEtapa: row.Id_etapa,
-              fecha,
-              idCliente: row.id_cliente,
-              tipo: CAJONES_TIPO_DEVOLUCION,
-              cantidad: row.cajones_devueltos,
-              existingCabId: existingDevCabId,
-              existingItemId: existingDevItemId
-            });
+              if (row.cajones_devueltos > 0 || existingDevCabId || existingDevItemId) {
+                await upsertCajonTipo(connection, {
+                  idEtapa: row.rawIdEtapa,
+                  fecha,
+                  idCliente: row.id_cliente,
+                  tipo: CAJONES_TIPO_DEVOLUCION,
+                  cantidad: row.cajones_devueltos,
+                  existingCabId: existingDevCabId,
+                  existingItemId: existingDevItemId
+                });
+              }
+              await connection.query('RELEASE SAVEPOINT legacy_cajones');
+            } catch (legacyErr) {
+              await connection.query('ROLLBACK TO SAVEPOINT legacy_cajones');
+              if (!isStageIdTypeMismatch(legacyErr)) {
+                console.warn('[guardarCajones] Aviso al sincronizar tabla legacy REMITO_CAJONES:', legacyErr.message);
+              }
+            }
           }
         }
         await connection.commit();
@@ -877,25 +1344,19 @@ async function guardarCajones(req, res) {
       }
     });
 
-    const updatedItems = await queryCajonesGrouped(hojaRuta.Transaccionid);
+    const updatedItems = await queryCajonesGrouped(hojaRuta.Transaccionid, cleanLugar);
 
     return res.json({
       ok: true,
-      message: `Movimiento de cajones guardado (${normalized.length} paradas procesadas).`,
+      lugar: cleanLugar || null,
+      message: `Cajones y pallets guardados correctamente (${normalized.length} clientes procesados).`,
       items: updatedItems
     });
   } catch (error) {
-    if (isStageIdTypeMismatch(error)) {
-      return res.status(422).json({
-        ok: false,
-        error: 'El campo REMITO_CAJONES.id_etapa es INT en Gestion_Logistica pero HOJA_RUTA_ETAPA.Id_etapa es alfanumérico (ej. "2143599-3913"). Solicite al DBA ejecutar docs/dba_gestion_logistica_ajustes.sql.',
-        details: error.message
-      });
-    }
     console.error(`[HojasRutaController.guardarCajones] Error: ${error.message}`);
     return res.status(500).json({
       ok: false,
-      error: 'Error al guardar movimientos de cajones.',
+      error: 'Error al guardar movimientos de cajones y pallets.',
       details: error.message
     });
   }
@@ -903,6 +1364,7 @@ async function guardarCajones(req, res) {
 
 module.exports = {
   getHojasDeRuta,
+  getLugaresByTransaccion,
   getEntregasByTransaccion,
   guardarEntregas,
   getDevolucionesByTransaccion,

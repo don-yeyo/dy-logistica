@@ -1,7 +1,12 @@
 import { openDB } from 'idb';
 
 const DB_NAME = 'dy_logistica_offline_db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
+
+function buildLugarCacheKey(transaccionId, lugar = '') {
+  const cleanLugar = String(lugar || '').trim().toLowerCase();
+  return cleanLugar ? `${Number(transaccionId)}::${cleanLugar}` : Number(transaccionId);
+}
 
 /**
  * Inicializa la base de datos IndexedDB local.
@@ -18,6 +23,9 @@ export async function initOfflineDB() {
       }
       if (!db.objectStoreNames.contains('hojas_ruta_cache')) {
         db.createObjectStore('hojas_ruta_cache', { keyPath: 'Transaccionid' });
+      }
+      if (!db.objectStoreNames.contains('lugares_cache')) {
+        db.createObjectStore('lugares_cache', { keyPath: 'Transaccionid' });
       }
       if (!db.objectStoreNames.contains('entregas_cache')) {
         db.createObjectStore('entregas_cache', { keyPath: 'Transaccionid' });
@@ -60,57 +68,85 @@ export async function getCachedHojasRuta() {
   }
 }
 
-export async function cacheEntregas(transaccionId, payload) {
+export async function cacheLugares(transaccionId, payload) {
   try {
     const db = await initOfflineDB();
-    await db.put('entregas_cache', { Transaccionid: Number(transaccionId), ...payload });
+    await db.put('lugares_cache', { ...payload, Transaccionid: Number(transaccionId) });
+  } catch (error) {
+    console.warn('[OfflineDB] Error al cachear lugares:', error);
+  }
+}
+
+export async function getCachedLugares(transaccionId) {
+  try {
+    const db = await initOfflineDB();
+    return await db.get('lugares_cache', Number(transaccionId));
+  } catch (error) {
+    console.warn('[OfflineDB] Error al leer lugares cacheados:', error);
+    return null;
+  }
+}
+
+export async function cacheEntregas(transaccionId, payload, lugar = '') {
+  try {
+    const db = await initOfflineDB();
+    await db.put('entregas_cache', {
+      ...payload,
+      Transaccionid: buildLugarCacheKey(transaccionId, lugar)
+    });
   } catch (error) {
     console.warn('[OfflineDB] Error al cachear entregas:', error);
   }
 }
 
-export async function getCachedEntregas(transaccionId) {
+export async function getCachedEntregas(transaccionId, lugar = '') {
   try {
     const db = await initOfflineDB();
-    return await db.get('entregas_cache', Number(transaccionId));
+    return await db.get('entregas_cache', buildLugarCacheKey(transaccionId, lugar));
   } catch (error) {
     console.warn('[OfflineDB] Error al leer entregas cacheadas:', error);
     return null;
   }
 }
 
-export async function cacheDevoluciones(transaccionId, payload) {
+export async function cacheDevoluciones(transaccionId, payload, lugar = '') {
   try {
     const db = await initOfflineDB();
-    await db.put('devoluciones_cache', { Transaccionid: Number(transaccionId), ...payload });
+    await db.put('devoluciones_cache', {
+      ...payload,
+      Transaccionid: buildLugarCacheKey(transaccionId, lugar)
+    });
   } catch (error) {
     console.warn('[OfflineDB] Error al cachear devoluciones:', error);
   }
 }
 
-export async function getCachedDevoluciones(transaccionId) {
+export async function getCachedDevoluciones(transaccionId, lugar = '') {
   try {
     const db = await initOfflineDB();
-    return await db.get('devoluciones_cache', Number(transaccionId));
+    return await db.get('devoluciones_cache', buildLugarCacheKey(transaccionId, lugar));
   } catch (error) {
     console.warn('[OfflineDB] Error al leer devoluciones cacheadas:', error);
     return null;
   }
 }
 
-export async function cacheCajones(transaccionId, payload) {
+export async function cacheCajones(transaccionId, payload, lugar = '') {
   try {
     const db = await initOfflineDB();
-    await db.put('cajones_cache', { Transaccionid: Number(transaccionId), ...payload });
+    await db.put('cajones_cache', {
+      ...payload,
+      Transaccionid: buildLugarCacheKey(transaccionId, lugar)
+    });
   } catch (error) {
     console.warn('[OfflineDB] Error al cachear cajones:', error);
   }
 }
 
-export async function getCachedCajones(transaccionId) {
+export async function getCachedCajones(transaccionId, lugar = '') {
   try {
     const db = await initOfflineDB();
-    return await db.get('cajones_cache', Number(transaccionId));
+    return await db.get('cajones_cache', buildLugarCacheKey(transaccionId, lugar));
   } catch (error) {
     console.warn('[OfflineDB] Error al leer cajones cacheados:', error);
     return null;

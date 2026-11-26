@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Calendar, Truck, UserRound } from 'lucide-react';
+import { FileText, Calendar, Truck, UserRound, MapPin } from 'lucide-react';
 
 function TrailerIcon({ size = 14 }) {
   return (
@@ -25,14 +25,16 @@ function TrailerIcon({ size = 14 }) {
 
 /**
  * Componente unificado de card de Hoja de Ruta:
- * Se utiliza tanto en Inicio (listado seleccionable) como en Entregas, Devoluciones, Cajones y Remitos.
- * Muestra: Hoja_de_ruta, Fecha, Transportista (100% ancho en 1 línea) y Patentes (Camión / Acoplado).
+ * Se utiliza en Inicio, Lugares, Entregas, Devoluciones, Cajones y Pallets, y Remitos.
+ * Cuando `selectedLugar` viene informado, incluye una franja con el lugar activo y botón Cambiar.
  */
 export default function HojaRutaHeader({
   hojaRuta,
   selected = true,
   interactive = false,
-  onSelect = null
+  onSelect = null,
+  selectedLugar = null,
+  onChangeLugar = null
 }) {
   if (!hojaRuta) return null;
 
@@ -89,6 +91,29 @@ export default function HojaRutaHeader({
             <span>Acoplado: <strong>{hojaRuta.Patente_acoplado || '-'}</strong></span>
           </div>
         </div>
+
+        {selectedLugar && (
+          <div className="hr-lugar-bar" title={selectedLugar}>
+            <div className="hr-lugar-bar-info">
+              <MapPin size={14} style={{ flexShrink: 0 }} />
+              <span>
+                Lugar: <strong>{selectedLugar}</strong>
+              </span>
+            </div>
+            {onChangeLugar && (
+              <button
+                type="button"
+                className="hr-lugar-change-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChangeLugar();
+                }}
+              >
+                Cambiar
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

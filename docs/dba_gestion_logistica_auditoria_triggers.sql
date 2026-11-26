@@ -383,4 +383,92 @@ BEGIN
   );
 END$$
 
+-- ------------------------------------------------------------------------------
+-- 10. APP_ENTREGAS_LUGAR y APP_CAJONES_PALLETS
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `APP_ENTREGAS_LUGAR` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `transaccion_id` INT NOT NULL,
+  `lugar_entrega` VARCHAR(250) NOT NULL,
+  `productoid` INT NOT NULL,
+  `producto_nombre` VARCHAR(200) DEFAULT NULL,
+  `remitido_total` INT NOT NULL DEFAULT 0,
+  `entregado_total` INT NOT NULL DEFAULT 0,
+  `usuario_email` VARCHAR(150) DEFAULT NULL,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_hr_lugar_prod` (`transaccion_id`, `lugar_entrega`, `productoid`),
+  INDEX `idx_ael_tx` (`transaccion_id`),
+  INDEX `idx_ael_prod` (`productoid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci$$
+
+CREATE TABLE IF NOT EXISTS `APP_CAJONES_PALLETS` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `transaccion_id` INT NOT NULL,
+  `id_etapa` VARCHAR(45) DEFAULT NULL,
+  `lugar_entrega` VARCHAR(250) NOT NULL,
+  `id_cliente` INT DEFAULT NULL,
+  `cliente` VARCHAR(200) NOT NULL,
+  `cajones_entregados` INT NOT NULL DEFAULT 0,
+  `cajones_devueltos` INT NOT NULL DEFAULT 0,
+  `pallets_entregados` INT NOT NULL DEFAULT 0,
+  `pallets_devueltos` INT NOT NULL DEFAULT 0,
+  `observaciones` VARCHAR(500) DEFAULT NULL,
+  `usuario_email` VARCHAR(150) DEFAULT NULL,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_hr_etapa_cliente` (`transaccion_id`, `id_etapa`, `cliente`),
+  INDEX `idx_acp_tx_lugar` (`transaccion_id`, `lugar_entrega`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci$$
+
+DROP TRIGGER IF EXISTS `trg_aud_app_entregas_lugar_ai`$$
+CREATE TRIGGER `trg_aud_app_entregas_lugar_ai` AFTER INSERT ON `APP_ENTREGAS_LUGAR` FOR EACH ROW
+BEGIN
+  INSERT INTO `AUDITORIA` (`tabla_nombre`, `operacion`, `registro_pk`, `usuario_app`, `usuario_rol`, `usuario_db`, `datos_anteriores`, `datos_nuevos`)
+  VALUES ('APP_ENTREGAS_LUGAR', 'INSERT', CAST(NEW.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(), NULL,
+    JSON_OBJECT('id', NEW.id, 'transaccion_id', NEW.transaccion_id, 'lugar_entrega', NEW.lugar_entrega, 'productoid', NEW.productoid, 'remitido_total', NEW.remitido_total, 'entregado_total', NEW.entregado_total, 'usuario_email', NEW.usuario_email));
+END$$
+
+DROP TRIGGER IF EXISTS `trg_aud_app_entregas_lugar_au`$$
+CREATE TRIGGER `trg_aud_app_entregas_lugar_au` AFTER UPDATE ON `APP_ENTREGAS_LUGAR` FOR EACH ROW
+BEGIN
+  INSERT INTO `AUDITORIA` (`tabla_nombre`, `operacion`, `registro_pk`, `usuario_app`, `usuario_rol`, `usuario_db`, `datos_anteriores`, `datos_nuevos`)
+  VALUES ('APP_ENTREGAS_LUGAR', 'UPDATE', CAST(NEW.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
+    JSON_OBJECT('id', OLD.id, 'transaccion_id', OLD.transaccion_id, 'lugar_entrega', OLD.lugar_entrega, 'productoid', OLD.productoid, 'entregado_total', OLD.entregado_total),
+    JSON_OBJECT('id', NEW.id, 'transaccion_id', NEW.transaccion_id, 'lugar_entrega', NEW.lugar_entrega, 'productoid', NEW.productoid, 'entregado_total', NEW.entregado_total, 'usuario_email', NEW.usuario_email));
+END$$
+
+DROP TRIGGER IF EXISTS `trg_aud_app_entregas_lugar_ad`$$
+CREATE TRIGGER `trg_aud_app_entregas_lugar_ad` AFTER DELETE ON `APP_ENTREGAS_LUGAR` FOR EACH ROW
+BEGIN
+  INSERT INTO `AUDITORIA` (`tabla_nombre`, `operacion`, `registro_pk`, `usuario_app`, `usuario_rol`, `usuario_db`, `datos_anteriores`, `datos_nuevos`)
+  VALUES ('APP_ENTREGAS_LUGAR', 'DELETE', CAST(OLD.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
+    JSON_OBJECT('id', OLD.id, 'transaccion_id', OLD.transaccion_id, 'lugar_entrega', OLD.lugar_entrega, 'productoid', OLD.productoid, 'entregado_total', OLD.entregado_total), NULL);
+END$$
+
+DROP TRIGGER IF EXISTS `trg_aud_app_cajones_pallets_ai`$$
+CREATE TRIGGER `trg_aud_app_cajones_pallets_ai` AFTER INSERT ON `APP_CAJONES_PALLETS` FOR EACH ROW
+BEGIN
+  INSERT INTO `AUDITORIA` (`tabla_nombre`, `operacion`, `registro_pk`, `usuario_app`, `usuario_rol`, `usuario_db`, `datos_anteriores`, `datos_nuevos`)
+  VALUES ('APP_CAJONES_PALLETS', 'INSERT', CAST(NEW.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(), NULL,
+    JSON_OBJECT('id', NEW.id, 'transaccion_id', NEW.transaccion_id, 'id_etapa', NEW.id_etapa, 'lugar_entrega', NEW.lugar_entrega, 'id_cliente', NEW.id_cliente, 'cliente', NEW.cliente, 'cajones_entregados', NEW.cajones_entregados, 'cajones_devueltos', NEW.cajones_devueltos, 'pallets_entregados', NEW.pallets_entregados, 'pallets_devueltos', NEW.pallets_devueltos, 'observaciones', NEW.observaciones, 'usuario_email', NEW.usuario_email));
+END$$
+
+DROP TRIGGER IF EXISTS `trg_aud_app_cajones_pallets_au`$$
+CREATE TRIGGER `trg_aud_app_cajones_pallets_au` AFTER UPDATE ON `APP_CAJONES_PALLETS` FOR EACH ROW
+BEGIN
+  INSERT INTO `AUDITORIA` (`tabla_nombre`, `operacion`, `registro_pk`, `usuario_app`, `usuario_rol`, `usuario_db`, `datos_anteriores`, `datos_nuevos`)
+  VALUES ('APP_CAJONES_PALLETS', 'UPDATE', CAST(NEW.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
+    JSON_OBJECT('id', OLD.id, 'cajones_entregados', OLD.cajones_entregados, 'cajones_devueltos', OLD.cajones_devueltos, 'pallets_entregados', OLD.pallets_entregados, 'pallets_devueltos', OLD.pallets_devueltos, 'observaciones', OLD.observaciones),
+    JSON_OBJECT('id', NEW.id, 'cajones_entregados', NEW.cajones_entregados, 'cajones_devueltos', NEW.cajones_devueltos, 'pallets_entregados', NEW.pallets_entregados, 'pallets_devueltos', NEW.pallets_devueltos, 'observaciones', NEW.observaciones, 'usuario_email', NEW.usuario_email));
+END$$
+
+DROP TRIGGER IF EXISTS `trg_aud_app_cajones_pallets_ad`$$
+CREATE TRIGGER `trg_aud_app_cajones_pallets_ad` AFTER DELETE ON `APP_CAJONES_PALLETS` FOR EACH ROW
+BEGIN
+  INSERT INTO `AUDITORIA` (`tabla_nombre`, `operacion`, `registro_pk`, `usuario_app`, `usuario_rol`, `usuario_db`, `datos_anteriores`, `datos_nuevos`)
+  VALUES ('APP_CAJONES_PALLETS', 'DELETE', CAST(OLD.id AS CHAR), COALESCE(@app_user_email, USER()), @app_user_rol, USER(),
+    JSON_OBJECT('id', OLD.id, 'transaccion_id', OLD.transaccion_id, 'lugar_entrega', OLD.lugar_entrega, 'cliente', OLD.cliente), NULL);
+END$$
+
 DELIMITER ;
