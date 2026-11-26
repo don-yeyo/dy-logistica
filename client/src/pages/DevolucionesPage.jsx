@@ -157,18 +157,18 @@ export default function DevolucionesPage({ hojaRuta, selectedLugar, onChangeLuga
     } else {
       const nextLugares = {};
       const nextClientes = {};
-        resolvedGrupos.forEach((g) => {
-          nextLugares[g.lugar] = true;
-          const singleClient = g.clientes.length === 1;
-          g.clientes.forEach((c) => {
-              if (singleClient || c.productos.length > 0) {
-                nextClientes[c.clientKey] = true;
-              }
-            });
+      resolvedGrupos.forEach((g) => {
+        nextLugares[g.lugar] = true;
+        const singleClient = g.clientes.length === 1;
+        g.clientes.forEach((c) => {
+          if (singleClient || c.productos.length > 0) {
+            nextClientes[c.clientKey] = true;
+          }
         });
-        setExpandedLugares(nextLugares);
-        setExpandedClientes(nextClientes);
-      }
+      });
+      setExpandedLugares(nextLugares);
+      setExpandedClientes(nextClientes);
+    }
   }, [hojaRuta, selectedLugar, user?.email]);
 
   const loadDevoluciones = useCallback(async () => {
@@ -728,7 +728,7 @@ export default function DevolucionesPage({ hojaRuta, selectedLugar, onChangeLuga
                             onClick={() => handleAddProduct(grupo.lugar, cli.clientKey)}
                           >
                             <Plus size={16} />
-                            <span>Agregar otro producto a devolver</span>
+                            <span>Agregar producto a devolver</span>
                           </button>
                         </div>
                       )}

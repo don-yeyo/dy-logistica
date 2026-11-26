@@ -399,6 +399,32 @@ async function setup() {
   `);
   console.log('✔ Tabla APP_CAJONES_PALLETS lista.');
 
+  // 2.8 Agregar columnas comerciales en ORGANIZACION de forma idempotente
+  const [orgCols] = await conn.query(
+    `SELECT COLUMN_NAME
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'ORGANIZACION'`
+  );
+  const orgColSet = new Set((orgCols || []).map((c) => c.COLUMN_NAME));
+  const orgAlters = [];
+
+  if (!orgColSet.has('cant_ejemplares_remito')) {
+    orgAlters.push(
+      "ADD COLUMN `cant_ejemplares_remito` TINYINT UNSIGNED NULL DEFAULT NULL COMMENT 'Cantidad de copias/ejemplares de remito esperados por cliente (NULL usa default del sistema)' AFTER `EMail`"
+    );
+  }
+  if (!orgColSet.has('permite_devolucion_libre')) {
+    orgAlters.push(
+      "ADD COLUMN `permite_devolucion_libre` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 si el cliente soporta devolucion libre (foto + total sin discriminar items), 0 normal' AFTER `cant_ejemplares_remito`"
+    );
+  }
+
+  if (orgAlters.length > 0) {
+    await conn.query(`ALTER TABLE \`ORGANIZACION\` ${orgAlters.join(', ')}`);
+  }
+  console.log('✔ Columnas cant_ejemplares_remito y permite_devolucion_libre verificadas en ORGANIZACION.');
+
   // 3. Sembrar usuarios iniciales
   const seedUsers = [
     {

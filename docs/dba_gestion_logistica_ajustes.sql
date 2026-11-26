@@ -132,3 +132,18 @@ LEFT JOIN `HOJA_RUTA_ETAPA` `ETAPA` ON `HR`.`Transaccionid` = `ETAPA`.`Transacci
 LEFT JOIN `ORGANIZACION` `CL` ON `CL`.`Organizacionid` = `ETAPA`.`Organizacionidoperador`
 LEFT JOIN `REMITO_CAJONES` `RC` ON `RC`.`id_etapa` = `ETAPA`.`Id_etapa`
 LEFT JOIN `REMITO_CAJONES_ITEMS` `RCI` ON `RCI`.`id_remito_cajones` = `RC`.`id_remito_cajones`;
+
+-- ------------------------------------------------------------------------------
+-- 6. COLUMNAS COMERCIALES EN ORGANIZACION (EJEMPLARES DE REMITO Y DEVOLUCIÓN LIBRE)
+--    Ya aplicadas en Gestion_Logistica por setup_glog_app.js; DDL de referencia y
+--    ejemplos de carga para el DBA.
+-- ------------------------------------------------------------------------------
+-- ALTER TABLE `ORGANIZACION`
+--   ADD COLUMN `cant_ejemplares_remito` TINYINT UNSIGNED NULL DEFAULT NULL
+--     COMMENT 'Cantidad de copias/ejemplares de remito esperados por cliente (NULL usa default del sistema)' AFTER `EMail`,
+--   ADD COLUMN `permite_devolucion_libre` TINYINT(1) NOT NULL DEFAULT 0
+--     COMMENT '1 si el cliente soporta devolucion libre (foto + total sin discriminar items), 0 normal' AFTER `cant_ejemplares_remito`;
+--
+-- Ejemplos de población por cliente:
+-- UPDATE `ORGANIZACION` SET `cant_ejemplares_remito` = 3, `permite_devolucion_libre` = 1 WHERE `Organizacionid` = 1234;
+-- UPDATE `ORGANIZACION` SET `cant_ejemplares_remito` = 2 WHERE `permite_devolucion_libre` = 0;

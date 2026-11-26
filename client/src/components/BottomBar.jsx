@@ -4,6 +4,7 @@ import { ArrowLeft, Camera, Check, RefreshCw } from 'lucide-react';
 
 export default function BottomBar({
   onBack,
+  backLabel = '',
   onSave,
   onCameraClick,
   saving = false,
@@ -16,11 +17,12 @@ export default function BottomBar({
         {onBack && (
           <button
             type="button"
-            className="btn-back-square"
+            className={`btn-back-square${backLabel ? ' btn-back-labeled' : ''}`}
             onClick={onBack}
-            title="Volver al listado de remitos"
+            title={backLabel || 'Volver al listado de remitos'}
           >
-            <ArrowLeft size={24} />
+            <ArrowLeft size={backLabel ? 19 : 24} />
+            {backLabel && <span>{backLabel}</span>}
           </button>
         )}
 

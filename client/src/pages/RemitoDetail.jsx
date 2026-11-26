@@ -19,17 +19,16 @@ import {
   CheckCircle2,
   Check,
   Trash2,
-  Camera,
   RefreshCw
 } from 'lucide-react';
 
 const EJEMPLARES = [
-  { key: 'ORIGINAL', label: 'Original', short: 'Orig.' },
-  { key: 'DUPLICADO', label: 'Duplic.', short: 'Duplic.' },
-  { key: 'TRIPLICADO', label: 'Triplic.', short: 'Triplic.' },
-  { key: 'CUATRIPLICADO', label: 'Cuatrip.', short: 'Cuatrip.' },
-  { key: 'RECEPCION_VALORIZADA', label: 'Recep.', subLabel: 'Val.', short: 'Recep. Val.' },
-  { key: 'OTRO', label: 'Otro', short: 'Otro' }
+  { key: 'ORIGINAL', label: 'Original', fullLabel: 'Original', short: 'Orig.' },
+  { key: 'DUPLICADO', label: 'Duplic.', fullLabel: 'Duplicado', short: 'Duplic.' },
+  { key: 'TRIPLICADO', label: 'Triplic.', fullLabel: 'Triplicado', short: 'Triplic.' },
+  { key: 'CUATRIPLICADO', label: 'Cuatrip.', fullLabel: 'Cuatriplicado', short: 'Cuatrip.' },
+  { key: 'RECEPCION_VALORIZADA', label: 'Recep.', subLabel: 'Val.', fullLabel: 'Recepción Valorizada', short: 'Recep. Val.' },
+  { key: 'OTRO', label: 'Otro', fullLabel: 'Otro', short: 'Otro' }
 ];
 
 function createEmptyEjemplar(key) {
@@ -42,6 +41,9 @@ function createEmptyEjemplar(key) {
     foto_url: null,
     foto_sharepoint_url: null,
     foto_nombre_archivo: null,
+    firma_digital_base64: null,
+    firma_receptor_aclaracion: '',
+    firma_receptor_dni: '',
     capturedPhoto: null
   };
 }
@@ -61,11 +63,13 @@ function buildInitialEjemplares(remito) {
         foto_url: ej.foto_url || null,
         foto_sharepoint_url: ej.foto_sharepoint_url || null,
         foto_nombre_archivo: ej.foto_nombre_archivo || null,
+        firma_digital_base64: ej.firma_digital_base64 || null,
+        firma_receptor_aclaracion: ej.firma_receptor_aclaracion || '',
+        firma_receptor_dni: ej.firma_receptor_dni || '',
         capturedPhoto: null
       };
     }
-    const keys = Object.keys(map);
-    return { map, firstKey: keys[0] || null };
+    return map;
   }
 
   if (remito.estado_firma && remito.estado_firma !== 'PENDIENTE') {
@@ -85,21 +89,15 @@ function buildInitialEjemplares(remito) {
       foto_url: remito.foto_url || null,
       foto_sharepoint_url: remito.foto_sharepoint_url || null,
       foto_nombre_archivo: remito.foto_nombre_archivo || null,
+      firma_digital_base64: remito.firma_digital_base64 || null,
+      firma_receptor_aclaracion: remito.firma_receptor_aclaracion || '',
+      firma_receptor_dni: remito.firma_receptor_dni || '',
       capturedPhoto: null
     };
-    return { map, firstKey: key };
+    return map;
   }
 
-  return { map, firstKey: null };
-}
-
-function formatSignersShort(ej) {
-  if (!ej) return '';
-  if (ej.no_firmado) return 'Sin firma';
-  if (ej.firmado_cliente && ej.firmado_intermediario) return 'Cliente + Interm.';
-  if (ej.firmado_cliente) return 'Cliente';
-  if (ej.firmado_intermediario) return 'Interm.';
-  return 'Falta firmar';
+  return map;
 }
 
 function serializeEjemplaresMap(ejemplaresMap = {}) {
@@ -116,79 +114,83 @@ function serializeEjemplaresMap(ejemplaresMap = {}) {
       foto_url: ej.foto_url || null,
       foto_sharepoint_url: ej.foto_sharepoint_url || null,
       foto_nombre_archivo: ej.foto_nombre_archivo || null,
+      firma_digital_base64: ej.firma_digital_base64 || null,
+      firma_receptor_aclaracion: ej.firma_receptor_aclaracion || '',
+      firma_receptor_dni: ej.firma_receptor_dni || '',
       capturedPhotoDataUrl: ej.capturedPhoto?.dataUrl || ej.capturedPhotoDataUrl || null
     };
   }
   return out;
 }
 
-function serializeRemitoSnapshot(ejemplaresMap, signatureInfo) {
+function serializeRemitoSnapshot(ejemplaresMap) {
   return {
-    ejemplaresMap: serializeEjemplaresMap(ejemplaresMap),
-    signatureInfo: {
-      firma_digital_base64: signatureInfo?.firma_digital_base64 || null,
-      firma_receptor_aclaracion: signatureInfo?.firma_receptor_aclaracion || '',
-      firma_receptor_dni: signatureInfo?.firma_receptor_dni || ''
-    }
+    ejemplaresMap: serializeEjemplaresMap(ejemplaresMap)
   };
 }
 
-function hydrateDraftEjemplares(ejemplaresMap = {}) {
+function hydrateDraftEjemplares(ejemplaresMap = {}, legacySignatureInfo = null) {
   const out = {};
-  for (const [k, ej] of Object.entries(ejemplaresMap)) {
-    if (!ej) continue;
+  const entries = Object.entries(ejemplaresMap);
+  entries.forEach(([k, ej], idx) => {
+    if (!ej) return;
+    const useLegacySig =
+      idx === 0 &&
+      !ej.firma_digital_base64 &&
+      Boolean(legacySignatureInfo?.firma_digital_base64);
     out[k] = {
       ...createEmptyEjemplar(k),
       ...ej,
+      firma_digital_base64: useLegacySig
+        ? legacySignatureInfo.firma_digital_base64
+        : ej.firma_digital_base64 || null,
+      firma_receptor_aclaracion: useLegacySig
+        ? legacySignatureInfo.firma_receptor_aclaracion || ''
+        : ej.firma_receptor_aclaracion || '',
+      firma_receptor_dni: useLegacySig
+        ? legacySignatureInfo.firma_receptor_dni || ''
+        : ej.firma_receptor_dni || '',
       capturedPhoto: ej.capturedPhotoDataUrl ? { dataUrl: ej.capturedPhotoDataUrl } : null
     };
-  }
+  });
   return out;
 }
 
 export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onBack, onSaved }) {
   const { user, refreshPendingCount } = useAuth();
   const initialSnapshotRef = useRef('');
+  const panelRefs = useRef({});
+  const containerRef = useRef(null);
 
-  const [initialState] = useState(() => buildInitialEjemplares(remito));
-  const [ejemplaresMap, setEjemplaresMap] = useState(initialState.map);
-  const [activeEjemplar, setActiveEjemplar] = useState(initialState.firstKey);
-  const [signatureInfo, setSignatureInfo] = useState({
-    firma_digital_base64: remito.firma_digital_base64 || null,
-    firma_receptor_aclaracion: remito.firma_receptor_aclaracion || '',
-    firma_receptor_dni: remito.firma_receptor_dni || ''
-  });
+  const [ejemplaresMap, setEjemplaresMap] = useState(() => buildInitialEjemplares(remito));
   const [saving, setSaving] = useState(false);
   const [successModal, setSuccessModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
 
   useEffect(() => {
-    const base = buildInitialEjemplares(remito);
-    const baseSig = {
-      firma_digital_base64: remito.firma_digital_base64 || null,
-      firma_receptor_aclaracion: remito.firma_receptor_aclaracion || '',
-      firma_receptor_dni: remito.firma_receptor_dni || ''
-    };
-    initialSnapshotRef.current = JSON.stringify(serializeRemitoSnapshot(base.map, baseSig));
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+    }
+  }, [remito?.id]);
+
+  useEffect(() => {
+    const baseMap = buildInitialEjemplares(remito);
+    initialSnapshotRef.current = JSON.stringify(serializeRemitoSnapshot(baseMap));
 
     const savedDraft =
       getHojaRutaDraft(user?.email, hojaRuta?.Transaccionid, selectedLugar).remitos?.byRemitoId?.[String(remito.id)];
 
     if (savedDraft) {
-      const hydratedMap = hydrateDraftEjemplares(savedDraft.ejemplaresMap || {});
-      const firstKey =
-        EJEMPLARES.map((e) => e.key).find((k) => Boolean(hydratedMap[k])) || null;
+      const hydratedMap = hydrateDraftEjemplares(
+        savedDraft.ejemplaresMap || {},
+        savedDraft.signatureInfo || null
+      );
       setEjemplaresMap(hydratedMap);
-      setActiveEjemplar(firstKey);
-      setSignatureInfo({
-        firma_digital_base64: savedDraft.signatureInfo?.firma_digital_base64 || null,
-        firma_receptor_aclaracion: savedDraft.signatureInfo?.firma_receptor_aclaracion || '',
-        firma_receptor_dni: savedDraft.signatureInfo?.firma_receptor_dni || ''
-      });
     } else {
-      setEjemplaresMap(base.map);
-      setActiveEjemplar(base.firstKey);
-      setSignatureInfo(baseSig);
+      setEjemplaresMap(baseMap);
     }
   }, [remito, user?.email, hojaRuta?.Transaccionid, selectedLugar]);
 
@@ -207,9 +209,9 @@ export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onB
   }, [hojaRuta?.Transaccionid, selectedLugar, onSaved, remito]);
 
   const syncRemitoDraft = useCallback(
-    (nextMap, nextSig) => {
+    (nextMap) => {
       if (!user?.email || !hojaRuta?.Transaccionid || !remito?.id) return;
-      const snapshot = serializeRemitoSnapshot(nextMap, nextSig);
+      const snapshot = serializeRemitoSnapshot(nextMap);
       const changed = JSON.stringify(snapshot) !== initialSnapshotRef.current;
 
       if (changed) {
@@ -221,8 +223,7 @@ export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onB
             remitoId: remito.id,
             comprobante: remito.finne_Comprobante || null,
             id_etapa: remito.id_etapa || null,
-            ejemplaresMap: snapshot.ejemplaresMap,
-            signatureInfo: snapshot.signatureInfo
+            ejemplaresMap: snapshot.ejemplaresMap
           },
           selectedLugar
         );
@@ -242,47 +243,65 @@ export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onB
     (item) => ({ ...item, data: ejemplaresMap[item.key] })
   );
 
-  const activeData = activeEjemplar ? ejemplaresMap[activeEjemplar] : null;
-  const activeMeta = EJEMPLARES.find((e) => e.key === activeEjemplar);
-
   const handleSelectOrAddEjemplar = (key) => {
-    if (!ejemplaresMap[key]) {
+    const cur = ejemplaresMap[key];
+    if (!cur) {
+      const hadExisting = Object.keys(ejemplaresMap).length > 0;
       const nextMap = {
         ...ejemplaresMap,
         [key]: createEmptyEjemplar(key)
       };
       setEjemplaresMap(nextMap);
-      syncRemitoDraft(nextMap, signatureInfo);
+      syncRemitoDraft(nextMap);
+      if (hadExisting) {
+        requestAnimationFrame(() => {
+          panelRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+      }
+      return;
     }
-    setActiveEjemplar(key);
+
+    const isEmpty =
+      !cur.firmado_cliente &&
+      !cur.firmado_intermediario &&
+      !cur.no_firmado &&
+      !String(cur.observaciones || '').trim() &&
+      !cur.capturedPhoto &&
+      !cur.foto_url &&
+      !cur.foto_sharepoint_url &&
+      !cur.firma_digital_base64 &&
+      !String(cur.firma_receptor_aclaracion || '').trim() &&
+      !String(cur.firma_receptor_dni || '').trim();
+
+    if (isEmpty) {
+      handleRemoveEjemplar(key);
+    } else {
+      panelRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   };
 
   const handleRemoveEjemplar = (key) => {
     const nextMap = { ...ejemplaresMap };
     delete nextMap[key];
-    const remaining = EJEMPLARES.map((e) => e.key).filter((k) => Boolean(nextMap[k]));
-    if (activeEjemplar === key) {
-      setActiveEjemplar(remaining[0] || null);
-    }
     setEjemplaresMap(nextMap);
-    syncRemitoDraft(nextMap, signatureInfo);
+    syncRemitoDraft(nextMap);
   };
 
-  const updateActiveEjemplar = (updater) => {
-    if (!activeEjemplar) return;
-    const cur = ejemplaresMap[activeEjemplar];
+  const updateEjemplar = (key, updater) => {
+    if (!key) return;
+    const cur = ejemplaresMap[key];
     if (!cur) return;
     const updated = typeof updater === 'function' ? updater(cur) : { ...cur, ...updater };
     const nextMap = {
       ...ejemplaresMap,
-      [activeEjemplar]: updated
+      [key]: updated
     };
     setEjemplaresMap(nextMap);
-    syncRemitoDraft(nextMap, signatureInfo);
+    syncRemitoDraft(nextMap);
   };
 
-  const handleToggleSigner = (signer) => {
-    updateActiveEjemplar((cur) => {
+  const handleToggleSigner = (key, signer) => {
+    updateEjemplar(key, (cur) => {
       if (signer === 'NO_FIRMADO') {
         const nextNoFirma = !cur.no_firmado;
         return {
@@ -318,9 +337,9 @@ export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onB
     for (const item of orderedEjemplares) {
       const d = item.data;
       if (!d.no_firmado && !d.firmado_cliente && !d.firmado_intermediario) {
-        setActiveEjemplar(item.key);
+        panelRefs.current[item.key]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         setErrorMessage(
-          `En el ejemplar "${item.short}" debés marcar al menos un firmante (Cliente, Intermediario o ambos) o "No Firmado".`
+          `En el ejemplar "${item.fullLabel}" debés marcar al menos un firmante (Cliente, Intermediario o ambos) o "No Firmado".`
         );
         return;
       }
@@ -369,12 +388,16 @@ export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onB
           observaciones: d.observaciones || '',
           foto_url: fotoUrl,
           foto_sharepoint_url: fotoSharepointUrl,
-          foto_nombre_archivo: fotoNombreArchivo
+          foto_nombre_archivo: fotoNombreArchivo,
+          firma_digital_base64: d.firma_digital_base64 || null,
+          firma_receptor_aclaracion: d.firma_receptor_aclaracion || null,
+          firma_receptor_dni: d.firma_receptor_dni || null
         });
       }
 
       const anyCliente = serializedEjemplares.some((e) => e.firmado_cliente);
       const anyInterm = serializedEjemplares.some((e) => e.firmado_intermediario);
+      const firstSigned = serializedEjemplares.find((e) => e.firma_digital_base64);
       const estadoFirmaConsolidado =
         anyCliente && anyInterm
           ? 'FIRMADO_AMBOS'
@@ -388,9 +411,9 @@ export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onB
         ejemplares: serializedEjemplares,
         ejemplar: serializedEjemplares[0].ejemplar,
         estado_firma: estadoFirmaConsolidado,
-        firma_digital_base64: signatureInfo.firma_digital_base64 || null,
-        firma_receptor_aclaracion: signatureInfo.firma_receptor_aclaracion || null,
-        firma_receptor_dni: signatureInfo.firma_receptor_dni || null,
+        firma_digital_base64: firstSigned?.firma_digital_base64 || null,
+        firma_receptor_aclaracion: firstSigned?.firma_receptor_aclaracion || null,
+        firma_receptor_dni: firstSigned?.firma_receptor_dni || null,
         id_etapa: remito.id_etapa || null,
         comprobante: remito.finne_Comprobante || null,
         sincronizado_offline: !navigator.onLine ? 1 : 0
@@ -443,7 +466,7 @@ export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onB
   };
 
   return (
-    <div className="detail-container-no-scroll">
+    <div ref={containerRef} className="detail-container-no-scroll">
       {/* Cabecera Resumen del Remito */}
       <div className="remito-summary-card">
         <div className="remito-summary-top">
@@ -477,13 +500,12 @@ export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onB
         <div className="ejemplar-grid-3col">
           {EJEMPLARES.map((item) => {
             const isConfigured = Boolean(ejemplaresMap[item.key]);
-            const isActive = activeEjemplar === item.key;
             const itemKeyClass = `ejemplar-btn-${item.key.toLowerCase().replace(/_/g, '-')}`;
             return (
               <button
                 key={item.key}
                 type="button"
-                className={`ejemplar-btn-3col ${itemKeyClass} ${isConfigured ? 'configured' : ''} ${isActive ? 'selected' : ''}`}
+                className={`ejemplar-btn-3col ${itemKeyClass} ${isConfigured ? 'configured selected' : ''}`}
                 onClick={() => handleSelectOrAddEjemplar(item.key)}
               >
                 {isConfigured && (
@@ -497,144 +519,138 @@ export default function RemitoDetail({ remito, hojaRuta, selectedLugar = '', onB
             );
           })}
         </div>
-
-        {orderedEjemplares.length > 0 && (
-          <div className="ejemplares-summary-strip">
-            {orderedEjemplares.map((item) => {
-              const d = item.data;
-              const isActive = activeEjemplar === item.key;
-              const hasPhoto = Boolean(d.capturedPhoto || d.foto_sharepoint_url || d.foto_url);
-              const needsSigner = !d.no_firmado && !d.firmado_cliente && !d.firmado_intermediario;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`ejemplar-summary-chip ${isActive ? 'active' : ''} ${needsSigner ? 'incomplete' : ''}`}
-                  onClick={() => setActiveEjemplar(item.key)}
-                >
-                  <strong>{item.short}</strong>
-                  <span>· {formatSignersShort(d)}</span>
-                  {hasPhoto && <Camera size={12} />}
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
 
-      {/* 2. EDITOR INDIVIDUAL DEL EJEMPLAR ACTIVO */}
-      {activeData && (
-        <div className="ejemplar-editor-panel">
-          <div className="ejemplar-editor-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <CheckCircle2 size={17} style={{ color: 'var(--dy-blue)' }} />
-              <span>
-                Editando: <strong>{activeMeta ? `${activeMeta.label}${activeMeta.subLabel ? ` ${activeMeta.subLabel}` : ''}` : activeEjemplar}</strong>
-              </span>
-            </div>
-            <button
-              type="button"
-              className="ejemplar-remove-btn"
-              onClick={() => handleRemoveEjemplar(activeEjemplar)}
-              title="Quitar este ejemplar"
-            >
-              <Trash2 size={14} />
-              <span>Quitar</span>
-            </button>
-          </div>
+      {/* 2. FORMULARIOS APILADOS DE CADA EJEMPLAR SELECCIONADO */}
+      {orderedEjemplares.length > 0 && (
+        <div className="ejemplares-editor-stack">
+          {orderedEjemplares.map((item) => {
+            const ejData = item.data;
+            const needsSigner = !ejData.no_firmado && !ejData.firmado_cliente && !ejData.firmado_intermediario;
 
-          <div className="firma-multi-hint">
-            Marcá <strong>Cliente</strong>, <strong>Intermediario</strong> o ambos si los dos firmaron este ejemplar.
-          </div>
+            return (
+              <div
+                key={item.key}
+                ref={(el) => {
+                  if (el) panelRefs.current[item.key] = el;
+                  else delete panelRefs.current[item.key];
+                }}
+                className={`ejemplar-editor-panel ${needsSigner ? 'incomplete' : ''}`}
+              >
+                <div className="ejemplar-editor-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <CheckCircle2 size={17} style={{ color: 'var(--dy-blue)' }} />
+                    <span>
+                      Ejemplar: <strong>{item.fullLabel}</strong>
+                    </span>
+                    {needsSigner && (
+                      <span className="ejemplar-missing-pill">Falta firmar</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="ejemplar-remove-btn"
+                    onClick={() => handleRemoveEjemplar(item.key)}
+                    title={`Quitar ejemplar ${item.fullLabel}`}
+                  >
+                    <Trash2 size={14} />
+                    <span>Quitar</span>
+                  </button>
+                </div>
 
-          <div className="firma-grid-3col">
-            <button
-              type="button"
-              className={`firma-btn-3col btn-cliente ${activeData.firmado_cliente ? 'selected' : ''}`}
-              onClick={() => handleToggleSigner('CLIENTE')}
-            >
-              <Building2 size={19} />
-              <span>Cliente</span>
-            </button>
+                <div className="firma-multi-hint">
+                  Marcá <strong>Cliente</strong>, <strong>Intermediario</strong> o ambos si los dos firmaron este ejemplar.
+                </div>
 
-            <button
-              type="button"
-              className={`firma-btn-3col btn-interm ${activeData.firmado_intermediario ? 'selected' : ''}`}
-              onClick={() => handleToggleSigner('INTERMEDIARIO')}
-            >
-              <Truck size={19} />
-              <span>Intermediario</span>
-            </button>
+                <div className="firma-grid-3col">
+                  <button
+                    type="button"
+                    className={`firma-btn-3col btn-cliente ${ejData.firmado_cliente ? 'selected' : ''}`}
+                    onClick={() => handleToggleSigner(item.key, 'CLIENTE')}
+                  >
+                    <Building2 size={19} />
+                    <span>Cliente</span>
+                  </button>
 
-            <button
-              type="button"
-              className={`firma-btn-3col btn-nofirma ${activeData.no_firmado ? 'selected' : ''}`}
-              onClick={() => handleToggleSigner('NO_FIRMADO')}
-            >
-              <XCircle size={19} />
-              <span>No Firmado</span>
-            </button>
-          </div>
+                  <button
+                    type="button"
+                    className={`firma-btn-3col btn-interm ${ejData.firmado_intermediario ? 'selected' : ''}`}
+                    onClick={() => handleToggleSigner(item.key, 'INTERMEDIARIO')}
+                  >
+                    <Truck size={19} />
+                    <span>Intermediario</span>
+                  </button>
 
-          {/* Foto opcional propia de este ejemplar */}
-          <div className="detail-section-compact" style={{ marginTop: '4px' }}>
-            <CameraCapture
-              key={activeEjemplar}
-              initialPhotoUrl={
-                activeData.capturedPhoto?.dataUrl ||
-                activeData.foto_sharepoint_url ||
-                activeData.foto_url ||
-                null
-              }
-              onPhotoCaptured={(photoData) => updateActiveEjemplar({ capturedPhoto: photoData })}
-              onPhotoRemoved={() =>
-                updateActiveEjemplar({
-                  capturedPhoto: null,
-                  foto_url: null,
-                  foto_sharepoint_url: null,
-                  foto_nombre_archivo: null
-                })
-              }
-            />
-          </div>
+                  <button
+                    type="button"
+                    className={`firma-btn-3col btn-nofirma ${ejData.no_firmado ? 'selected' : ''}`}
+                    onClick={() => handleToggleSigner(item.key, 'NO_FIRMADO')}
+                  >
+                    <XCircle size={19} />
+                    <span>No Firmado</span>
+                  </button>
+                </div>
 
-          {/* Observaciones propias de este ejemplar */}
-          <div className="detail-section-compact detail-section-obs">
-            <textarea
-              className="obs-textarea-compact"
-              value={activeData.observaciones || ''}
-              onChange={(e) => updateActiveEjemplar({ observaciones: e.target.value })}
-              placeholder={`Observaciones del ejemplar ${activeMeta?.short || activeEjemplar} (opcional)`}
-            />
-          </div>
+                {/* Foto opcional propia de este ejemplar */}
+                <div className="detail-section-compact" style={{ marginTop: '4px' }}>
+                  <CameraCapture
+                    key={item.key}
+                    initialPhotoUrl={
+                      ejData.capturedPhoto?.dataUrl ||
+                      ejData.foto_sharepoint_url ||
+                      ejData.foto_url ||
+                      null
+                    }
+                    onPhotoCaptured={(photoData) => updateEjemplar(item.key, { capturedPhoto: photoData })}
+                    onPhotoRemoved={() =>
+                      updateEjemplar(item.key, {
+                        capturedPhoto: null,
+                        foto_url: null,
+                        foto_sharepoint_url: null,
+                        foto_nombre_archivo: null
+                      })
+                    }
+                  />
+                </div>
+
+                {/* Firma digital propia de este ejemplar */}
+                <div className="detail-section-compact">
+                  <SignaturePad
+                    key={`sig-${item.key}`}
+                    ejemplarLabel={item.fullLabel}
+                    signatureDataUrl={ejData.firma_digital_base64 || null}
+                    aclaracion={ejData.firma_receptor_aclaracion || ''}
+                    dni={ejData.firma_receptor_dni || ''}
+                    onConfirm={(sigData) => updateEjemplar(item.key, sigData)}
+                    onClear={() =>
+                      updateEjemplar(item.key, {
+                        firma_digital_base64: null,
+                        firma_receptor_aclaracion: '',
+                        firma_receptor_dni: ''
+                      })
+                    }
+                  />
+                </div>
+
+                {/* Observaciones propias de este ejemplar */}
+                <div className="detail-section-compact detail-section-obs">
+                  <textarea
+                    className="obs-textarea-compact"
+                    value={ejData.observaciones || ''}
+                    onChange={(e) => updateEjemplar(item.key, { observaciones: e.target.value })}
+                    placeholder={`Observaciones del ejemplar ${item.fullLabel} (opcional)`}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
-
-      {/* 3. FIRMA DIGITAL TÁCTIL COMPARTIDA DEL REMITO */}
-      <div className="detail-section-compact">
-        <SignaturePad
-          signatureDataUrl={signatureInfo.firma_digital_base64}
-          aclaracion={signatureInfo.firma_receptor_aclaracion}
-          dni={signatureInfo.firma_receptor_dni}
-          onConfirm={(sigData) => {
-            setSignatureInfo(sigData);
-            syncRemitoDraft(ejemplaresMap, sigData);
-          }}
-          onClear={() => {
-            const cleared = {
-              firma_digital_base64: null,
-              firma_receptor_aclaracion: '',
-              firma_receptor_dni: ''
-            };
-            setSignatureInfo(cleared);
-            syncRemitoDraft(ejemplaresMap, cleared);
-          }}
-        />
-      </div>
 
       {/* BOTTOM ACTION BAR FIJA */}
       <BottomBar
         onBack={onBack}
+        backLabel="Volver a Remitos"
         onSave={handleSave}
         saving={saving}
         saveLabel="Confirmar"

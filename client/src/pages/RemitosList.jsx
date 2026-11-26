@@ -47,10 +47,10 @@ export default function RemitosList({
         const cached = await getCachedRemitos();
         const filteredCached = selectedLugar
           ? cached.filter(
-              (r) =>
-                String(r.finne_domicilio || '').trim().toLowerCase() ===
-                String(selectedLugar).trim().toLowerCase()
-            )
+            (r) =>
+              String(r.finne_domicilio || '').trim().toLowerCase() ===
+              String(selectedLugar).trim().toLowerCase()
+          )
           : cached;
         setRemitos(filteredCached);
       }
@@ -60,10 +60,10 @@ export default function RemitosList({
       if (cached.length > 0) {
         const filteredCached = selectedLugar
           ? cached.filter(
-              (r) =>
-                String(r.finne_domicilio || '').trim().toLowerCase() ===
-                String(selectedLugar).trim().toLowerCase()
-            )
+            (r) =>
+              String(r.finne_domicilio || '').trim().toLowerCase() ===
+              String(selectedLugar).trim().toLowerCase()
+          )
           : cached;
         setRemitos(filteredCached);
       }
@@ -149,7 +149,7 @@ export default function RemitosList({
           onClick={onOpenScan}
         >
           <ScanLine size={20} />
-          <span>Escanear Código de Barras 1D del Remito</span>
+          <span>Escanear Código del Remito</span>
         </button>
       )}
 

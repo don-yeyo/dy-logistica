@@ -438,7 +438,8 @@ export async function saveDraftSection(
       }
 
       const serializedEjemplares = [];
-      for (const ej of orderedEjemplares) {
+      for (let ejIdx = 0; ejIdx < orderedEjemplares.length; ejIdx += 1) {
+        const ej = orderedEjemplares[ejIdx];
         let fotoUrl = ej.foto_url || null;
         let fotoSharepointUrl = ej.foto_sharepoint_url || null;
         let fotoNombreArchivo = ej.foto_nombre_archivo || null;
@@ -468,6 +469,10 @@ export async function saveDraftSection(
           }
         }
 
+        const legacySig = entry.signatureInfo || {};
+        const useLegacySig =
+          ejIdx === 0 && !ej.firma_digital_base64 && Boolean(legacySig.firma_digital_base64);
+
         serializedEjemplares.push({
           ejemplar: ej.ejemplar,
           firmado_cliente: Boolean(ej.firmado_cliente),
@@ -476,12 +481,22 @@ export async function saveDraftSection(
           observaciones: ej.observaciones || '',
           foto_url: fotoUrl,
           foto_sharepoint_url: fotoSharepointUrl,
-          foto_nombre_archivo: fotoNombreArchivo
+          foto_nombre_archivo: fotoNombreArchivo,
+          firma_digital_base64: useLegacySig
+            ? legacySig.firma_digital_base64
+            : ej.firma_digital_base64 || null,
+          firma_receptor_aclaracion: useLegacySig
+            ? legacySig.firma_receptor_aclaracion || null
+            : ej.firma_receptor_aclaracion || null,
+          firma_receptor_dni: useLegacySig
+            ? legacySig.firma_receptor_dni || null
+            : ej.firma_receptor_dni || null
         });
       }
 
       const anyCliente = serializedEjemplares.some((e) => e.firmado_cliente);
       const anyInterm = serializedEjemplares.some((e) => e.firmado_intermediario);
+      const firstSigned = serializedEjemplares.find((e) => e.firma_digital_base64);
       const estadoFirmaConsolidado =
         anyCliente && anyInterm
           ? 'FIRMADO_AMBOS'
@@ -491,14 +506,13 @@ export async function saveDraftSection(
           ? 'FIRMADO_INTERMEDIARIO'
           : 'NO_FIRMADO';
 
-      const sig = entry.signatureInfo || {};
       const payload = {
         ejemplares: serializedEjemplares,
         ejemplar: serializedEjemplares[0].ejemplar,
         estado_firma: estadoFirmaConsolidado,
-        firma_digital_base64: sig.firma_digital_base64 || null,
-        firma_receptor_aclaracion: sig.firma_receptor_aclaracion || null,
-        firma_receptor_dni: sig.firma_receptor_dni || null,
+        firma_digital_base64: firstSigned?.firma_digital_base64 || null,
+        firma_receptor_aclaracion: firstSigned?.firma_receptor_aclaracion || null,
+        firma_receptor_dni: firstSigned?.firma_receptor_dni || null,
         id_etapa: entry.id_etapa || null,
         comprobante: entry.comprobante || null,
         sincronizado_offline: !navigator.onLine ? 1 : 0

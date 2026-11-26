@@ -2656,6 +2656,17 @@ body {
   color: #f8fafc;
 }
 
+.btn-back-square.btn-back-labeled {
+  width: auto;
+  min-width: auto;
+  padding: 0 14px;
+  gap: 6px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
 .btn-primary-action {
   height: 48px;
   flex: 1;
@@ -5947,6 +5958,13 @@ body {
   background: rgba(245, 158, 11, 0.12);
 }
 
+.ejemplares-editor-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 6px;
+}
+
 .ejemplar-editor-panel {
   background: var(--surface);
   border: 1.5px solid var(--dy-blue);
@@ -5958,8 +5976,32 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.ejemplar-editor-panel.incomplete {
+  border-color: #f59e0b;
+}
+
+.ejemplar-missing-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.dark-theme .ejemplar-missing-pill {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fcd34d;
+}
+
 .dark-theme .ejemplar-editor-panel {
   border-color: rgba(56, 189, 248, 0.5);
+}
+
+.dark-theme .ejemplar-editor-panel.incomplete {
+  border-color: rgba(251, 191, 36, 0.7);
 }
 
 .ejemplar-editor-header {

@@ -108,6 +108,9 @@ function mapRemitoRow(row, rawEjemplares = [], options = {}) {
     foto_url: e.foto_url || null,
     foto_sharepoint_url: e.foto_sharepoint_url || null,
     foto_nombre_archivo: e.foto_nombre_archivo || null,
+    firma_digital_base64: e.firma_digital_base64 || null,
+    firma_receptor_aclaracion: e.firma_receptor_aclaracion || '',
+    firma_receptor_dni: e.firma_receptor_dni || '',
     fecha_hora: e.fecha_hora || null
   }));
 
@@ -189,7 +192,14 @@ function normalizeIncomingEjemplares(body = {}) {
         observaciones: item.observaciones ? String(item.observaciones) : null,
         foto_url: item.foto_url ? String(item.foto_url) : null,
         foto_sharepoint_url: item.foto_sharepoint_url ? String(item.foto_sharepoint_url) : null,
-        foto_nombre_archivo: item.foto_nombre_archivo ? String(item.foto_nombre_archivo) : null
+        foto_nombre_archivo: item.foto_nombre_archivo ? String(item.foto_nombre_archivo) : null,
+        firma_digital_base64: item.firma_digital_base64 ? String(item.firma_digital_base64) : null,
+        firma_receptor_aclaracion: item.firma_receptor_aclaracion
+          ? String(item.firma_receptor_aclaracion).trim()
+          : null,
+        firma_receptor_dni: item.firma_receptor_dni
+          ? String(item.firma_receptor_dni).trim()
+          : null
       };
     });
   } else if (body.estado_firma) {
@@ -204,7 +214,14 @@ function normalizeIncomingEjemplares(body = {}) {
         observaciones: body.observaciones ? String(body.observaciones) : null,
         foto_url: body.foto_url ? String(body.foto_url) : null,
         foto_sharepoint_url: body.foto_sharepoint_url ? String(body.foto_sharepoint_url) : null,
-        foto_nombre_archivo: body.foto_nombre_archivo ? String(body.foto_nombre_archivo) : null
+        foto_nombre_archivo: body.foto_nombre_archivo ? String(body.foto_nombre_archivo) : null,
+        firma_digital_base64: body.firma_digital_base64 ? String(body.firma_digital_base64) : null,
+        firma_receptor_aclaracion: body.firma_receptor_aclaracion
+          ? String(body.firma_receptor_aclaracion).trim()
+          : null,
+        firma_receptor_dni: body.firma_receptor_dni
+          ? String(body.firma_receptor_dni).trim()
+          : null
       }
     ];
   }
@@ -596,9 +613,9 @@ async function persistControlInDatabase(remitoId, user, payload, normalizedEjemp
             ej.foto_url || null,
             ej.foto_sharepoint_url || null,
             ej.foto_nombre_archivo || null,
-            firma_digital_base64 || null,
-            firma_receptor_aclaracion || null,
-            firma_receptor_dni || null,
+            ej.firma_digital_base64 ?? firma_digital_base64 ?? null,
+            ej.firma_receptor_aclaracion ?? firma_receptor_aclaracion ?? null,
+            ej.firma_receptor_dni ?? firma_receptor_dni ?? null,
             user.organizacion_id || null,
             user.email || null
           ]

@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { PenTool, Eraser, Check, X, Trash2 } from 'lucide-react';
 
 /**
@@ -9,6 +10,7 @@ export default function SignaturePad({
   signatureDataUrl,
   aclaracion = '',
   dni = '',
+  ejemplarLabel = '',
   onConfirm,
   onClear
 }) {
@@ -151,11 +153,11 @@ export default function SignaturePad({
           onClick={() => setIsOpen(true)}
         >
           <PenTool size={16} />
-          <span>Capturar Firma Digital en Pantalla</span>
+          <span>Registrar Firma Digital{ejemplarLabel ? ` · ${ejemplarLabel}` : ''}</span>
         </button>
       )}
 
-      {isOpen && (
+      {isOpen && typeof document !== 'undefined' && createPortal(
         <div className="modal-overlay" onClick={() => setIsOpen(false)}>
           <div
             className="modal-card glass"
@@ -166,7 +168,7 @@ export default function SignaturePad({
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <PenTool size={18} style={{ color: 'var(--dy-blue)' }} />
                 <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--text)' }}>
-                  Firma Digital del Receptor
+                  Firma Digital del Receptor{ejemplarLabel ? ` · ${ejemplarLabel}` : ''}
                 </h3>
               </div>
               <button
@@ -239,7 +241,8 @@ export default function SignaturePad({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

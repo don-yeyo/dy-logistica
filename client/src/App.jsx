@@ -129,7 +129,7 @@ export default function App() {
     return () => window.removeEventListener('dy-draft-changed', handleDraftChanged);
   }, [syncDirtySummary]);
 
-  // Temporizador para recordar cambios locales sin confirmar tras N segundos
+  // Temporizador para recordar cambios locales sin confirmar tras N segundos continuos sin actividad del usuario
   useEffect(() => {
     if (
       user?.rol !== 'chofer' ||
@@ -141,11 +141,41 @@ export default function App() {
       return undefined;
     }
 
-    const timer = setTimeout(() => {
-      setReminderOpen(true);
-    }, UNSAVED_REMINDER_SECONDS * 1000);
+    let timerId = null;
+    let lastHighFreqResetAt = 0;
 
-    return () => clearTimeout(timer);
+    const resetInactivityTimer = () => {
+      if (timerId) clearTimeout(timerId);
+      timerId = setTimeout(() => {
+        setReminderOpen(true);
+      }, UNSAVED_REMINDER_SECONDS * 1000);
+    };
+
+    const handleDiscreteActivity = () => {
+      resetInactivityTimer();
+    };
+
+    const handleHighFreqActivity = () => {
+      const now = Date.now();
+      if (now - lastHighFreqResetAt < 300) return;
+      lastHighFreqResetAt = now;
+      resetInactivityTimer();
+    };
+
+    const discreteEvents = ['mousedown', 'pointerdown', 'click', 'touchstart', 'keydown', 'input'];
+    const highFreqEvents = ['mousemove', 'pointermove', 'touchmove', 'wheel', 'scroll'];
+    const listenerOpts = { capture: true, passive: true };
+
+    discreteEvents.forEach((evt) => window.addEventListener(evt, handleDiscreteActivity, listenerOpts));
+    highFreqEvents.forEach((evt) => window.addEventListener(evt, handleHighFreqActivity, listenerOpts));
+
+    resetInactivityTimer();
+
+    return () => {
+      if (timerId) clearTimeout(timerId);
+      discreteEvents.forEach((evt) => window.removeEventListener(evt, handleDiscreteActivity, listenerOpts));
+      highFreqEvents.forEach((evt) => window.removeEventListener(evt, handleHighFreqActivity, listenerOpts));
+    };
   }, [
     user?.rol,
     selectedHojaRuta?.Transaccionid,
