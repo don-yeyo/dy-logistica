@@ -1,22 +1,23 @@
 - agregar test funcionales con playright y test unitarios con jest
-- permitir registrar mas de un ejemplar por remito
 - productos posibles de seleccionar de una devolucion deben ser los de entregas anteriores para el cliente o intermediario seleccionado
 
 # fuera de scope. Etapa 2
 - agregar mapa de recorrido
+- envio de emails: definir cuales, cuando y como
 
 ----------------------
 
-unificar totales de remitido por lugar de entrega
+al agregar cliente en las devoluciones que solo muestre una lista de los clientes de ese intermediario
 
 devolución libre, algunos clientes deben soportar en lugar de cargar prod, adjuntar foto del remito
 
-al agregar cliente en las devoluciones que solo muestre una lista de los clientes de ese intermediario
 
-en cajones (cambiar nombre a cajones y pallets) que existan los dos. Y considerar el resumen discriminado
+------------------------
 
-en remitos: mostrar remitos de viajes anteriores de ese cliente a ese intermediario
+consultas:
 
-hacer que sea mas tipo wizard: agregar 2da opción para fijar lugar, pasa de un lado al otro
+1) la operatoria de registro de remitos, conviene seguir mostrando la lista de remitos pendientes de ese lugar y que por cada uno, como está ahora, especifique cual ejemplar es y por quien esta firmado o solo escanear lo que le estan entregando (mas simple) y especificar ejemplar y por quien esta firmado pero solo de ese?
 
-enviar sugerencias de mejoras del sistema, incorporar una opcion en el menu desplegable del avatar pero tambien desde el drawer, loq ue ingrese el usuario debe llegar a los emails especificados por env var
+2) cómo es la operatoria de devoluciones libres, se puedrá especificar los pasos que realizan actualmente en algun documento, cuando llega el chofer, que se hace? se genera una NC por las cantidades marcadas a mano alzada en el remito? puede tratarse de remitos de viajes anteriores? se confia en eso? en la NC a realizar va el detalle de productos?
+
+3) La firma del remito en pantalla, es obligatoria?
